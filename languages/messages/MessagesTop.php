@@ -14,7 +14,7 @@
  * Do NOT set this to false in any other message file! Leave the line out to
  * accept the default fallback to "en".
  */
-$fallback = false;
+# $fallback = false;
 
 /**
  * Is the language written right-to-left?
@@ -121,10 +121,10 @@ $namespaceGenderAliases = [];
  * $wgAmericanDates
  */
 $datePreferences = [
-	'default',
+	'ymd',
 	'mdy',
 	'dmy',
-	'ymd',
+	'default',
 	'ISO 8601',
 ];
 
