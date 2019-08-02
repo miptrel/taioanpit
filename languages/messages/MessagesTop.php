@@ -31,9 +31,9 @@ $dateFormats = [
 
 	'ymd time' => 'H:i',
 	'ymd date' => 'Y "nî" n "goe̍h" j "ji̍t"',
-	'ymd monthonly' => 'Y F',
-	'ymd both' => 'H:i, Y F j',
-	'ymd pretty' => 'F j',
+	'ymd monthonly' => 'Y "nî" n "goe̍h"',
+	'ymd both' => 'Y "nî" n "goe̍h" j "ji̍t", H:i',
+	'ymd pretty' => 'n "goe̍h" j "ji̍t"',
 
 	'ISO 8601 time' => 'xnH:xni:xns',
 	'ISO 8601 date' => 'xnY-xnm-xnd',
