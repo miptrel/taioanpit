@@ -352,7 +352,7 @@
   "perfcached": "The following data is cached and may not be up to date. A maximum of {{PLURAL:$1|one result is|$1 results are}} available in the cache.",
   "perfcachedts": "The following data is cached, and was last updated $1. A maximum of {{PLURAL:$4|one result is|$4 results are}} available in the cache.",
   "querypage-no-updates": "Updates for this page are currently disabled.\nData here will not presently be refreshed.",
-  "viewsource": "View source",
+  "viewsource": "Khòaⁿ goân-pún",
   "viewsource-title": "View source for $1",
   "actionthrottled": "Action throttled",
   "actionthrottledtext": "As an anti-abuse measure, you are limited from performing this action too many times in a short space of time, and you have exceeded this limit.\nPlease try again in a few minutes.",
