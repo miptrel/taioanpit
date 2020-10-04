@@ -3,14 +3,15 @@
 		"authors": [
 			"Ahonc",
 			"Andriykopanytsia",
-			"Piramidion",
 			"Steve.rusyn",
 			"SteveR",
-			"Ата"
+			"Ата",
+			"Piramidion"
 		]
 	},
 	"usermerge": "Об'єднання і вилучення облікових записів",
 	"usermerge-desc": "[[Special:UserMerge|Переводить зв'язки з одного користувача на іншого]] у базі даних вікі, старі користувачі будуть вилучатися. Вимагає прав ''usermerge''",
+	"usermerge-badolduser": "Неправильне старе ім'я користувача",
 	"usermerge-badnewuser": "Неправильне нове ім'я користувача",
 	"usermerge-nonewuser": "Порожнє ім'я користувача. Припускається злиття з «{{GENDER:$1|$1}}».<br />\nНатисніть «{{int:usermerge-submit}}», щоб підтвердити дію.",
 	"usermerge-noolduser": "Порожнє старе ім'я користувача",
@@ -27,7 +28,7 @@
 	"usermerge-logpagetext": "Це журнал об'єднання облікових записів.",
 	"usermerge-noselfdelete": "Ви не можете вилучати або приєднувати {{GENDER:$1|самого себе|саму себе}}!",
 	"usermerge-protectedgroup": "Неможливо приєднати {{GENDER:$1|користувача|користувачку}}: {{GENDER:$1|користувач|користувачка}} належить до захищеної групи.",
-	"right-usermerge": "Об'єднування користувачів",
+	"right-usermerge": "об'єднування користувачів",
 	"action-usermerge": "об'єднування користувачів",
 	"usermerge-autopagedelete": "Автоматичне вилучення сторінки при об'єднанні користувачів",
 	"usermerge-page-unmoved": "Сторінка $1 не може бути перейменована на $2.",

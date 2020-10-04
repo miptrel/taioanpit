@@ -1,17 +1,17 @@
 {
 	"@metadata": {
 		"authors": [
-			"KuboF",
 			"Melancholie",
 			"Michawiki",
-			"Robin van der Vliet",
-			"Yekrats"
+			"Yekrats",
+			"KuboF"
 		]
 	},
 	"usermerge": "Kunigi kaj forigi uzantojn",
-	"usermerge-badnewuser": "Nevalida nova uzantnomo",
-	"usermerge-noolduser": "Malplena malnova uzantnomo",
-	"usermerge-fieldset": "Kunigotaj uzantnomoj",
+	"usermerge-badolduser": "Nevalida malnova salutnomo",
+	"usermerge-badnewuser": "Nevalida nova salutnomo",
+	"usermerge-noolduser": "Malplena malnova salutnomo",
+	"usermerge-fieldset": "Kunigotaj salutnomoj",
 	"usermerge-olduser": "Malnova uzanto (kunigante de):",
 	"usermerge-newuser": "Nova uzanto (kunigante al):",
 	"usermerge-deleteolduser": "Forigi malnovan uzanton",

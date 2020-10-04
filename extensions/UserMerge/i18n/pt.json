@@ -1,23 +1,24 @@
 {
 	"@metadata": {
 		"authors": [
-			"Athena in Wonderland",
 			"Crazymadlover",
 			"Hamilton Abreu",
-			"He7d3r",
-			"Helder.wiki",
 			"Jorge Morais",
 			"Lijealso",
 			"Luckas",
 			"Malafaya",
-			"MokaAkashiyaPT",
 			"Sir Lestaty de Lioncourt",
+			"Waldir",
 			"Vitorvicentevalente",
-			"Waldir"
+			"Helder.wiki",
+			"He7d3r",
+			"MokaAkashiyaPT",
+			"Athena in Wonderland"
 		]
 	},
 	"usermerge": "Fusão e eliminação de utilizadores",
 	"usermerge-desc": "[[Special:UserMerge|Faz a fusão das referências a um utilizador com as de outro utilizador]] na base de dados da wiki - também apaga o utilizador antigo após a fusão. Requer o privilégio ''usermerge''",
+	"usermerge-badolduser": "Nome antigo inválido.",
 	"usermerge-badnewuser": "Nome novo inválido.",
 	"usermerge-nonewuser": "O nome de utilizador novo está vazio. Será assumida a fusão com {{GENDER:$1|$1}}.<br />\nClique \"{{int:usermerge-submit}}\" para aceitar.",
 	"usermerge-noolduser": "O nome de utilizador antigo está vazio.",

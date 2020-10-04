@@ -1,7 +1,7 @@
 <?php
 
-use MediaWiki\Block\DatabaseBlock;
 use MediaWiki\MediaWikiServices;
+use MediaWiki\Block\DatabaseBlock;
 use Wikimedia\Rdbms\IDatabase;
 
 /**
@@ -112,7 +112,7 @@ class MergeUser {
 		$qi = DatabaseBlock::getQueryInfo();
 		$rows = $dbw->select(
 			$qi['tables'],
-			array_merge( $qi['fields'], [ 'ipb_user' ] ),
+			$qi['fields'],
 			[
 				'ipb_user' => [ $this->oldUser->getId(), $this->newUser->getId() ],
 			],
@@ -131,13 +131,15 @@ class MergeUser {
 			}
 		}
 
-		if ( !$oldBlock ) {
-			// No one is blocked or
+		if ( !$newBlock && !$oldBlock ) {
+			// No one is blocked, yaaay
+			$dbw->endAtomic( __METHOD__ );
+			return;
+		} elseif ( $newBlock && !$oldBlock ) {
 			// Only the new user is blocked, so nothing to do.
 			$dbw->endAtomic( __METHOD__ );
 			return;
-		}
-		if ( !$newBlock ) {
+		} elseif ( $oldBlock && !$newBlock ) {
 			// Just move the old block to the new username
 			$dbw->update(
 				'ipblocks',
@@ -305,6 +307,7 @@ class MergeUser {
 
 			$options = $fieldInfo['options'] ?? [];
 			unset( $fieldInfo['options'] );
+			/** @phan-suppress-next-line PhanTypeInvalidDimOffset */
 			$db = $fieldInfo['db'] ?? $dbw;
 			unset( $fieldInfo['db'] );
 			$tableName = array_shift( $fieldInfo );
@@ -312,9 +315,7 @@ class MergeUser {
 			$keyField = $fieldInfo['batchKey'] ?? null;
 			unset( $fieldInfo['batchKey'] );
 
-			if ( isset( $fieldInfo['actorId'] ) && isset( $fieldInfo['actorStage'] ) &&
-				!$this->stageNeedsUser( $fieldInfo['actorStage'] )
-			) {
+			if ( isset( $fieldInfo['actorId'] ) && !$this->stageNeedsUser( $fieldInfo['actorStage'] ) ) {
 				continue;
 			}
 			unset( $fieldInfo['actorId'], $fieldInfo['actorStage'] );
@@ -366,16 +367,15 @@ class MergeUser {
 
 		if ( $this->oldUser->getActorId() ) {
 			$oldActorId = $this->oldUser->getActorId();
-			$newActorId = $this->newUser->getActorId( $dbw );
+			$newActorId = $this->newUser->getActorId( $db );
 
 			foreach ( $updateFields as $fieldInfo ) {
-				if ( empty( $fieldInfo['actorId'] ) || empty( $fieldInfo['actorStage'] ) ||
-					!$this->stageNeedsActor( $fieldInfo['actorStage'] )
-				) {
+				if ( empty( $fieldInfo['actorId'] ) || !$this->stageNeedsActor( $fieldInfo['actorStage'] ) ) {
 					continue;
 				}
 
 				$options = $fieldInfo['options'] ?? [];
+				/** @phan-suppress-next-line PhanTypeInvalidDimOffset */
 				$db = $fieldInfo['db'] ?? $dbw;
 				$tableName = array_shift( $fieldInfo );
 				$idField = $fieldInfo['actorId'];
@@ -425,9 +425,7 @@ class MergeUser {
 			}
 		}
 
-		$dbw->delete( 'user_newtalk', [ 'user_id' => $this->oldUser->getId() ], __METHOD__ );
-		$this->oldUser->clearInstanceCache();
-		$this->newUser->clearInstanceCache();
+		$dbw->delete( 'user_newtalk', [ 'user_id' => $this->oldUser->getId() ] );
 
 		Hooks::run( 'MergeAccountFromTo', [ &$this->oldUser, &$this->newUser ] );
 	}
@@ -511,6 +509,7 @@ class MergeUser {
 	 * @return array Array of old name (string) => new name (Title) where the move failed
 	 */
 	private function movePages( User $performer, /* callable */ $msg ) {
+		global $wgUser;
 		$contLang = MediaWikiServices::getInstance()->getContentLanguage();
 
 		$oldusername = trim( str_replace( '_', ' ', $this->oldUser->getName() ) );
@@ -526,13 +525,16 @@ class MergeUser {
 				'page_namespace' => [ NS_USER, NS_USER_TALK ],
 				'page_title' . $dbr->buildLike( $oldusername->getDBkey() . '/', $dbr->anyString() )
 					. ' OR page_title = ' . $dbr->addQuotes( $oldusername->getDBkey() ),
-			],
-			__METHOD__
+			]
 		);
 
 		$message = function ( /* ... */ ) use ( $msg ) {
 			return call_user_func_array( $msg, func_get_args() );
 		};
+
+		// Need to set $wgUser to attribute log properly.
+		$oldUser = $wgUser;
+		$wgUser = $performer;
 
 		$failedMoves = [];
 		foreach ( $pages as $row ) {
@@ -542,36 +544,46 @@ class MergeUser {
 
 			if ( $this->newUser->getName() === 'Anonymous' ) { # delete ALL old pages
 				if ( $oldPage->exists() ) {
-					$this->deletePage( $message, $performer, $oldPage );
+					$error = '';
+					$oldPageArticle = new Article( $oldPage, 0 );
+					$oldPageArticle->doDeleteArticle(
+						$message( 'usermerge-autopagedelete' )->inContentLanguage()->text(),
+						false, null, null, $error, true
+					);
 				}
 			} elseif ( $newPage->exists()
-				&& !MediaWikiServices::getInstance()
-					->getMovePageFactory()
-					->newMovePage( $oldPage, $newPage )
-					->isValidMove()
-					->isOk()
+				&& !$oldPage->isValidMoveTarget( $newPage )
 				&& $newPage->getLength() > 0
 			) {
 				# delete old pages that can't be moved
-				$this->deletePage( $message, $performer, $oldPage );
+				$error = '';
+				$oldPageArticle = new Article( $oldPage, 0 );
+				$oldPageArticle->doDeleteArticle(
+					$message( 'usermerge-autopagedelete' )->inContentLanguage()->text(),
+					false, null, null, $error, true
+				);
+
 			} else { # move content to new page
 				# delete target page if it exists and is blank
 				if ( $newPage->exists() ) {
-					$this->deletePage( $message, $performer, $newPage );
+					$error = '';
+					$newPageArticle = new Article( $newPage, 0 );
+					$newPageArticle->doDeleteArticle(
+						$message( 'usermerge-autopagedelete' )->inContentLanguage()->text(),
+						false, null, null, $error, true
+					);
 				}
 
 				# move to target location
-				$status = MediaWikiServices::getInstance()
-					->getMovePageFactory()
-					->newMovePage( $oldPage, $newPage )
-					->move(
-						$performer,
-						$message(
-							'usermerge-move-log',
-							$oldusername->getText(),
-							$newusername->getText() )->inContentLanguage()->text()
-					);
-				if ( !$status->isOk() ) {
+				$errors = $oldPage->moveTo(
+					$newPage,
+					false,
+					$message(
+						'usermerge-move-log',
+						$oldusername->getText(),
+						$newusername->getText() )->inContentLanguage()->text()
+				);
+				if ( $errors !== true ) {
 					$failedMoves[$oldPage->getPrefixedText()] = $newPage;
 				}
 
@@ -583,40 +595,19 @@ class MergeUser {
 				);
 				if ( !$dbr->numRows( $res ) ) {
 					# nothing links here, so delete unmoved page/redirect
-					$this->deletePage( $message, $performer, $oldPage );
+					$error = '';
+					$oldPageArticle = new Article( $oldPage, 0 );
+					$oldPageArticle->doDeleteArticle(
+						$message( 'usermerge-autopagedelete' )->inContentLanguage()->text(),
+						false, null, null, $error, true
+					);
 				}
 			}
 		}
 
-		return $failedMoves;
-	}
+		$wgUser = $oldUser;
 
-	/**
-	 * Helper to delete pages
-	 *
-	 * @param callable $msg
-	 * @param User $user
-	 * @param Title $title
-	 */
-	private function deletePage( $msg, User $user, Title $title ) {
-		$wikipage = WikiPage::factory( $title );
-		$reason = $msg( 'usermerge-autopagedelete' )->inContentLanguage()->text();
-		$error = '';
-		if ( version_compare( MW_VERSION, '1.35', '<' ) ) {
-			$wikipage->doDeleteArticle( $reason, false, null, null, $error, $user, true );
-		} else {
-			$wikipage->doDeleteArticleReal(
-				$reason,
-				$user,
-				false,
-				null, // Unused
-				$error,
-				null, // Unused
-				[],
-				'delete',
-				true
-			);
-		}
+		return $failedMoves;
 	}
 
 	/**
@@ -658,8 +649,7 @@ class MergeUser {
 			}
 			$db->delete(
 				$table,
-				[ $field => $this->oldUser->getId() ],
-				__METHOD__
+				[ $field => $this->oldUser->getId() ]
 			);
 		}
 

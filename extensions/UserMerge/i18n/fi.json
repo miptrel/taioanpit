@@ -1,20 +1,21 @@
 {
 	"@metadata": {
 		"authors": [
-			"01miki10",
 			"Cimon Avaro",
 			"Crt",
 			"Nike",
 			"Silvonen",
 			"Str4nd",
 			"Stryn",
-			"Valtlait",
 			"VezonThunder",
-			"Vililikku"
+			"Vililikku",
+			"01miki10",
+			"Valtlait"
 		]
 	},
 	"usermerge": "Käyttäjätunnusten yhdistys ja poisto",
 	"usermerge-desc": "[[Special:UserMerge|Yhdistää viittaukset yhdestä käyttäjästä toiseen]] wikin tietokannassa - poistaa myös vanhat käyttäjät yhdistämisen jälkeen. Vaatii oikeuden ”usermerge”",
+	"usermerge-badolduser": "Vanha käyttäjätunnus ei kelpaa",
 	"usermerge-badnewuser": "Uusi käyttäjätunnus ei kelpaa",
 	"usermerge-nonewuser": "Uusi käyttäjätunnus -kenttä on tyhjä. Oletetaan yhdistäminen tunnukseen ”{{GENDER:$1|$1}}”. <br /> \nNapsauta \"{{int:usermerge-submit}}\" hyväksyäksesi.",
 	"usermerge-noolduser": "Vanha käyttäjätunnus ei voi olla tyhjä.",
@@ -24,7 +25,7 @@
 	"usermerge-newuser": "Uusi käyttäjä (mihin yhdistetään)",
 	"usermerge-deleteolduser": "Poista vanha käyttäjä",
 	"usermerge-submit": "Yhdistä käyttäjä",
-	"usermerge-badtoken": "Virheellinen muokkauspoletti.",
+	"usermerge-badtoken": "Virheellinen muokkauslipuke",
 	"usermerge-userdeleted": "$1 ($2) on poistettu.",
 	"usermerge-success": "Yhdistäminen tunnuksesta $1 ($2) tunnukseen $3 ($4) on suoritettu.",
 	"usermerge-logpage": "Käyttäjien yhdistämisloki",

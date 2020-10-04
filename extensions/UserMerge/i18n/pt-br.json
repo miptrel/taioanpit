@@ -1,22 +1,23 @@
 {
 	"@metadata": {
 		"authors": [
-			"!Silent",
-			"Araceletorres",
 			"Crazymadlover",
-			"Eduardo Addad de Oliveira",
 			"Eduardo.mps",
-			"Felipe L. Ewald",
-			"He7d3r",
-			"Helder.wiki",
 			"Jorge Morais",
 			"Luckas",
+			"Helder.wiki",
+			"He7d3r",
 			"Nemo bis",
-			"Opraco"
+			"Araceletorres",
+			"Opraco",
+			"!Silent",
+			"Felipe L. Ewald",
+			"Eduardo Addad de Oliveira"
 		]
 	},
 	"usermerge": "Fusão e eliminação de utilizadores",
 	"usermerge-desc": "[[Special:UserMerge|Unifica as referências de um usuário em outro usuário]] no banco de dados da wiki - também apagará o antigo usuário após a fusão. Requer privilégio ''usermerge''",
+	"usermerge-badolduser": "Nome antigo inválido.",
 	"usermerge-badnewuser": "Nome novo inválido.",
 	"usermerge-nonewuser": "Novo nome de usuário vazio. Assumida fusão com \"{{GENDER:$1|$1}}\".<br />\nClique \"{{int:usermerge-submit}}\" para aceitar.",
 	"usermerge-noolduser": "Limpar nome antigo.",

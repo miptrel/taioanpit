@@ -1,8 +1,7 @@
 <?php
 
 /**
- * @todo this should better use the Database group
- * @group Database
+ * @todo this should use the Database group
  */
 class MergeUserTest extends MediaWikiTestCase {
 
@@ -19,15 +18,6 @@ class MergeUserTest extends MediaWikiTestCase {
 		$user->addToDatabase();
 		SiteStatsUpdate::factory( [ 'users' => 1 ] )->doUpdate();
 		return $user;
-	}
-
-	public function setUp() : void {
-		parent::setUp();
-
-		$this->tablesUsed[] = 'page';
-		$this->tablesUsed[] = 'revision';
-		$this->tablesUsed[] = 'comment';
-		$this->tablesUsed[] = 'user';
 	}
 
 	/**
@@ -50,12 +40,12 @@ class MergeUserTest extends MediaWikiTestCase {
 		$user2 = $this->getNewTestUser();
 		$user2->addToDatabase();
 
-		$mu = new MergeUser( $user1, $user2, $this->createMock( UserMergeLogger::class ) );
-		$mu->merge( $this->createMock( User::class ) );
+		$mu = new MergeUser( $user1, $user2, $this->getMock( 'UserMergeLogger' ) );
+		$mu->merge( $this->getMock( 'User' ) );
 
 		$this->reallyClearInstanceCache( $user1 );
 		$this->reallyClearInstanceCache( $user2 );
-		$this->assertNull( $user1->getOption( 'foo' ) );
+		$this->assertEquals( null, $user1->getOption( 'foo' ) );
 		$this->assertEquals( 'baz', $user2->getOption( 'foo' ) );
 	}
 
@@ -69,8 +59,8 @@ class MergeUserTest extends MediaWikiTestCase {
 		$user2 = $this->getNewTestUser();
 		$user2->addGroup( 'group2' );
 
-		$mu = new MergeUser( $user1, $user2, $this->createMock( UserMergeLogger::class ) );
-		$mu->merge( $this->createMock( User::class ) );
+		$mu = new MergeUser( $user1, $user2, $this->getMock( 'UserMergeLogger' ) );
+		$mu->merge( $this->getMock( 'User' ) );
 
 		$this->reallyClearInstanceCache( $user1 );
 		$this->reallyClearInstanceCache( $user2 );
@@ -89,11 +79,11 @@ class MergeUserTest extends MediaWikiTestCase {
 		$this->reallyClearInstanceCache( $user1 );
 		$this->assertGreaterThan( 0, $user1->getId() );
 
-		$mu = new MergeUser( $user1, $user2, $this->createMock( UserMergeLogger::class ) );
-		$mu->delete( $this->createMock( User::class ), 'wfMessage' );
+		$mu = new MergeUser( $user1, $user2, $this->getMock( 'UserMergeLogger' ) );
+		$mu->delete( $this->getMock( 'User' ), 'wfMessage' );
 
 		$this->reallyClearInstanceCache( $user1 );
-		$this->assertSame( 0, $user1->getId() );
+		$this->assertEquals( 0, $user1->getId() );
 	}
 
 	/**
@@ -110,33 +100,12 @@ class MergeUserTest extends MediaWikiTestCase {
 			$count++;
 		}
 
-		$mu = new MergeUser( $user1, $user2, $this->createMock( UserMergeLogger::class ) );
-		$mu->merge( $this->createMock( User::class ) );
+		$mu = new MergeUser( $user1, $user2, $this->getMock( 'UserMergeLogger' ) );
+		$mu->merge( $this->getMock( 'User' ) );
 
 		$this->reallyClearInstanceCache( $user1 );
 		$this->reallyClearInstanceCache( $user2 );
-		$this->assertSame( 0, $user1->getEditCount() );
+		$this->assertEquals( 0, $user1->getEditCount() );
 		$this->assertEquals( 21, $user2->getEditCount() );
-	}
-
-	/**
-	 * @covers MergeUser::movePages
-	 */
-	public function testMovePages() {
-		$user1 = $this->getNewTestUser();
-		$user1->addToDatabase();
-		$user2 = $this->getNewTestUser();
-		$user2->addToDatabase();
-
-		$userpage1 = $user1->getUserPage();
-		$this->getExistingTestPage( $userpage1 );
-
-		$userpage2 = $user2->getUserPage();
-		$this->assertFalse( $userpage2->exists( Title::READ_LATEST ) );
-
-		$mu = new MergeUser( $user1, $user2, $this->createMock( UserMergeLogger::class ) );
-		$mu->delete( $this->getTestSysop()->getUser(), 'wfMessage' );
-
-		$this->assertTrue( $userpage2->exists( Title::READ_LATEST ) );
 	}
 }
