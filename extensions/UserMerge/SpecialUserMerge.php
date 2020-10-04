@@ -24,20 +24,21 @@ class SpecialUserMerge extends FormSpecialPage {
 	 * @return array
 	 */
 	protected function getFormFields() {
+		$us = $this;
 		return [
 			'olduser' => [
 				'type' => 'text',
 				'label-message' => 'usermerge-olduser',
 				'required' => true,
-				'validation-callback' => function ( $val ) {
+				'validation-callback' => function ( $val ) use ( $us ) {
 					// only pass strings to User::newFromName
 					if ( !is_string( $val ) ) {
 						return true;
 					}
 
-					$key = $this->validateOldUser( $val );
+					$key = $us->validateOldUser( $val );
 					if ( is_string( $key ) || is_array( $key ) ) {
-						return $this->msg( $key )->escaped();
+						return $us->msg( $key )->escaped();
 					}
 					return true;
 				},
@@ -46,15 +47,15 @@ class SpecialUserMerge extends FormSpecialPage {
 				'type' => 'text',
 				'required' => true,
 				'label-message' => 'usermerge-newuser',
-				'validation-callback' => function ( $val ) {
+				'validation-callback' => function ( $val ) use ( $us ) {
 					// only pass strings to User::newFromName
 					if ( !is_string( $val ) ) {
 						return true;
 					}
 
-					$key = $this->validateNewUser( $val );
+					$key = $us->validateNewUser( $val );
 					if ( is_string( $key ) ) {
-						return $this->msg( $key )->escaped();
+						return $us->msg( $key )->escaped();
 					}
 					return true;
 				},
@@ -72,6 +73,7 @@ class SpecialUserMerge extends FormSpecialPage {
 	 *   if validation failed
 	 */
 	public function validateOldUser( $val ) {
+		global $wgUserMergeProtectedGroups;
 		$oldUser = User::newFromName( $val );
 		if ( !$oldUser || $oldUser->getId() === 0 ) {
 			return 'usermerge-badolduser';
@@ -79,8 +81,7 @@ class SpecialUserMerge extends FormSpecialPage {
 		if ( $this->getUser()->getId() === $oldUser->getId() ) {
 			return [ 'usermerge-noselfdelete', $this->getUser()->getName() ];
 		}
-		$protectedGroups = $this->getConfig()->get( 'UserMergeProtectedGroups' );
-		if ( count( array_intersect( $oldUser->getGroups(), $protectedGroups ) ) ) {
+		if ( count( array_intersect( $oldUser->getGroups(), $wgUserMergeProtectedGroups ) ) ) {
 			return [ 'usermerge-protectedgroup', $oldUser->getName() ];
 		}
 
@@ -92,8 +93,8 @@ class SpecialUserMerge extends FormSpecialPage {
 	 * @return bool|string true if valid, a string of the error's message key if validation failed
 	 */
 	public function validateNewUser( $val ) {
-		$enableDelete = $this->getConfig()->get( 'UserMergeEnableDelete' );
-		if ( $enableDelete && $val === 'Anonymous' ) {
+		global $wgUserMergeEnableDelete;
+		if ( $wgUserMergeEnableDelete && $val === 'Anonymous' ) {
 			return true; // Special case
 		}
 		$newUser = User::newFromName( $val );
@@ -116,12 +117,12 @@ class SpecialUserMerge extends FormSpecialPage {
 	 * @return Status
 	 */
 	public function onSubmit( array $data ) {
-		$enableDelete = $this->getConfig()->get( 'UserMergeEnableDelete' );
+		global $wgUserMergeEnableDelete;
 		// Most of the data has been validated using callbacks
 		// still need to check if the users are different
 		$newUser = User::newFromName( $data['newuser'] );
 		// Handle "Anonymous" as a special case for user deletion
-		if ( $enableDelete && $data['newuser'] === 'Anonymous' ) {
+		if ( $wgUserMergeEnableDelete && $data['newuser'] === 'Anonymous' ) {
 			$newUser->mId = 0;
 		}
 
@@ -170,16 +171,10 @@ class SpecialUserMerge extends FormSpecialPage {
 		return Status::newGood();
 	}
 
-	/**
-	 * @inheritDoc
-	 */
 	protected function getDisplayFormat() {
 		return 'ooui';
 	}
 
-	/**
-	 * @inheritDoc
-	 */
 	protected function getGroupName() {
 		return 'users';
 	}

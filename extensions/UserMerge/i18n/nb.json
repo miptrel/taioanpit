@@ -18,9 +18,11 @@
 	"usermerge-newuser": "Nytt brukernavn (slå sammen til):",
 	"usermerge-deleteolduser": "Slett gammel bruker",
 	"usermerge-submit": "Slå sammen brukere",
-	"usermerge-badtoken": "Ugyldig redigeringsnøkkel.",
+	"usermerge-badtoken": "Ugyldig redigeringstegn",
 	"usermerge-userdeleted": "$1 ($2) har blitt slettet.",
+	"usermerge-userdeleted-log": "slettet brukerkontoen «$2» ($3)",
 	"usermerge-success": "Sammenslåing fra $1 ($2) til $3 ($4) er fullført.",
+	"usermerge-success-log": "slo brukerkontoen «$2» ($3) sammen med «[[User:$4|$4]]» ($5)",
 	"usermerge-logpage": "Brukersammenslåingslogg",
 	"usermerge-logpagetext": "Dette er en logg over brukersammenslåinger.",
 	"usermerge-noselfdelete": "Du kan ikke slette eller slå sammen {{GENDER:$1|din}} egen konto!",
@@ -28,11 +30,6 @@
 	"right-usermerge": "Slå sammen kontoer",
 	"action-usermerge": "slå sammen brukere",
 	"usermerge-autopagedelete": "Siden ble automatisk slettet ved kontosammenslåing",
-	"usermerge-page-unmoved": "Siden $1 kunne ikke flyttes til $2.",
-	"usermerge-move-log": "Flyttet siden automatisk i forbindelse med sammenslåing av kontoen «$1» til «[[User:$2|$2]]»",
-	"logentry-usermerge-mergeuser": "$1 {{GENDER:$2|slo sammen}} brukerkontoen «$4» ($5) til {{GENDER:$8|$6}} ($7)",
-	"logentry-usermerge-deleteuser": "$1 {{GENDER:$2|slettet}} brukerkontoen «$4» ($5)",
-	"log-action-filter-usermerge": "Type handling:",
-	"log-action-filter-usermerge-mergeuser": "Kontosammenslåing",
-	"log-action-filter-usermerge-deleteuser": "Kontosletting"
+	"usermerge-page-unmoved": "Side $1 kunne ikke flyttes til $2.",
+	"usermerge-move-log": "Flyttet siden automatisk i forbindelse med sammenslåing av kontoen «$1» til «[[User:$2|$2]]»"
 }

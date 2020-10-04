@@ -4,28 +4,31 @@
  * @package UserMerge
  */
 
-/* eslint-env node, es6 */
+/*jshint node:true */
 module.exports = function ( grunt ) {
-	var conf = grunt.file.readJSON( 'extension.json' );
-
 	grunt.loadNpmTasks( 'grunt-banana-checker' );
-	grunt.loadNpmTasks( 'grunt-eslint' );
+	grunt.loadNpmTasks( 'grunt-jsonlint' );
+	grunt.loadNpmTasks( 'grunt-contrib-jshint' );
 
+	var conf = grunt.file.readJSON( 'extension.json' );
 	grunt.initConfig( {
-		eslint: {
-			options: {
-				reportUnusedDisableDirectives: true,
-				extensions: [ '.js', '.json' ],
-				cache: true
-			},
+		banana: conf.MessagesDirs,
+		jshint: {
 			all: [
-				'**/*.js{,on}',
-				'!{vendor,node_modules}/**'
+				'**/*.js',
+				'!node_modules/**',
+				'!vendor/**'
 			]
 		},
-		banana: conf.MessagesDirs
+		jsonlint: {
+			all: [
+				'**/*.json',
+				'!node_modules/**',
+				'!vendor/**'
+			]
+		}
 	} );
 
-	grunt.registerTask( 'test', [ 'eslint', 'banana' ] );
+	grunt.registerTask( 'test', [ 'jsonlint', 'banana', 'jshint' ] );
 	grunt.registerTask( 'default', 'test' );
 };

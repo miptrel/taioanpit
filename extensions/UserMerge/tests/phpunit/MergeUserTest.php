@@ -16,7 +16,6 @@ class MergeUserTest extends MediaWikiTestCase {
 		}
 		$user->setName( $name );
 		$user->addToDatabase();
-		SiteStatsUpdate::factory( [ 'users' => 1 ] )->doUpdate();
 		return $user;
 	}
 
@@ -29,9 +28,6 @@ class MergeUserTest extends MediaWikiTestCase {
 		$u = User::newFromName( $u->getName() );
 	}
 
-	/**
-	 * @covers MergeUser::merge
-	 */
 	public function testBasicMerge() {
 		$user1 = $this->getNewTestUser();
 		$user1->addToDatabase();
@@ -49,9 +45,6 @@ class MergeUserTest extends MediaWikiTestCase {
 		$this->assertEquals( 'baz', $user2->getOption( 'foo' ) );
 	}
 
-	/**
-	 * @covers MergeUser::merge
-	 */
 	public function testMergeOfUserGroups() {
 		$user1 = $this->getNewTestUser();
 		$user1->addGroup( 'group1' );
@@ -69,9 +62,6 @@ class MergeUserTest extends MediaWikiTestCase {
 		$this->assertArrayEquals( [ 'group1', 'group2' ], $user2->getGroups() );
 	}
 
-	/**
-	 * @covers MergeUser::delete
-	 */
 	public function testDeleteUser() {
 		$user1 = $this->getNewTestUser();
 		$user2 = $this->getNewTestUser();

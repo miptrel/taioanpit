@@ -1,11 +1,10 @@
 <?php
-
 use MediaWiki\MediaWikiServices;
-use MediaWiki\Block\DatabaseBlock;
 use Wikimedia\Rdbms\IDatabase;
 
 /**
  * Contains the actual database backend logic for merging users
+ *
  */
 class MergeUser {
 	/**
@@ -101,28 +100,20 @@ class MergeUser {
 		$dbw->endAtomic( __METHOD__ );
 	}
 
-	/**
-	 * @param IDatabase $dbw
-	 * @return void
-	 */
 	private function mergeBlocks( IDatabase $dbw ) {
 		$dbw->startAtomic( __METHOD__ );
 
 		// Pull blocks directly from master
-		$qi = DatabaseBlock::getQueryInfo();
 		$rows = $dbw->select(
-			$qi['tables'],
-			$qi['fields'],
+			'ipblocks',
+			'*',
 			[
 				'ipb_user' => [ $this->oldUser->getId(), $this->newUser->getId() ],
-			],
-			__METHOD__,
-			[],
-			$qi['joins']
+			]
 		);
 
-		$newBlock = null;
-		$oldBlock = null;
+		$newBlock = false;
+		$oldBlock = false;
 		foreach ( $rows as $row ) {
 			if ( (int)$row->ipb_user === $this->oldUser->getId() ) {
 				$oldBlock = $row;
@@ -151,10 +142,10 @@ class MergeUser {
 			return;
 		}
 
-		// Okay, let's pick the "strongest" block, and re-apply it to
+		// Okay, lets pick the "strongest" block, and re-apply it to
 		// the new user.
-		$oldBlockObj = DatabaseBlock::newFromRow( $oldBlock );
-		$newBlockObj = DatabaseBlock::newFromRow( $newBlock );
+		$oldBlockObj = Block::newFromRow( $oldBlock );
+		$newBlockObj = Block::newFromRow( $newBlock );
 
 		$winner = $this->chooseBlock( $oldBlockObj, $newBlockObj );
 		if ( $winner->getId() === $newBlockObj->getId() ) {
@@ -173,11 +164,11 @@ class MergeUser {
 	}
 
 	/**
-	 * @param DatabaseBlock $b1
-	 * @param DatabaseBlock $b2
-	 * @return DatabaseBlock
+	 * @param Block $b1
+	 * @param Block $b2
+	 * @return Block
 	 */
-	private function chooseBlock( DatabaseBlock $b1, DatabaseBlock $b2 ) {
+	private function chooseBlock( Block $b1, Block $b2 ) {
 		// First, see if one is longer than the other.
 		if ( $b1->getExpiry() !== $b2->getExpiry() ) {
 			// This works for infinite blocks because:
@@ -190,57 +181,18 @@ class MergeUser {
 		}
 
 		// Next check what they block, in order
-		$blockProps = [];
-		foreach ( [ $b1, $b2 ] as $block ) {
-			$blockProps[] = [
-				'block' => $block,
-				'createaccount' => $block->isCreateAccountBlocked(),
-				'sendemail' => $block->isEmailBlocked(),
-				'editownusertalk' => !$block->isUsertalkEditAllowed(),
-			];
-		}
 		foreach ( [ 'createaccount', 'sendemail', 'editownusertalk' ] as $action ) {
-			if ( $blockProps[0][$action] xor $blockProps[1][$action] ) {
-				if ( $blockProps[0][$action] ) {
-					return $blockProps[0]['block'];
+			if ( $b1->prevents( $action ) xor $b2->prevents( $action ) ) {
+				if ( $b1->prevents( $action ) ) {
+					return $b1;
 				} else {
-					return $blockProps[1]['block'];
+					return $b2;
 				}
 			}
 		}
 
 		// Give up, return the second one.
 		return $b2;
-	}
-
-	private function stageNeedsUser( $stage ) {
-		if ( !defined( 'MIGRATION_NEW' ) ) {
-			return true;
-		}
-		if ( !class_exists( ActorMigration::class ) ) {
-			return false;
-		}
-
-		if ( defined( 'ActorMigration::MIGRATION_STAGE_SCHEMA_COMPAT' ) ) {
-			return (bool)( (int)$stage & SCHEMA_COMPAT_WRITE_OLD );
-		} else {
-			return $stage < MIGRATION_NEW;
-		}
-	}
-
-	private function stageNeedsActor( $stage ) {
-		if ( !defined( 'MIGRATION_NEW' ) ) {
-			return false;
-		}
-		if ( !class_exists( ActorMigration::class ) ) {
-			return true;
-		}
-
-		if ( defined( 'ActorMigration::MIGRATION_STAGE_SCHEMA_COMPAT' ) ) {
-			return (bool)( $stage & SCHEMA_COMPAT_WRITE_NEW );
-		} else {
-			return $stage > MIGRATION_OLD;
-		}
 	}
 
 	/**
@@ -252,38 +204,47 @@ class MergeUser {
 	 * @param string $fnameTrxOwner
 	 */
 	private function mergeDatabaseTables( $fnameTrxOwner ) {
+		global $wgActorTableSchemaMigrationStage;
+
+		if ( defined( 'MIGRATION_NEW' ) ) {
+			$stage = isset( $wgActorTableSchemaMigrationStage )
+				? $wgActorTableSchemaMigrationStage
+				: ( is_callable( 'User', 'getActorId' ) ? MIGRATION_NEW : MIGRATION_OLD );
+			$needActors = $stage > MIGRATION_OLD;
+			// We still update user fields for MIGRATION_WRITE_NEW because
+			// reads might still be falling back.
+			$needUsers = $stage < MIGRATION_NEW;
+		} else {
+			$needActors = false;
+			$needUsers = true;
+		}
+
 		// Fields to update with the format:
 		// [
 		// tableName, idField, textField,
 		// 'batchKey' => unique field, 'options' => array(), 'db' => IDatabase
 		// 'actorId' => actor ID field,
-		// 'actorStage' => actor schema migration stage
 		// ];
 		// textField, batchKey, db, and options are optional
 		$updateFields = [
-			[ 'archive', 'ar_user', 'ar_user_text', 'batchKey' => 'ar_id', 'actorId' => 'ar_actor',
-				'actorStage' => SCHEMA_COMPAT_NEW ],
-			[ 'revision', 'rev_user', 'rev_user_text', 'batchKey' => 'rev_id', 'actorId' => '',
-				'actorStage' => SCHEMA_COMPAT_NEW ],
-			[ 'filearchive', 'fa_user', 'fa_user_text', 'batchKey' => 'fa_id', 'actorId' => 'fa_actor',
-				'actorStage' => SCHEMA_COMPAT_NEW ],
-			[ 'image', 'img_user', 'img_user_text', 'batchKey' => 'img_name', 'actorId' => 'img_actor',
-				'actorStage' => SCHEMA_COMPAT_NEW ],
+			[ 'archive', 'ar_user', 'ar_user_text', 'batchKey' => 'ar_id', 'actorId' => 'ar_actor' ],
+			[ 'revision', 'rev_user', 'rev_user_text', 'batchKey' => 'rev_id', 'actorId' => '' ],
+			[ 'filearchive', 'fa_user', 'fa_user_text', 'batchKey' => 'fa_id', 'actorId' => 'fa_actor' ],
+			[ 'image', 'img_user', 'img_user_text', 'batchKey' => 'img_name', 'actorId' => 'img_actor' ],
 			[ 'oldimage', 'oi_user', 'oi_user_text', 'batchKey' => 'oi_archive_name',
-				'actorId' => 'oi_actor', 'actorStage' => SCHEMA_COMPAT_NEW ],
-			[ 'recentchanges', 'rc_user', 'rc_user_text', 'batchKey' => 'rc_id', 'actorId' => 'rc_actor',
-				'actorStage' => SCHEMA_COMPAT_NEW ],
-			[ 'logging', 'log_user', 'log_user_text', 'batchKey' => 'log_id', 'actorId' => 'log_actor',
-				'actorStage' => SCHEMA_COMPAT_NEW ],
-			[ 'ipblocks', 'ipb_by', 'ipb_by_text', 'batchKey' => 'ipb_id', 'actorId' => 'ipb_by_actor',
-				'actorStage' => SCHEMA_COMPAT_NEW ],
+				'actorId' => 'oi_actor' ],
+			[ 'recentchanges', 'rc_user', 'rc_user_text', 'batchKey' => 'rc_id', 'actorId' => 'rc_actor' ],
+			[ 'logging', 'log_user', 'log_user_text', 'batchKey' => 'log_id', 'actorId' => 'log_actor' ],
+			[ 'ipblocks', 'ipb_by', 'ipb_by_text', 'batchKey' => 'ipb_id', 'actorId' => 'ipb_by_actor' ],
 			[ 'watchlist', 'wl_user', 'batchKey' => 'wl_title' ],
 			[ 'user_groups', 'ug_user', 'options' => [ 'IGNORE' ] ],
 			[ 'user_properties', 'up_user', 'options' => [ 'IGNORE' ] ],
 			[ 'user_former_groups', 'ufg_user', 'options' => [ 'IGNORE' ] ],
-			[ 'revision_actor_temp', 'batchKey' => 'revactor_rev', 'actorId' => 'revactor_actor',
-				'actorStage' => SCHEMA_COMPAT_NEW ],
 		];
+		if ( $needActors ) {
+			$updateFields[] =
+				[ 'revision_actor_temp', 'batchKey' => 'revactor_rev', 'actorId' => 'revactor_actor' ];
+		}
 
 		Hooks::run( 'UserMergeAccountFields', [ &$updateFields ] );
 
@@ -305,20 +266,19 @@ class MergeUser {
 				continue;
 			}
 
-			$options = $fieldInfo['options'] ?? [];
+			$options = isset( $fieldInfo['options'] ) ? $fieldInfo['options'] : [];
 			unset( $fieldInfo['options'] );
-			/** @phan-suppress-next-line PhanTypeInvalidDimOffset */
-			$db = $fieldInfo['db'] ?? $dbw;
+			$db = isset( $fieldInfo['db'] ) ? $fieldInfo['db'] : $dbw;
 			unset( $fieldInfo['db'] );
 			$tableName = array_shift( $fieldInfo );
 			$idField = array_shift( $fieldInfo );
-			$keyField = $fieldInfo['batchKey'] ?? null;
+			$keyField = isset( $fieldInfo['batchKey'] ) ? $fieldInfo['batchKey'] : null;
 			unset( $fieldInfo['batchKey'] );
 
-			if ( isset( $fieldInfo['actorId'] ) && !$this->stageNeedsUser( $fieldInfo['actorStage'] ) ) {
+			if ( isset( $fieldInfo['actorId'] ) && !$needUsers ) {
 				continue;
 			}
-			unset( $fieldInfo['actorId'], $fieldInfo['actorStage'] );
+			unset( $fieldInfo['actorId'] );
 
 			if ( $db->trxLevel() || $keyField === null ) {
 				// Can't batch/wait when in a transaction or when no batch key is given
@@ -365,21 +325,20 @@ class MergeUser {
 			}
 		}
 
-		if ( $this->oldUser->getActorId() ) {
+		if ( $needActors && $this->oldUser->getActorId() ) {
 			$oldActorId = $this->oldUser->getActorId();
 			$newActorId = $this->newUser->getActorId( $db );
 
 			foreach ( $updateFields as $fieldInfo ) {
-				if ( empty( $fieldInfo['actorId'] ) || !$this->stageNeedsActor( $fieldInfo['actorStage'] ) ) {
+				if ( empty( $fieldInfo['actorId'] ) ) {
 					continue;
 				}
 
-				$options = $fieldInfo['options'] ?? [];
-				/** @phan-suppress-next-line PhanTypeInvalidDimOffset */
-				$db = $fieldInfo['db'] ?? $dbw;
+				$options = isset( $fieldInfo['options'] ) ? $fieldInfo['options'] : [];
+				$db = isset( $fieldInfo['db'] ) ? $fieldInfo['db'] : $dbw;
 				$tableName = array_shift( $fieldInfo );
 				$idField = $fieldInfo['actorId'];
-				$keyField = $fieldInfo['batchKey'] ?? null;
+				$keyField = isset( $fieldInfo['batchKey'] ) ? $fieldInfo['batchKey'] : null;
 
 				if ( $db->trxLevel() || $keyField === null ) {
 					// Can't batch/wait when in a transaction or when no batch key is given
@@ -509,12 +468,11 @@ class MergeUser {
 	 * @return array Array of old name (string) => new name (Title) where the move failed
 	 */
 	private function movePages( User $performer, /* callable */ $msg ) {
-		global $wgUser;
-		$contLang = MediaWikiServices::getInstance()->getContentLanguage();
+		global $wgContLang, $wgUser;
 
 		$oldusername = trim( str_replace( '_', ' ', $this->oldUser->getName() ) );
 		$oldusername = Title::makeTitle( NS_USER, $oldusername );
-		$newusername = Title::makeTitleSafe( NS_USER, $contLang->ucfirst( $this->newUser->getName() ) );
+		$newusername = Title::makeTitleSafe( NS_USER, $wgContLang->ucfirst( $this->newUser->getName() ) );
 
 		# select all user pages and sub-pages
 		$dbr = wfGetDB( DB_REPLICA );
@@ -544,11 +502,9 @@ class MergeUser {
 
 			if ( $this->newUser->getName() === 'Anonymous' ) { # delete ALL old pages
 				if ( $oldPage->exists() ) {
-					$error = '';
 					$oldPageArticle = new Article( $oldPage, 0 );
 					$oldPageArticle->doDeleteArticle(
-						$message( 'usermerge-autopagedelete' )->inContentLanguage()->text(),
-						false, null, null, $error, true
+						$message( 'usermerge-autopagedelete' )->inContentLanguage()->text()
 					);
 				}
 			} elseif ( $newPage->exists()
@@ -556,21 +512,17 @@ class MergeUser {
 				&& $newPage->getLength() > 0
 			) {
 				# delete old pages that can't be moved
-				$error = '';
 				$oldPageArticle = new Article( $oldPage, 0 );
 				$oldPageArticle->doDeleteArticle(
-					$message( 'usermerge-autopagedelete' )->inContentLanguage()->text(),
-					false, null, null, $error, true
+					$message( 'usermerge-autopagedelete' )->inContentLanguage()->text()
 				);
 
 			} else { # move content to new page
 				# delete target page if it exists and is blank
 				if ( $newPage->exists() ) {
-					$error = '';
 					$newPageArticle = new Article( $newPage, 0 );
 					$newPageArticle->doDeleteArticle(
-						$message( 'usermerge-autopagedelete' )->inContentLanguage()->text(),
-						false, null, null, $error, true
+						$message( 'usermerge-autopagedelete' )->inContentLanguage()->text()
 					);
 				}
 
@@ -595,11 +547,9 @@ class MergeUser {
 				);
 				if ( !$dbr->numRows( $res ) ) {
 					# nothing links here, so delete unmoved page/redirect
-					$error = '';
 					$oldPageArticle = new Article( $oldPage, 0 );
 					$oldPageArticle->doDeleteArticle(
-						$message( 'usermerge-autopagedelete' )->inContentLanguage()->text(),
-						false, null, null, $error, true
+						$message( 'usermerge-autopagedelete' )->inContentLanguage()->text()
 					);
 				}
 			}
@@ -642,7 +592,7 @@ class MergeUser {
 		foreach ( $tablesToDelete as $table => $field ) {
 			// Check if a different database object was passed (Echo or Flow)
 			if ( is_array( $field ) ) {
-				$db = $field['db'] ?? $dbw;
+				$db = isset( $field['db'] ) ? $field['db'] : $dbw;
 				$field = $field[0];
 			} else {
 				$db = $dbw;

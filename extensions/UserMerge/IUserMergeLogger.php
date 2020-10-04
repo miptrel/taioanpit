@@ -14,8 +14,8 @@ interface IUserMergeLogger {
 	/**
 	 * Adds a user deletion log entry
 	 *
-	 * @param User $performer
+	 * @param User $perfomer
 	 * @param User $oldUser
 	 */
-	public function addDeleteEntry( User $performer, User $oldUser );
+	public function addDeleteEntry( User $perfomer, User $oldUser );
 }

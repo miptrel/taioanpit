@@ -10,8 +10,7 @@
 			"Fitoschido",
 			"Nemo bis",
 			"Macofe",
-			"Dgstranz",
-			"Tiberius1701"
+			"Dgstranz"
 		]
 	},
 	"usermerge": "Fusionar y borrar usuarios",
@@ -28,7 +27,9 @@
 	"usermerge-submit": "Fusionar usuario",
 	"usermerge-badtoken": "Ficha de edición inválida",
 	"usermerge-userdeleted": "Se borró a $1 ($2).",
+	"usermerge-userdeleted-log": "borró la cuenta de usuario «$2» ($3)",
 	"usermerge-success": "Se completó la combinación de $1 ($2) a $3 ($4).",
+	"usermerge-success-log": "fusionó la cuenta «$2» ($3) con «[[User:$4|$4]]» ($5)",
 	"usermerge-logpage": "Registro de fusiones del usuario",
 	"usermerge-logpagetext": "Este es un registro de fusiones de cuentas de usuario.",
 	"usermerge-noselfdelete": "No puedes borrarte o fusionarte tú {{GENDER:$1|mismo|misma}}.",
@@ -37,10 +38,5 @@
 	"action-usermerge": "fusionar usuarios",
 	"usermerge-autopagedelete": "Borrada automáticamente al fusionar usuarios",
 	"usermerge-page-unmoved": "La página $1 no pudo trasladarse a $2.",
-	"usermerge-move-log": "Página trasladada automáticamente al fusionar la cuenta «$1» con «[[User:$2|$2]]»",
-	"logentry-usermerge-mergeuser": "$1 {{GENDER:$2|fusionó}} la cuenta de usuario «$4» ($5) en la cuenta {{GENDER:$8|$6}} ($7)",
-	"logentry-usermerge-deleteuser": "$1 {{GENDER:$2|borró}} la cuenta de usuario «$4» ($5)",
-	"log-action-filter-usermerge": "Tipo de acción:",
-	"log-action-filter-usermerge-mergeuser": "Fusiones de cuentas de usuario",
-	"log-action-filter-usermerge-deleteuser": "Borrado de cuentas de usuario"
+	"usermerge-move-log": "Página trasladada automáticamente al fusionar la cuenta «$1» con «[[User:$2|$2]]»"
 }

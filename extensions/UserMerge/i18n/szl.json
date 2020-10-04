@@ -1,8 +1,7 @@
 {
 	"@metadata": {
 		"authors": [
-			"Lajsikonik",
-			"Uostofchuodnego"
+			"Lajsikonik"
 		]
 	},
 	"usermerge": "Skupluj a wyćep użytkowńikůw",
@@ -15,11 +14,13 @@
 	"usermerge-newuser": "Nowy użytkowńik (kupluj s)",
 	"usermerge-deleteolduser": "Wyćepać starygo użytkowńika?",
 	"usermerge-submit": "Kupluj użytkowńikůw",
-	"usermerge-badtoken": "Niynŏleżny tokyn edycyje.",
+	"usermerge-badtoken": "Ńyprowidłowy żetůn sprowjyńo",
 	"usermerge-userdeleted": "$1 ($2) zostoł wyćepany.",
+	"usermerge-userdeleted-log": "wyćepoł użytkowńika „$2” ($3)",
 	"usermerge-success": "Kuplowańy $1 ($2) s $3 ($4) zakończůne.",
-	"usermerge-logpage": "Regest kuplowaniŏ używŏczōw",
-	"usermerge-logpagetext": "To je regest kuplowań używŏczōw.",
+	"usermerge-success-log": "skuplowoł użytkowńika „$2” ($3) do „$4” ($5)",
+	"usermerge-logpage": "Rejer kuplowańo użytkowńików",
+	"usermerge-logpagetext": "To je rejer uoperacyji kuplowańo użytkowńikůw.",
 	"usermerge-noselfdelete": "Ńy idźe wyćepać abo kuplować samygo śebje!",
 	"usermerge-protectedgroup": "Ńy idźe skulować użytkowńika - je uůn człůnkym zabezpjeczůnyj grupy.",
 	"right-usermerge": "Kuplowańy użytkowńikůw"
