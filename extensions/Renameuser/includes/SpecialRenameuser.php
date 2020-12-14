@@ -1,5 +1,7 @@
 <?php
 
+use MediaWiki\MediaWikiServices;
+
 /**
  * Special page that allows authorised users to rename
  * user accounts
@@ -23,7 +25,8 @@ class SpecialRenameuser extends SpecialPage {
 	 * @throws UserBlockedError
 	 */
 	public function execute( $par ) {
-		global $wgContLang, $wgCapitalLinks;
+		global $wgCapitalLinks;
+		$contLang = MediaWikiServices::getInstance()->getContentLanguage();
 
 		$this->setHeaders();
 		$this->addHelpLink( 'Help:Renameuser' );
@@ -36,12 +39,10 @@ class SpecialRenameuser extends SpecialPage {
 			throw new PermissionsError( 'renameuser' );
 		}
 
-		if ( wfReadOnly() ) {
-			throw new ReadOnlyError;
-		}
+		$this->checkReadOnly();
 
 		if ( $user->isBlocked() ) {
-			throw new UserBlockedError( $this->getUser()->mBlock );
+			throw new UserBlockedError( $this->getUser()->getBlock() );
 		}
 
 		$this->useTransactionalTimeLimit();
@@ -51,11 +52,11 @@ class SpecialRenameuser extends SpecialPage {
 		$usernames = explode( '/', $par, 2 ); // this works as "/" is not valid in usernames
 		$oldnamePar = trim( str_replace( '_', ' ', $request->getText( 'oldusername', $usernames[0] ) ) );
 		$oldusername = Title::makeTitle( NS_USER, $oldnamePar );
-		$newnamePar = $usernames[1] ?? null;
+		$newnamePar = $usernames[1] ?? '';
 		$newnamePar = trim( str_replace( '_', ' ', $request->getText( 'newusername', $newnamePar ) ) );
 		// Force uppercase of newusername, otherwise wikis
 		// with wgCapitalLinks=false can create lc usernames
-		$newusername = Title::makeTitleSafe( NS_USER, $wgContLang->ucfirst( $newnamePar ) );
+		$newusername = Title::makeTitleSafe( NS_USER, $contLang->ucfirst( $newnamePar ) );
 		$oun = is_object( $oldusername ) ? $oldusername->getText() : '';
 		$nun = is_object( $newusername ) ? $newusername->getText() : '';
 		$token = $user->getEditToken();
@@ -138,6 +139,7 @@ class SpecialRenameuser extends SpecialPage {
 				);
 			}
 		}
+		// @phan-suppress-next-line PhanImpossibleCondition May set by hook
 		if ( $warnings ) {
 			$warningsHtml = [];
 			foreach ( $warnings as $warning ) {
@@ -255,7 +257,7 @@ class SpecialRenameuser extends SpecialPage {
 
 		// Check for the existence of lowercase oldusername in database.
 		// Until r19631 it was possible to rename a user to a name with first character as lowercase
-		if ( $oldusername->getText() !== $wgContLang->ucfirst( $oldusername->getText() ) ) {
+		if ( $oldusername->getText() !== $contLang->ucfirst( $oldusername->getText() ) ) {
 			// oldusername was entered as lowercase -> check for existence in table 'user'
 			$dbr = wfGetDB( DB_REPLICA );
 			$uid = $dbr->selectField( 'user', 'user_id',
@@ -340,12 +342,13 @@ class SpecialRenameuser extends SpecialPage {
 
 			$output = '';
 			$linkRenderer = $this->getLinkRenderer();
+			$movePageFactory = MediaWikiServices::getInstance()->getMovePageFactory();
 			foreach ( $pages as $row ) {
 				$oldPage = Title::makeTitleSafe( $row->page_namespace, $row->page_title );
 				$newPage = Title::makeTitleSafe( $row->page_namespace,
 					preg_replace( '!^[^/]+!', $newusername->getDBkey(), $row->page_title ) );
 
-				$movePage = new MovePage( $oldPage, $newPage );
+				$movePage = $movePageFactory->newMovePage( $oldPage, $newPage );
 				$validMoveStatus = $movePage->isValidMove();
 
 				# Do not autodelete or anything, title must not exist
