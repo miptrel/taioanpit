@@ -333,11 +333,6 @@ $specialPageAliases['sr-ec'] = [
 	'Renameuser' => [ 'ПреименујКорисника', 'Преименуј_корисника' ],
 ];
 
-/** Serbian (Latin script) (srpski (latinica)‎) */
-$specialPageAliases['sr-el'] = [
-	'Renameuser' => [ 'PreimenujKorisnika', 'Preimenuj_korisnika' ],
-];
-
 /** Swedish (svenska) */
 $specialPageAliases['sv'] = [
 	'Renameuser' => [ 'Användarnamnbyte' ],

@@ -43,7 +43,7 @@ class RenameUserCleanup extends Maintenance {
 	}
 
 	public function execute() {
-		if ( !RenameuserSQL::actorMigrationWriteOld() ) {
+		if ( RenameuserSQL::getActorMigrationStage() >= MIGRATION_NEW ) {
 			$this->output( "Core xx_user_text fields are no longer used, no updates should be needed.\n" );
 			return;
 		}
@@ -71,7 +71,7 @@ class RenameUserCleanup extends Maintenance {
 	 */
 	public function checkUserExistence( $olduser, $newuser ) {
 		if ( !$newuser->getId() ) {
-			$this->fatalError( 'No such user: ' . $this->getOption( 'newuser' ) );
+			$this->error( 'No such user: ' . $this->getOption( 'newuser' ), true );
 		}
 		if ( $olduser->getId() ) {
 			$this->output( 'WARNING!!: Old user still exists: ' . $this->getOption( 'olduser' ) . "\n" );
@@ -336,8 +336,7 @@ class RenameUserCleanup extends Maintenance {
 				$this->commitTransaction( $dbw, __METHOD__ );
 			} else {
 				$this->rollbackTransaction( $dbw, __METHOD__ );
-				$this->fatalError( "Problem with the update, rolling back and exiting\n" );
-				throw new LogicException();
+				$this->error( "Problem with the update, rolling back and exiting\n", true );
 			}
 
 			// $contribs = User::edits( $olduser->getId() );
@@ -347,5 +346,5 @@ class RenameUserCleanup extends Maintenance {
 	}
 }
 
-$maintClass = RenameUserCleanup::class;
+$maintClass = 'RenameUserCleanup';
 require_once RUN_MAINTENANCE_IF_MAIN;

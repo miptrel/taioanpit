@@ -1,7 +1,5 @@
 <?php
 
-use MediaWiki\MediaWikiServices;
-
 /**
  * Special page that allows authorised users to rename
  * user accounts
@@ -19,14 +17,12 @@ class SpecialRenameuser extends SpecialPage {
 	 * Show the special page
 	 *
 	 * @param mixed $par Parameter passed to the page
-	 * @suppress SecurityCheck-XSS T211471
 	 * @throws PermissionsError
 	 * @throws ReadOnlyError
 	 * @throws UserBlockedError
 	 */
 	public function execute( $par ) {
-		global $wgCapitalLinks;
-		$contLang = MediaWikiServices::getInstance()->getContentLanguage();
+		global $wgContLang, $wgCapitalLinks;
 
 		$this->setHeaders();
 		$this->addHelpLink( 'Help:Renameuser' );
@@ -39,10 +35,12 @@ class SpecialRenameuser extends SpecialPage {
 			throw new PermissionsError( 'renameuser' );
 		}
 
-		$this->checkReadOnly();
+		if ( wfReadOnly() ) {
+			throw new ReadOnlyError;
+		}
 
 		if ( $user->isBlocked() ) {
-			throw new UserBlockedError( $this->getUser()->getBlock() );
+			throw new UserBlockedError( $this->getUser()->mBlock );
 		}
 
 		$this->useTransactionalTimeLimit();
@@ -52,11 +50,11 @@ class SpecialRenameuser extends SpecialPage {
 		$usernames = explode( '/', $par, 2 ); // this works as "/" is not valid in usernames
 		$oldnamePar = trim( str_replace( '_', ' ', $request->getText( 'oldusername', $usernames[0] ) ) );
 		$oldusername = Title::makeTitle( NS_USER, $oldnamePar );
-		$newnamePar = $usernames[1] ?? '';
+		$newnamePar = isset( $usernames[1] ) ? $usernames[1] : null;
 		$newnamePar = trim( str_replace( '_', ' ', $request->getText( 'newusername', $newnamePar ) ) );
 		// Force uppercase of newusername, otherwise wikis
 		// with wgCapitalLinks=false can create lc usernames
-		$newusername = Title::makeTitleSafe( NS_USER, $contLang->ucfirst( $newnamePar ) );
+		$newusername = Title::makeTitleSafe( NS_USER, $wgContLang->ucfirst( $newnamePar ) );
 		$oun = is_object( $oldusername ) ? $oldusername->getText() : '';
 		$nun = is_object( $newusername ) ? $newusername->getText() : '';
 		$token = $user->getEditToken();
@@ -139,7 +137,6 @@ class SpecialRenameuser extends SpecialPage {
 				);
 			}
 		}
-		// @phan-suppress-next-line PhanImpossibleCondition May set by hook
 		if ( $warnings ) {
 			$warningsHtml = [];
 			foreach ( $warnings as $warning ) {
@@ -257,7 +254,7 @@ class SpecialRenameuser extends SpecialPage {
 
 		// Check for the existence of lowercase oldusername in database.
 		// Until r19631 it was possible to rename a user to a name with first character as lowercase
-		if ( $oldusername->getText() !== $contLang->ucfirst( $oldusername->getText() ) ) {
+		if ( $oldusername->getText() !== $wgContLang->ucfirst( $oldusername->getText() ) ) {
 			// oldusername was entered as lowercase -> check for existence in table 'user'
 			$dbr = wfGetDB( DB_REPLICA );
 			$uid = $dbr->selectField( 'user', 'user_id',
@@ -311,7 +308,7 @@ class SpecialRenameuser extends SpecialPage {
 			return;
 		}
 
-		// If this user is renaming his/herself, make sure that MovePage::move()
+		// If this user is renaming his/herself, make sure that Title::moveTo()
 		// doesn't make a bunch of null move edits under the old name!
 		if ( $user->getId() === $uid ) {
 			$user->setName( $newusername->getText() );
@@ -342,17 +339,12 @@ class SpecialRenameuser extends SpecialPage {
 
 			$output = '';
 			$linkRenderer = $this->getLinkRenderer();
-			$movePageFactory = MediaWikiServices::getInstance()->getMovePageFactory();
 			foreach ( $pages as $row ) {
 				$oldPage = Title::makeTitleSafe( $row->page_namespace, $row->page_title );
 				$newPage = Title::makeTitleSafe( $row->page_namespace,
 					preg_replace( '!^[^/]+!', $newusername->getDBkey(), $row->page_title ) );
-
-				$movePage = $movePageFactory->newMovePage( $oldPage, $newPage );
-				$validMoveStatus = $movePage->isValidMove();
-
 				# Do not autodelete or anything, title must not exist
-				if ( $newPage->exists() && !$validMoveStatus->isOK() ) {
+				if ( $newPage->exists() && !$oldPage->isValidMoveTarget( $newPage ) ) {
 					$link = $linkRenderer->makeKnownLink( $newPage );
 					$output .= Html::rawElement(
 						'li',
@@ -360,13 +352,16 @@ class SpecialRenameuser extends SpecialPage {
 						$this->msg( 'renameuser-page-exists' )->rawParams( $link )->escaped()
 					);
 				} else {
-					$logReason = $this->msg(
-						'renameuser-move-log', $oldusername->getText(), $newusername->getText()
-					)->inContentLanguage()->text();
-
-					$moveStatus = $movePage->move( $user, $logReason, !$suppressRedirect );
-
-					if ( $moveStatus->isOK() ) {
+					$success = $oldPage->moveTo(
+						$newPage,
+						false,
+						$this->msg(
+							'renameuser-move-log',
+							$oldusername->getText(),
+							$newusername->getText() )->inContentLanguage()->text(),
+						!$suppressRedirect
+					);
+					if ( $success === true ) {
 						# oldPage is not known in case of redirect suppression
 						$oldLink = $linkRenderer->makeLink( $oldPage, null, [], [ 'redirect' => 'no' ] );
 
@@ -419,6 +414,9 @@ class SpecialRenameuser extends SpecialPage {
 	 * @return string[] Matching subpages
 	 */
 	public function prefixSearchSubpages( $search, $limit, $offset ) {
+		if ( !class_exists( 'UserNamePrefixSearch' ) ) { // check for version 1.27
+			return [];
+		}
 		$user = User::newFromName( $search );
 		if ( !$user ) {
 			// No prefix suggestion for invalid user

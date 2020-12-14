@@ -1,7 +1,5 @@
 <?php
 
-use MediaWiki\MediaWikiServices;
-
 /**
  * Custom job to perform updates on tables in busier environments
  *
@@ -54,10 +52,12 @@ class RenameUserJob extends Job {
 		// Skip core tables that were migrated to the actor table, even if the
 		// field still exists in the database.
 		if ( in_array( "$table.$column", self::$actorMigratedColumns, true ) ) {
-			if ( !RenameuserSQL::actorMigrationWriteOld() ) {
+			// We still run the job for MIGRATION_WRITE_NEW because reads might
+			// still be falling back.
+			$stage = RenameuserSQL::getActorMigrationStage();
+			if ( $stage >= MIGRATION_NEW ) {
 				wfDebugLog( 'Renameuser',
-					"Ignoring job {$this->toString()}, column $table.$column "
-						. "actor migration stage lacks WRITE_OLD\n"
+					"Ignoring job {$this->toString()}, column $table.$column actor migration stage = $stage\n"
 				);
 				return true;
 			}
@@ -96,9 +96,9 @@ class RenameUserJob extends Job {
 			$minTimestamp = null;
 			$maxTimestamp = null;
 		}
-		$uniqueKey = $this->params['uniqueKey'] ?? null;
-		$keyId = $this->params['keyId'] ?? null;
-		$logId = $this->params['logId'] ?? null;
+		$uniqueKey = isset( $this->params['uniqueKey'] ) ? $this->params['uniqueKey'] : null;
+		$keyId = isset( $this->params['keyId'] ) ? $this->params['keyId'] : null;
+		$logId = isset( $this->params['logId'] ) ? $this->params['logId'] : null;
 
 		if ( $logId ) {
 			# Block until the transaction that inserted this job commits.
@@ -138,17 +138,15 @@ class RenameUserJob extends Job {
 			throw new InvalidArgumentException( 'Expected ID batch or time range' );
 		}
 
-		$lbFactory = MediaWikiServices::getInstance()->getDBLoadBalancerFactory();
-
 		$affectedCount = 0;
 		# Actually update the rows for this job...
 		if ( $uniqueKey !== null ) {
 			# Select the rows to update by PRIMARY KEY
 			$ids = $dbw->selectFieldValues( $table, $uniqueKey, $conds, __METHOD__ );
-			# Update these rows by PRIMARY KEY to avoid replica lag
+			# Update these rows by PRIMARY KEY to avoid slave lag
 			foreach ( array_chunk( $ids, $wgUpdateRowsPerQuery ) as $batch ) {
 				$dbw->commit( __METHOD__, 'flush' );
-				$lbFactory->waitForReplication();
+				wfWaitForSlaves();
 
 				$dbw->update( $table,
 					[ $column => $newname ],
@@ -186,7 +184,7 @@ class RenameUserJob extends Job {
 			);
 			foreach ( array_chunk( $ids, $wgUpdateRowsPerQuery ) as $batch ) {
 				$dbw->commit( __METHOD__, 'flush' );
-				$lbFactory->waitForReplication();
+				wfWaitForSlaves();
 
 				$dbw->update(
 					'archive',
@@ -215,7 +213,7 @@ class RenameUserJob extends Job {
 			);
 			foreach ( array_chunk( $ids, $wgUpdateRowsPerQuery ) as $batch ) {
 				$dbw->commit( __METHOD__, 'flush' );
-				$lbFactory->waitForReplication();
+				wfWaitForSlaves();
 
 				$dbw->update(
 					'revision',

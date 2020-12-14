@@ -1,7 +1,5 @@
 <?php
 
-use MediaWiki\MediaWikiServices;
-
 $IP = getenv( 'MW_INSTALL_PATH' );
 if ( $IP === false ) {
 	$IP = __DIR__ . '/../../..';
@@ -15,21 +13,19 @@ require_once "$IP/maintenance/Maintenance.php";
 class CleanupArchiveUserText extends Maintenance {
 	public function __construct() {
 		parent::__construct();
-		$this->addDescription( 'Update the archive table where users were ' .
-			'previously renamed, but their archive contributions were not' );
+		$this->mDescription = 'Update the archive table where users were ' .
+			'previously renamed, but their archive contributions were not';
 
 		$this->requireExtension( 'Renameuser' );
 	}
 
 	public function execute() {
-		if ( !RenameuserSQL::actorMigrationWriteOld() ) {
+		if ( RenameuserSQL::getActorMigrationStage() >= MIGRATION_NEW ) {
 			$this->output( "archive.ar_user_text is no longer used.\n" );
 			return;
 		}
 
 		$dbw = wfGetDB( DB_MASTER );
-		$lbFactory = MediaWikiServices::getInstance()->getDBLoadBalancerFactory();
-
 		do {
 			$res = $dbw->select(
 				[ 'archive', 'user' ],
@@ -57,7 +53,7 @@ class CleanupArchiveUserText extends Maintenance {
 				);
 				$affected = $dbw->affectedRows();
 				$this->output( "$affected rows\n" );
-				$lbFactory->waitForReplication();
+				wfWaitForSlaves();
 			}
 		} while ( $results === 50 );
 	}
@@ -67,5 +63,5 @@ class CleanupArchiveUserText extends Maintenance {
 	}
 }
 
-$maintClass = CleanupArchiveUserText::class;
+$maintClass = 'CleanupArchiveUserText';
 require_once RUN_MAINTENANCE_IF_MAIN;
