@@ -2,12 +2,14 @@
 	"@metadata": {
 		"authors": [
 			"Ahmed-Najib-Biabani-Ibrahimkhel",
-			"Baloch Khan",
-			"Amjad Khan"
+			"Amjad Khan",
+			"Baloch Khan"
 		]
 	},
+	"minerva-last-modified-date": "فعاله خبرې اترې",
 	"minerva-talk-add-topic": "خبري آترې ورګډول",
 	"mobile-frontend-editor-edit": "سمول",
+	"minerva-download": "پی‌ډی‌اف کښته کول",
 	"mobile-frontend-editor-redlink-create": "مخ جوړول",
 	"mobile-frontend-editor-redlink-explain": "دا مخ لا تراوسه نه دي جوړ شوې.",
 	"mobile-frontend-editor-redlink-leave": "نه، مننه.",
@@ -30,10 +32,9 @@
 	"mobile-frontend-pageaction-edit-tooltip": "د دې مخ د پيل برخه سمول.",
 	"mobile-frontend-placeholder": "{{SITENAME}} پلټل",
 	"mobile-frontend-random-button": "بېلابېل",
-	"mobile-frontend-redirected-from": "د \"$1\" څخه راوګرځول شو",
+	"mobile-frontend-redirected-from": "د \"[[$1]]\" څخه راوګرځول شو",
 	"mobile-frontend-talk-back-to-page": "و \"$1\" مخ ته وروګرځي.",
 	"mobile-frontend-talk-back-to-userpage": "بيرته د «{{GENDER:$1|$1}}» مخ ته وروګرځي.",
 	"mobile-frontend-user-page-contributions": "ونډې",
-	"mobile-frontend-user-page-talk": "خبرې اترې",
-	"mobile-frontend-user-page-uploads": "پورته کېدنې"
+	"mobile-frontend-user-page-talk": "خبرې اترې"
 }

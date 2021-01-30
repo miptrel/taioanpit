@@ -1,7 +1,9 @@
 <?php
+
 namespace MobileFrontend\AMC;
 
 use MediaWiki\ChangeTags\Taggable;
+use User;
 
 /**
  * Hooks for Advanced Mobile Contributions
@@ -23,6 +25,7 @@ final class Hooks {
 		}
 		return true;
 	}
+
 	/**
 	 * Register default preference value for AMC opt-in
 	 *
@@ -30,6 +33,18 @@ final class Hooks {
 	 */
 	public static function onUserGetDefaultOptions( &$defaultUserOptions ) {
 		$defaultUserOptions[UserMode::USER_OPTION_MODE_AMC] = UserMode::OPTION_DISABLED;
+	}
+
+	/**
+	 * Register AMC preference
+	 * @param User $user
+	 * @param array &$preferences
+	 */
+	public static function onGetPreferences( User $user, array &$preferences ) {
+		$preferences[ UserMode::USER_OPTION_MODE_AMC ] = [
+			'type' => 'api',
+			'default' => UserMode::OPTION_DISABLED
+		];
 	}
 
 	/**

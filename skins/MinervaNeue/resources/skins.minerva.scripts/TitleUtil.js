@@ -3,8 +3,8 @@
 // of a SiteInfo, it still becomes a public API. If it lives where used, it becomes a copy and paste
 // implementation where each copy can deviate but deletion is easy. See additional discussion in
 // T218358 and I95b08e77eece5cd4dae62f6f237d492d6b0fe42b.
-( function ( M ) {
-	var UriUtil = M.require( 'skins.minerva.scripts/UriUtil' );
+( function () {
+	var UriUtil = require( './UriUtil.js' );
 
 	/**
 	 * Returns the decoded wiki page title referenced by the passed link as a string when parsable.
@@ -70,7 +70,7 @@
 
 		if ( mwUri.query.title ) {
 			// True if input starts with wgScriptPath.
-			regExp = new RegExp( '^' + mw.RegExp.escape( mw.config.get( 'wgScriptPath' ) ) + '/' );
+			regExp = new RegExp( '^' + mw.util.escapeRegExp( mw.config.get( 'wgScriptPath' ) ) + '/' );
 
 			// URL has a nonempty `title` query parameter like `/w/index.php?title=Foo`. The script
 			// path should match.
@@ -84,7 +84,7 @@
 		} else {
 			// True if input starts with wgArticlePath and ends with a nonempty page title. The
 			// first matching group (index 1) is the page title.
-			regExp = new RegExp( '^' + mw.RegExp.escape( mw.config.get( 'wgArticlePath' ) ).replace( '\\$1', '(.+)' ) );
+			regExp = new RegExp( '^' + mw.util.escapeRegExp( mw.config.get( 'wgArticlePath' ) ).replace( '\\$1', '(.+)' ) );
 
 			// No title query parameter is present so the URL may be "pretty" like `/wiki/Foo`.
 			// `Uri.path` should not contain query parameters or a fragment, as is assumed in
@@ -132,7 +132,7 @@
 		return length === ( ( 'oldid' in uri.query ? 1 : 0 ) + ( 'title' in uri.query ? 1 : 0 ) );
 	}
 
-	M.define( 'skins.minerva.scripts/TitleUtil', {
+	module.exports = {
 		newFromUri: newFromUri
-	} );
-}( mw.mobileFrontend ) );
+	};
+}() );

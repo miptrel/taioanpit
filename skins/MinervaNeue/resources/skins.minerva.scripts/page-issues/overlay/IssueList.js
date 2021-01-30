@@ -3,10 +3,11 @@
 		mobile = M.require( 'mobile.startup' ),
 		mfExtend = mobile.mfExtend,
 		View = mobile.View,
-		IssueNotice = M.require( 'skins.minerva.scripts/IssueNotice' );
+		IssueNotice = require( './IssueNotice.js' );
 
 	/**
 	 * IssueList
+	 *
 	 * @class IssueList
 	 * @extends View
 	 *
@@ -29,5 +30,7 @@
 		}
 	} );
 
-	M.define( 'skins.minerva.scripts/IssueList', IssueList );
+	module.exports = IssueList;
+
+// eslint-disable-next-line no-restricted-properties
 }( mw.mobileFrontend ) );

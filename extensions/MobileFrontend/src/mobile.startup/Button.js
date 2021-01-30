@@ -1,9 +1,11 @@
 var
 	mfExtend = require( './mfExtend' ),
+	util = require( './util' ),
 	View = require( './View' );
 
 /**
  * A wrapper for creating a button.
+ *
  * @class Button
  * @extends View
  *
@@ -31,15 +33,16 @@ mfExtend( Button, View, {
 	 * @property {string} defaults.tagName The name of the tag in which the button is wrapped.
 	 * @property {boolean} defaults.block is stacked button
 	 * @property {boolean} defaults.progressive is progressive action
-	 *   This option is deprecated. Please use `progressive`.
 	 * @property {boolean} defaults.quiet is quiet button
 	 * @property {boolean} defaults.destructive is destructive action
 	 * @property {string} defaults.additionalClassNames Additional class name(s).
 	 * @property {string} defaults.href url
 	 * @property {string} defaults.label of button
+	 * @property {boolean} defaults.disabled should only be used with tagName button
 	 */
 	defaults: {
 		tagName: 'a',
+		disabled: false,
 		block: undefined,
 		progressive: undefined,
 		destructive: undefined,
@@ -52,7 +55,13 @@ mfExtend( Button, View, {
 	 * @memberof Button
 	 * @instance
 	 */
-	template: mw.template.get( 'mobile.startup', 'button.hogan' )
+	template: util.template( `<{{tagName}} {{#disabled}}disabled{{/disabled}}
+{{#href}}href="{{href}}"{{/href}}
+class="mw-ui-button {{#progressive}}mw-ui-progressive{{/progressive}}
+	{{#block}}mw-ui-block{{/block}}
+	{{#quiet}}mw-ui-quiet{{/quiet}}
+	{{#destructive}}mw-ui-destructive{{/destructive}} {{additionalClassNames}}
+">{{label}}</{{tagName}}>` )
 } );
 
 module.exports = Button;

@@ -2,8 +2,9 @@ var browser = require( './Browser' ).getSingleton(),
 	util = require( './util' ),
 	escapeHash = util.escapeHash,
 	arrowOptions = {
-		name: 'arrow',
-		additionalClassNames: 'indicator'
+		name: 'expand',
+		isSmall: true,
+		additionalClassNames: 'indicator mw-ui-icon-flush-left'
 	},
 	Icon = require( './Icon' );
 
@@ -13,7 +14,7 @@ var browser = require( './Browser' ).getSingleton(),
  * @prop {boolean} expanded True if section is opened, false if closed.
  * @prop {Page} page
  * @prop {boolean} isReferenceSection
- * @prop {JQuery.Object} $heading
+ * @prop {jQuery.Object} $heading
  */
 
 /**
@@ -25,7 +26,7 @@ var browser = require( './Browser' ).getSingleton(),
  * @param {jQuery.Object} options.$container to apply toggling to
  * @param {string} options.prefix a prefix to use for the id.
  * @param {Page} options.page to allow storage of session for future visits
- * @param {Page} [options.isClosed]
+ * @param {boolean} [options.isClosed]
  */
 function Toggler( options ) {
 	this.eventBus = options.eventBus;
@@ -46,9 +47,9 @@ function getExpandedSections( page ) {
 }
 
 /**
-* @param {Object} expandedSections
-* Save expandedSections to localStorage
-*/
+ * @param {Object} expandedSections
+ * Save expandedSections to localStorage
+ */
 function saveExpandedSections( expandedSections ) {
 	mw.storage.set(
 		'expandedSections', JSON.stringify( expandedSections )
@@ -80,6 +81,7 @@ function storeSectionToggleState( $heading, page ) {
 
 /**
  * Expand sections that were previously expanded before leaving this page.
+ *
  * @param {Toggler} toggler
  * @param {jQuery.Object} $container
  * @param {Page} page
@@ -105,6 +107,7 @@ function expandStoredSections( toggler, $container, page ) {
 /**
  * Clean obsolete (saved more than a day ago) expanded sections from
  * localStorage.
+ *
  * @param {Page} page
  */
 function cleanObsoleteStoredSections( page ) {
@@ -132,11 +135,13 @@ function cleanObsoleteStoredSections( page ) {
  * @memberof Toggler
  * @instance
  * @param {jQuery.Object} $heading A heading belonging to a section
+ * @param {Page} page
  */
-Toggler.prototype.toggle = function ( $heading ) {
+Toggler.prototype.toggle = function ( $heading, page ) {
 	var indicator,
+		self = this,
 		wasExpanded = $heading.is( '.open-block' ),
-		page = $heading.data( 'page' ),
+		$headingLabel = $heading.find( '.mw-headline' ),
 		$content = $heading.next();
 
 	$heading.toggleClass( 'open-block' );
@@ -146,23 +151,29 @@ Toggler.prototype.toggle = function ( $heading ) {
 	indicator = new Icon( arrowOptions ).prependTo( $heading );
 	$heading.data( 'indicator', indicator );
 
-	$content
-		.toggleClass( 'open-block' )
-		.attr( {
-			'aria-pressed': !wasExpanded,
-			'aria-expanded': !wasExpanded
-		} );
+	$headingLabel.attr( 'aria-expanded', !wasExpanded );
 
-	/**
-	 * Global event emitted after a section has been toggled
-	 * @event section-toggled
-	 * @type {ToggledEvent}
-	 */
-	this.eventBus.emit( 'section-toggled', {
-		expanded: wasExpanded,
-		page: page,
-		isReferenceSection: Boolean( $content.attr( 'data-is-reference-section' ) ),
-		$heading: $heading
+	$content.toggleClass( 'open-block' );
+
+	/* T239418 We consider this event as a low-priority one and emit it asynchronously.
+	This ensures that any logic associated with section toggling is async and not contributing
+	directly to a slow click/press event handler.
+
+	Currently costly reflow-inducing viewport size computation is being done for lazy-loaded
+	images by the main listener to this event. */
+	mw.requestIdleCallback( function () {
+		/**
+		 * Global event emitted after a section has been toggled
+		 *
+		 * @event section-toggled
+		 * @type {ToggledEvent}
+		 */
+
+		self.eventBus.emit( 'section-toggled', {
+			expanded: wasExpanded,
+			isReferenceSection: Boolean( $content.attr( 'data-is-reference-section' ) ),
+			$heading: $heading
+		} );
 	} );
 
 	if ( !browser.isWideScreen() ) {
@@ -175,12 +186,13 @@ Toggler.prototype.toggle = function ( $heading ) {
  *
  * @param {Toggler} toggler instance.
  * @param {jQuery.Object} $heading
+ * @param {Page} page
  */
-function enableKeyboardActions( toggler, $heading ) {
+function enableKeyboardActions( toggler, $heading, page ) {
 	$heading.on( 'keypress', function ( ev ) {
 		if ( ev.which === 13 || ev.which === 32 ) {
 			// Only handle keypresses on the "Enter" or "Space" keys
-			toggler.toggle( $heading );
+			toggler.toggle( $heading, page );
 		}
 	} ).find( 'a' ).on( 'keypress mouseup', function ( ev ) {
 		ev.stopPropagation();
@@ -194,8 +206,9 @@ function enableKeyboardActions( toggler, $heading ) {
  * @instance
  * @param {string} selector A css selector that identifies a single element
  * @param {Object} $container jQuery element to search in
+ * @param {Page} page
  */
-Toggler.prototype.reveal = function ( selector, $container ) {
+Toggler.prototype.reveal = function ( selector, $container, page ) {
 	var $target, $heading;
 
 	// jQuery will throw for hashes containing certain characters which can break toggling
@@ -207,7 +220,7 @@ Toggler.prototype.reveal = function ( selector, $container ) {
 			$heading = $target.parents( '.collapsible-block' ).prev( '.collapsible-heading' );
 		}
 		if ( $heading.length && !$heading.hasClass( 'open-block' ) ) {
-			this.toggle( $heading );
+			this.toggle( $heading, page );
 		}
 		if ( $heading.length ) {
 			// scroll again after opening section (opening section makes the page longer)
@@ -225,7 +238,7 @@ Toggler.prototype.reveal = function ( selector, $container ) {
  * @param {jQuery.Object} $container to apply toggling to
  * @param {string} prefix a prefix to use for the id.
  * @param {Page} page to allow storage of session for future visits
- * @param {Page} [isClosed] whether the element should begin closed
+ * @param {boolean} [isClosed] whether the element should begin closed
  * @private
  */
 Toggler.prototype._enable = function ( $container, prefix, page, isClosed ) {
@@ -249,22 +262,17 @@ Toggler.prototype._enable = function ( $container, prefix, page, isClosed ) {
 	$container.children( tagName ).each( function ( i ) {
 		var isReferenceSection,
 			$heading = $container.find( this ),
+			$headingLabel = $heading.find( '.mw-headline' ),
 			$indicator = $heading.find( '.indicator' ),
 			id = prefix + 'collapsible-block-' + i;
-		// Be sure there is a div wrapping the section content.
+		// Be sure there is a `section` wrapping the section content.
 		// Otherwise, collapsible sections for this page is not enabled.
-		if ( $heading.next().is( 'div' ) ) {
-			$content = $heading.next( 'div' );
+		if ( $heading.next().is( 'section' ) ) {
+			$content = $heading.next( 'section' );
 			isReferenceSection = Boolean( $content.attr( 'data-is-reference-section' ) );
 			$heading
 				.addClass( 'collapsible-heading ' )
 				.data( 'section-number', i )
-				.data( 'page', page )
-				.attr( {
-					tabindex: 0,
-					'aria-haspopup': 'true',
-					'aria-controls': id
-				} )
 				.on( 'click', function ( ev ) {
 					// don't toggle, if the click target was a link
 					// (a link in a section heading)
@@ -272,12 +280,20 @@ Toggler.prototype._enable = function ( $container, prefix, page, isClosed ) {
 					if ( !ev.target.href ) {
 						// prevent taps/clicks on edit button after toggling (bug 56209)
 						ev.preventDefault();
-						self.toggle( $heading );
+						self.toggle( $heading, page );
 					}
+				} );
+			$headingLabel
+				.attr( {
+					tabindex: 0,
+					role: 'button',
+					'aria-controls': id,
+					'aria-expanded': 'false'
 				} );
 
 			arrowOptions.rotation = expandSections ? 180 : 0;
 			indicator = new Icon( arrowOptions );
+
 			if ( $indicator.length ) {
 				// replace the existing indicator
 				$indicator.replaceWith( indicator.$el );
@@ -291,13 +307,11 @@ Toggler.prototype._enable = function ( $container, prefix, page, isClosed ) {
 				.attr( {
 					// We need to give each content block a unique id as that's
 					// the only way we can tell screen readers what element we're
-					// referring to (aria-controls)
-					id: id,
-					'aria-pressed': 'false',
-					'aria-expanded': 'false'
+					// referring to via `aria-controls`.
+					id: id
 				} );
 
-			enableKeyboardActions( self, $heading );
+			enableKeyboardActions( self, $heading, page );
 			if (
 				!isReferenceSection && (
 					!isClosed && browser.isWideScreen() || expandSections
@@ -307,7 +321,7 @@ Toggler.prototype._enable = function ( $container, prefix, page, isClosed ) {
 				// or if the expand sections setting is set.
 				// The wide screen logic for determining whether to collapse sections initially
 				// should be kept in sync with mobileoptions#initLocalStorageElements().
-				self.toggle( $heading );
+				self.toggle( $heading, page );
 			}
 		}
 	} );
@@ -321,7 +335,9 @@ Toggler.prototype._enable = function ( $container, prefix, page, isClosed ) {
 	function checkHash() {
 		var hash = window.location.hash;
 		if ( hash.indexOf( '#' ) === 0 ) {
-			self.reveal( hash, $container );
+			// Non-latin characters in the hash will be provided percent-encoded, which
+			// jQuery would later fail to cope with.
+			self.reveal( decodeURIComponent( hash ), $container, page );
 		}
 	}
 
@@ -337,7 +353,7 @@ Toggler.prototype._enable = function ( $container, prefix, page, isClosed ) {
 
 		if ( internalRedirectHash ) {
 			window.location.hash = internalRedirectHash;
-			self.reveal( internalRedirectHash, $container );
+			self.reveal( internalRedirectHash, $container, page );
 		}
 	}
 	/* eslint-enable no-restricted-properties */

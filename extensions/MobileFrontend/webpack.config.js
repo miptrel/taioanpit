@@ -1,4 +1,5 @@
-/* eslint-env node, es6 */
+'use strict';
+
 const
 	CleanPlugin = require( 'clean-webpack-plugin' ),
 	glob = require( 'glob' ),
@@ -10,7 +11,6 @@ const
 	srcMapExt = '.map.json',
 	ENTRIES = {
 		tests: 'tests.mobilefrontend',
-		hogan: 'mediawiki.template.hogan',
 		startup: 'mobile.startup',
 		categories: 'mobile.categories.overlays',
 		editor: 'mobile.editor.overlay',
@@ -18,12 +18,9 @@ const
 		languages: 'mobile.languages.structured',
 		mediaViewer: 'mobile.mediaViewer',
 		mobileInit: 'mobile.init',
-		notifications: 'mobile.notifications.overlay',
 		talk: 'mobile.talk.overlays',
 		mobileOptions: 'mobile.special.mobileoptions.scripts',
-		mobileDiff: 'mobile.special.mobilediff.scripts',
 		nearby: 'mobile.special.nearby.scripts',
-		uploads: 'mobile.special.uploads.scripts',
 		userLogin: 'mobile.special.userlogin.scripts',
 		watchlist: 'mobile.special.watchlist.scripts'
 	};
@@ -58,14 +55,15 @@ module.exports = ( env, argv ) => ( {
 		// test.mediawiki.qunit.testrunner and test.sinonjs.
 		// The glob module is used to ensure that all tests inside the folder (minus stubs) are
 		// caught and run to ensure we don't forget to register new tests.
-		[ENTRIES.tests]: glob.sync( './tests/node-qunit/**/*.test.js' ),
+		[ENTRIES.tests]: glob.sync( './tests/node-qunit/**/*.test.js', {
+			ignore: './tests/node-qunit/importable.test.js'
+		} ),
 
 		// mobile.startup.runtime: reserved entry for the Webpack bootloader
 		// optimization.runtimeChunk. Without a distinct runtime chunk, it's instead bundled into
 		// each entry which is inefficient. This chunk should only change when Webpack or this
 		// configuration changes.
 
-		[ENTRIES.hogan]: './src/mediawiki.template.hogan/mediawiki.template.hogan.js',
 		[ENTRIES.startup]: './src/mobile.startup/mobile.startup.js',
 		// Make some chunks which will be lazy loaded by resource loader.
 		// If we utilize webpack lazy loading instead of resource loader lazy
@@ -76,26 +74,23 @@ module.exports = ( env, argv ) => ( {
 		[ENTRIES.editorVe]: './src/mobile.editor.ve/mobile.editor.ve.js',
 		[ENTRIES.languages]: './src/mobile.languages.structured/mobile.languages.structured.js',
 		[ENTRIES.mediaViewer]: './src/mobile.mediaViewer/mobile.mediaViewer.js',
-		[ENTRIES.notifications]: './src/mobile.notifications.overlay/mobile.notifications.overlay.js',
 		[ENTRIES.talk]: './src/mobile.talk.overlays/mobile.talk.overlays.js',
 		// all mobile skins,
 		[ENTRIES.mobileInit]: './src/mobile.init/mobile.init.js',
 		// T212823 Make a chunk for each mobile special page
-		[ENTRIES.mobileDiff]: './src/mobile.special.mobilediff.scripts.js',
 		[ENTRIES.mobileOptions]: './src/mobile.special.mobileoptions.scripts.js',
 		[ENTRIES.nearby]: './src/mobile.special.nearby.scripts/mobile.special.nearby.scripts.js',
 		[ENTRIES.userLogin]: './src/mobile.special.userlogin.scripts.js',
-		[ENTRIES.uploads]: './src/mobile.special.uploads.scripts/mobile.special.uploads.scripts.js',
 		[ENTRIES.watchlist]: './src/mobile.special.watchlist.scripts/mobile.special.watchlist.scripts.js'
 	},
 
 	// tests.mobilefrontend has additional dependencies but they're provided externally. This code
 	// can be removed if tests.mobilefrontend is removed.
-	externals: [ 'jquery', 'jsdom', 'oojs', 'sinon', 'qunit', 'fs', 'path' ],
+	externals: [ 'jquery', 'jsdom', 'oojs', 'qunit', 'fs', 'path' ],
 	resolve: {
 		alias: {
 			// This avoids leaking unnecessary code into the webpack test build
-			'./mockMediaWiki': path.resolve( __dirname, 'tests/node-qunit/utils/blank.json' )
+			'./mockMediaWiki': path.resolve( __dirname, 'tests/node-qunit/utils/blank.js' )
 		}
 	},
 	module: {
@@ -124,7 +119,7 @@ module.exports = ( env, argv ) => ( {
 		namedModules: true,
 
 		// Generate a single Webpack bootstrap chunk for ResourceLoader modules to share. This will
-		// be packaged inside the mediawiki.template.hogan module which should be a dependency for
+		// be packaged inside the mobile.startup module which should be a dependency for
 		// all modules. The inefficient  alternative is for each module to bundle its own runtime.
 		// The terms bootloader and runtime are used interchangeably.
 		runtimeChunk: { name: 'mobile.startup.runtime' },
@@ -161,6 +156,7 @@ module.exports = ( env, argv ) => ( {
 					// this cacheGroup
 					enforce: true,
 					// Only consider splitting chunks off of these whitelisted entry names
+					// eslint-disable-next-line no-restricted-syntax
 					chunks: ( chunk ) => [
 						ENTRIES.startup,
 						ENTRIES.categories,
@@ -168,14 +164,12 @@ module.exports = ( env, argv ) => ( {
 						ENTRIES.editorVe,
 						ENTRIES.languages,
 						ENTRIES.mediaViewer,
-						ENTRIES.notifications,
 						ENTRIES.talk,
 						ENTRIES.mobileInit,
 						ENTRIES.mobileDiff,
 						ENTRIES.mobileOptions,
 						ENTRIES.nearby,
 						ENTRIES.userLogin,
-						ENTRIES.uploads,
 						ENTRIES.watchlist
 					].includes( chunk.name )
 				}
@@ -223,11 +217,13 @@ module.exports = ( env, argv ) => ( {
 		// well understood. Related to bundlesize minified, gzipped compressed file size tests.
 		// Note: entrypoint size implicitly includes the mobile.startup.runtime and mobile.common
 		// chunks.
-		maxAssetSize: 49 * 1024,
-		maxEntrypointSize: 80 * 1024,
+		maxAssetSize: 60.5 * 1024,
+		maxEntrypointSize: 89.9 * 1024,
 		// The default filter excludes map files but we rename ours. Also, any modules prefixed with
 		// "tests." are excluded from performance checks as they are not shipped to end users.
+		// eslint-disable-next-line no-restricted-properties
 		assetFilter: ( filename ) => !filename.startsWith( 'tests.' ) &&
+			// eslint-disable-next-line no-restricted-properties
 			!filename.endsWith( srcMapExt )
 	}
 } );

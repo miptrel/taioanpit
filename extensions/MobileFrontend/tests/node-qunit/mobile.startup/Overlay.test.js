@@ -1,12 +1,13 @@
-var
+const
 	sinon = require( 'sinon' ),
 	jQuery = require( '../utils/jQuery' ),
 	mfExtend = require( '../../../src/mobile.startup/mfExtend' ),
 	dom = require( '../utils/dom' ),
 	mediaWiki = require( '../utils/mw' ),
+	mustache = require( '../utils/mustache' ),
 	oo = require( '../utils/oo' ),
-	util = require( '../../../src/mobile.startup/util' ),
-	Hogan = require( 'hogan.js' ),
+	util = require( '../../../src/mobile.startup/util' );
+let
 	Overlay,
 	sandbox;
 
@@ -18,6 +19,7 @@ QUnit.module( 'MobileFrontend: Overlay.js', {
 		jQuery.setUp( sandbox, global );
 		oo.setUp( sandbox, global );
 		mediaWiki.setUp( sandbox, global );
+		mustache.setUp( sandbox, global );
 		Overlay = require( '../../../src/mobile.startup/Overlay' );
 
 		// jsdom will throw "Not implemented" errors if we don't stub
@@ -40,18 +42,17 @@ QUnit.module( 'MobileFrontend: Overlay.js', {
 } );
 
 QUnit.test( 'Simple overlay', function ( assert ) {
-	var overlay = new Overlay( {
-			heading: '<h2>Overlay Title</h2>'
-		} ),
-		headingNode;
+	const overlay = new Overlay( {
+		heading: '<h2>Overlay Title</h2>'
+	} );
 
-	headingNode = overlay.$el.find( 'h2:contains("Overlay Title")' );
+	const $headingNode = overlay.$el.find( 'h2:contains("Overlay Title")' );
 
-	assert.strictEqual( headingNode.length, 1 );
+	assert.strictEqual( $headingNode.length, 1 );
 } );
 
 QUnit.test( '#make', function ( assert ) {
-	var overlay = Overlay.make( {
+	const overlay = Overlay.make( {
 		heading: 'Fresh from factory'
 	}, new Overlay( {
 		className: 'overlay-child',
@@ -72,18 +73,16 @@ QUnit.test( '#make', function ( assert ) {
 } );
 
 QUnit.test( 'HTML overlay', function ( assert ) {
-	var overlay;
-
 	function TestOverlay() {
 		Overlay.apply( this, arguments );
 	}
 
 	mfExtend( TestOverlay, Overlay, {
 		templatePartials: util.extend( {}, Overlay.prototype.templatePartials, {
-			content: Hogan.compile( '<div class="content">YO</div>' )
+			content: util.template( '<div class="content">YO</div>' )
 		} )
 	} );
-	overlay = new TestOverlay( {
+	const overlay = new TestOverlay( {
 		heading: 'Awesome'
 	} );
 
@@ -92,35 +91,11 @@ QUnit.test( 'HTML overlay', function ( assert ) {
 } );
 
 QUnit.test( 'headerActions property', function ( assert ) {
-	var overlays = [
+	const overlays = [
 		new Overlay( {} ),
 		new Overlay( {
 			headerActions: [
 				{ $el: util.parseHTML( '<div>' ) }
-			]
-		} ),
-		new Overlay( {
-			headerButtons: [
-				{
-					href: '#',
-					className: 'foo',
-					disabled: true,
-					msg: 'banana'
-				}
-			]
-		} ),
-		new Overlay( {
-			headerButtons: [
-				{
-					href: '#',
-					className: 'foo',
-					disabled: true,
-					msg: 'banana'
-				}
-			],
-			headerActions: [
-				{ $el: util.parseHTML( '<div>' ) },
-				{ $el: util.parseHTML( '<button>' ) }
 			]
 		} )
 	];
@@ -128,14 +103,10 @@ QUnit.test( 'headerActions property', function ( assert ) {
 		'Overlays do not have header actions by default' );
 	assert.strictEqual( overlays[1].$el.find( '.header-action > *' ).length, 1,
 		'headerActions will be inserted into the header-action container' );
-	assert.strictEqual( overlays[2].$el.find( '.header-action > *' ).length, 1,
-		'headerButtons will be constructed from headerButtons into header-action container' );
-	assert.strictEqual( overlays[3].$el.find( '.header-action > *' ).length, 3,
-		'headerButtons and header actions can be mixed if necessary' );
 } );
 
 QUnit.test( 'onBeforeExit', function ( assert ) {
-	var spies = [],
+	const spies = [],
 		overlays = [
 			new Overlay( {} ),
 			new Overlay( {
@@ -157,7 +128,7 @@ QUnit.test( 'onBeforeExit', function ( assert ) {
 } );
 
 QUnit.test( 'Close overlay', function ( assert ) {
-	var overlay = new Overlay( {
+	const overlay = new Overlay( {
 		heading: '<h2>Title</h2>',
 		content: 'Text'
 	} );

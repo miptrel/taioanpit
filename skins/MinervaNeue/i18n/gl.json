@@ -4,8 +4,9 @@
 			"Banjo",
 			"Elisardojm",
 			"Fisterraeomar",
-			"Toliño",
-			"Navhy"
+			"Fitoschido",
+			"Iváns",
+			"Toliño"
 		]
 	},
 	"minerva-last-modified-date": "Última edición o $1 ás $2",
@@ -13,14 +14,12 @@
 	"mobile-frontend-cookies-required": "As cookies son necesarias para cambiar o modo de visualización. Permita o uso de cookies e inténteo de novo por favor.",
 	"mobile-frontend-editor-edit": "Editar",
 	"minerva-download": "Descargar",
-	"skin-minerva-share": "Compartir",
-	"skin-minerva-mobile-option-MinervaShareButton": "Compartir",
 	"mobile-frontend-editor-redlink-create": "Crear unha páxina",
 	"mobile-frontend-editor-redlink-explain": "Esta páxina aínda non foi creada.",
 	"mobile-frontend-editor-redlink-leave": "Non, grazas",
 	"mobile-frontend-history": "Amosar o historial de edicións desta páxina.",
 	"mobile-frontend-home-button": "Portada",
-	"mobile-frontend-language-article-heading": "Ler noutra lingua",
+	"mobile-frontend-language-article-heading": "Lingua",
 	"mobile-frontend-languages-not-available": "Esta páxina non está dispoñible noutras linguas.",
 	"mobile-frontend-logged-in-homepage-notification": "{{GENDER:$1|Benvido|Benvida}}, $1!",
 	"mobile-frontend-main-menu-button-tooltip": "Abrir o menú principal",
@@ -39,7 +38,7 @@
 	"mobile-frontend-pageaction-edit-tooltip": "Editar a introdución desta páxina",
 	"mobile-frontend-placeholder": "Procurar en {{SITENAME}}",
 	"mobile-frontend-random-button": "Ao chou",
-	"mobile-frontend-redirected-from": "Redirixido desde \"$1\"",
+	"mobile-frontend-redirected-from": "Redirixido desde \"[[$1]]\"",
 	"mobile-frontend-talk-back-to-filepage": "Volver ó ficheiro \"$1\".",
 	"mobile-frontend-talk-back-to-page": "Volver á páxina \"$1\".",
 	"mobile-frontend-talk-back-to-projectpage": "Volver á páxina do proxecto \"$1\".",
@@ -49,11 +48,8 @@
 	"mobile-frontend-user-page-contributions": "Contribucións",
 	"mobile-frontend-user-page-member-since": "{{GENDER:$2|Uniuse}} $1",
 	"mobile-frontend-user-page-talk": "Conversa",
-	"mobile-frontend-user-page-uploads": "Subas",
 	"minerva-skin-desc": "Un tema inicial de resposta rápida para móbiles.",
 	"skin-minerva-issue-learn-more": "Máis información",
 	"skin-minerva-mobile-option-MinervaShowCategoriesButton": "Categorías",
-	"skin-minerva-mobile-option-MinervaShowCategoriesButton-description": "Amosa as categorías das páxinas",
-	"skin-minerva-mobile-option-MinervaEnableBackToTop": "Chimpar cara enriba",
-	"skin-minerva-mobile-option-MinervaEnableBackToTop-description": "Brinca cara enriba da páxina actual, empregando un botón frotante"
+	"skin-minerva-mobile-option-MinervaShowCategoriesButton-description": "Amosa as categorías das páxinas"
 }

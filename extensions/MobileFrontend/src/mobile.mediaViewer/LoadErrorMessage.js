@@ -1,10 +1,11 @@
 var util = require( './../mobile.startup/util' ),
 	mfExtend = require( './../mobile.startup/mfExtend' ),
-	Icon = require( './../mobile.startup/Icon' ),
+	icons = require( './../mobile.startup/icons' ),
 	View = require( './../mobile.startup/View' );
 
 /**
  * Shows the user a load failure message
+ *
  * @class LoadErrorMessage
  * @extends View
  * @fires LoadErrorMessage#retry
@@ -23,7 +24,14 @@ function LoadErrorMessage( options ) {
 }
 
 mfExtend( LoadErrorMessage, View, {
-	template: mw.template.get( 'mobile.mediaViewer', 'LoadErrorMessage.hogan' ),
+	template: util.template( `
+<div class="load-fail-msg">
+  <div class="load-fail-msg-text">{{msgToUser}}</div>
+  <div class="load-fail-msg-link">
+    <a href="#">{{retryTxt}}</a>
+  </div>
+</div>
+	` ),
 	isTemplateMode: true,
 
 	/**
@@ -36,10 +44,6 @@ mfExtend( LoadErrorMessage, View, {
 		* @instance
 		*/
 	defaults: util.extend( {}, LoadErrorMessage.prototype.defaults, {
-		icon: new Icon( {
-			name: 'alert-invert',
-			additionalClassNames: 'load-fail-msg-icon'
-		} ).toHtmlString(),
 		msgToUser: mw.msg( 'mobile-frontend-media-load-fail-message' ),
 		retryTxt: mw.msg( 'mobile-frontend-media-load-fail-retry' )
 	} ),
@@ -50,11 +54,13 @@ mfExtend( LoadErrorMessage, View, {
 	 * @instance
 	 */
 	postRender: function () {
+		this.$el.prepend( icons.error().$el );
 		this.$el.find( '.load-fail-msg-link a' ).attr( 'href', '#' + this.options.retryPath );
 	},
 
 	/**
 	 * Event handler for retry event
+	 *
 	 * @param {jQuery.Event} ev
 	 * @return {boolean} Returns false to prevent default behavior for links and
 	 * stop the event from propagating
@@ -64,6 +70,7 @@ mfExtend( LoadErrorMessage, View, {
 	onRetry: function () {
 		/**
 		 * Triggered when retry button is clicked.
+		 *
 		 * @event LoadErrorMessage#retry
 		 */
 		this.emit( 'retry' );

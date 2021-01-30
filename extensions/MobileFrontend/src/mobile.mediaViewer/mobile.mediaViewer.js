@@ -1,18 +1,7 @@
-var m = require( './../mobile.startup/moduleLoaderSingleton' ),
-	overlay = require( '../mobile.startup/mediaViewer/overlay' ),
+var m = require( '../mobile.startup/moduleLoaderSingleton' ),
 	ImageCarousel = require( './ImageCarousel' );
 
-/**
- * @deprecated
- * @param {Object} options
- * @return {Overlay}
- */
-function ImageOverlay( options ) {
-	return overlay( options );
-}
-
-// Expose for Minerva
-m.define( 'mobile.mediaViewer/ImageOverlay', ImageOverlay );
+// Needed for lazy loading ImageCarousel
 m.define( 'mobile.mediaViewer', {
 	ImageCarousel
 } );

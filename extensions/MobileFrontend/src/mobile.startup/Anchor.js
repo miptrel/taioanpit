@@ -1,23 +1,19 @@
 var
 	View = require( './View' ),
-	mfExtend = require( './mfExtend' );
+	util = require( './util' );
 
 /**
  * A wrapper for creating an anchor.
- * @class Anchor
+ *
  * @extends View
  */
-function Anchor() {
-	View.apply( this, arguments );
-}
-
-mfExtend( Anchor, View, {
+class Anchor extends View {
 	/**
 	 * @inheritdoc
-	 * @memberof Anchor
-	 * @instance
 	 */
-	isTemplateMode: true,
+	get isTemplateMode() {
+		return true;
+	}
 	/**
 	 * @memberof Anchor
 	 * @instance
@@ -29,19 +25,26 @@ mfExtend( Anchor, View, {
 	 * @property {string} defaults.href url
 	 * @property {string} defaults.label of anchor
 	 */
-	defaults: {
-		progressive: undefined,
-		destructive: undefined,
-		additionalClassNames: '',
-		href: undefined,
-		label: undefined
-	},
+	get defaults() {
+		return {
+			progressive: undefined,
+			destructive: undefined,
+			additionalClassNames: '',
+			href: undefined,
+			label: undefined
+		};
+	}
 	/**
 	 * @inheritdoc
-	 * @memberof Anchor
-	 * @instance
 	 */
-	template: mw.template.get( 'mobile.startup', 'anchor.hogan' )
-} );
+	get template() {
+		return util.template( `
+<a {{#href}}href="{{href}}"{{/href}} class="mw-ui-anchor
+	{{#progressive}} mw-ui-progressive{{/progressive}}
+	{{#destructive}} mw-ui-destructive{{/destructive}}
+	 {{additionalClassNames}}">{{label}}</a>
+	` );
+	}
+}
 
 module.exports = Anchor;

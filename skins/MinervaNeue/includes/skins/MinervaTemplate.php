@@ -17,6 +17,8 @@
  *
  * @file
  */
+use MediaWiki\MediaWikiServices;
+use MediaWiki\Minerva\SkinOptions;
 
 /**
  * Extended Template class of BaseTemplate for mobile devices
@@ -31,6 +33,9 @@ class MinervaTemplate extends BaseTemplate {
 	/** @var bool Specify whether the page is main page */
 	protected $isMainPage;
 
+	/** @var bool */
+	protected $isMainPageTalk;
+
 	/**
 	 * Start render the page in template
 	 */
@@ -40,8 +45,11 @@ class MinervaTemplate extends BaseTemplate {
 		$this->isSpecialMobileMenuPage = $this->isSpecialPage &&
 			$title->isSpecial( 'MobileMenu' );
 		$this->isMainPage = $title->isMainPage();
-		$this->isMainPageTalk = $title->getSubjectPage()->isMainPage();
-		Hooks::run( 'MinervaPreRender', [ $this ] );
+		$subjectPage = MediaWikiServices::getInstance()->getNamespaceInfo()
+			->getSubjectPage( $title );
+
+		$this->isMainPageTalk = Title::newFromLinkTarget( $subjectPage )->isMainPage();
+		Hooks::run( 'MinervaPreRender', [ $this ], '1.35' );
 		$this->render( $this->data );
 	}
 
@@ -50,7 +58,7 @@ class MinervaTemplate extends BaseTemplate {
 	 * @return array
 	 */
 	protected function getPageActions() {
-		return $this->isFallbackEditor() ? [] : $this->data['page_actions'];
+		return $this->isFallbackEditor() ? [] : $this->data['pageActionsMenu'];
 	}
 
 	/**
@@ -80,12 +88,14 @@ class MinervaTemplate extends BaseTemplate {
 		}
 
 		// This turns off the footer id and allows us to distinguish the old footer with the new design
+
 		return [
 			'lastmodified' => $this->getHistoryLinkHtml( $data ),
 			'headinghtml' => $data['footer-site-heading-html'],
 			// Note mobile-license is only available on the mobile skin. It is outputted as part of
 			// footer-info on desktop hence the conditional check.
-			'licensehtml' => isset( $data['mobile-license'] ) ? $data['mobile-license'] : '',
+			'licensehtml' => ExtensionRegistry::getInstance()->isLoaded( 'MobileFrontend' ) ?
+				MobileFrontendSkinHooks::getLicenseText( $this->getSkin() ) : '',
 			'lists' => $groups,
 		];
 	}
@@ -95,12 +105,12 @@ class MinervaTemplate extends BaseTemplate {
 	 * @return string
 	 */
 	protected function getPageActionsHtml() {
-		$templateParser = new TemplateParser( __DIR__ );
-		$actions = $this->getPageActions();
+		$templateParser = new TemplateParser( __DIR__ . '/../../components' );
+		$pageActions = $this->getPageActions();
 		$html = '';
 
-		if ( $actions ) {
-			$html = $templateParser->processTemplate( 'pageActionMenu',  [ 'pageActions' => $actions ] );
+		if ( $pageActions && $pageActions['toolbar'] ) {
+			$html = $templateParser->processTemplate( 'PageActionsMenu',  $pageActions );
 		}
 		return $html;
 	}
@@ -114,9 +124,12 @@ class MinervaTemplate extends BaseTemplate {
 		$action = Action::getActionName( RequestContext::getMain() );
 		if ( isset( $data['historyLink'] ) && $action === 'view' ) {
 			$args = [
-				'clockIconClass' => MinervaUI::iconClass( 'clock', 'before' ),
+				'historyIconClass' => MinervaUI::iconClass(
+					'history-base20', 'mw-ui-icon-small', '', 'wikimedia'
+				),
 				'arrowIconClass' => MinervaUI::iconClass(
-					'arrow-gray', 'element', 'mw-ui-icon-small mf-mw-ui-icon-rotate-anti-clockwise indicator',
+					'expand-gray', 'small',
+					'mf-mw-ui-icon-rotate-anti-clockwise indicator',
 					// Uses icon in MobileFrontend so must be prefixed mf.
 					// Without MobileFrontend it will not render.
 					// Rather than maintain 2 versions (and variants) of the arrow icon which can conflict
@@ -143,7 +156,7 @@ class MinervaTemplate extends BaseTemplate {
 
 	/**
 	 * Get page secondary actions
-	 * @return string[]
+	 * @return array
 	 */
 	protected function getSecondaryActions() {
 		if ( $this->isFallbackEditor() ) {
@@ -170,6 +183,7 @@ class MinervaTemplate extends BaseTemplate {
 				} else {
 					$el['attributes']['class'] = $baseClass;
 				}
+				// @phan-suppress-next-line PhanTypeMismatchArgument
 				$html .= Html::element( 'a', $el['attributes'], $el['label'] );
 			}
 		}
@@ -199,20 +213,12 @@ class MinervaTemplate extends BaseTemplate {
 	}
 
 	/**
-	 * Gets the main menu only on Special:MobileMenu.
-	 * On other pages the menu is rendered via JS.
+	 * Gets the main menu HTML.
 	 * @param array $data Data used to build the page
 	 * @return string
 	 */
-	protected function getMainMenuHtml( $data ) {
-		if ( $this->isSpecialMobileMenuPage ) {
-			$templateParser = new TemplateParser(
-				__DIR__ . '/../../resources/skins.minerva.scripts/menu/' );
-
-			return $templateParser->processTemplate( 'menu', $data['menu_data'] );
-		}
-
-		return '';
+	protected function getMainMenuData( $data ) {
+		return $data['mainMenu']['items'];
 	}
 
 	/**
@@ -221,14 +227,13 @@ class MinervaTemplate extends BaseTemplate {
 	 * @todo replace with template engines
 	 */
 	protected function render( $data ) {
+		$skinOptions = MediaWikiServices::getInstance()->getService( 'Minerva.SkinOptions' );
 		$templateParser = new TemplateParser( __DIR__ );
-		$skin = $this->getSkin();
+
 		$internalBanner = $data[ 'internalBanner' ];
-		$preBodyHtml = isset( $data['prebodyhtml'] ) ? $data['prebodyhtml'] : '';
-		$hasHeadingHolder = $internalBanner || $preBodyHtml || isset( $data['page_actions'] );
-		$hasPageActions = !$this->isSpecialPage && !$this->isMainPage &&
-			Action::getActionName( RequestContext::getMain() ) === 'view';
-		$hasTalkTabs = $hasPageActions && !$this->isMainPageTalk;
+		$preBodyHtml = $data['prebodyhtml'] ?? '';
+		$hasHeadingHolder = $internalBanner || $preBodyHtml || isset( $data['pageActionsMenu'] );
+		$hasPageActions = $this->hasPageActions( $data['skin']->getContext() );
 
 		// prepare template data
 		$templateData = [
@@ -238,9 +243,10 @@ class MinervaTemplate extends BaseTemplate {
 			'search' => $data['search'],
 			'placeholder' => wfMessage( 'mobile-frontend-placeholder' ),
 			'headelement' => $data[ 'headelement' ],
-			'menuButton' => $data['menuButton'],
+			'main-menu-tooltip' => $this->getMsg( 'mobile-frontend-main-menu-button-tooltip' ),
 			'siteheading' => $data['footer-site-heading-html'],
 			'mainPageURL' => Title::newMainPage()->getLocalURL(),
+			'userNavigationLabel' => wfMessage( 'minerva-user-navigation' ),
 			// A button when clicked will submit the form
 			// This is used so that on tablet devices with JS disabled the search button
 			// passes the value of input to the search
@@ -248,33 +254,60 @@ class MinervaTemplate extends BaseTemplate {
 			// which is problematic in Opera Mini (see T140490)
 			'searchButton' => Html::rawElement( 'button', [
 				'id' => 'searchIcon',
-				'class' => MinervaUI::iconClass( 'magnifying-glass', 'element', 'skin-minerva-search-trigger' ),
-			], wfMessage( 'searchbutton' ) ),
-			'secondaryButtonData' => $data['secondaryButtonData'],
-			'mainmenuhtml' => $this->getMainMenuHtml( $data ),
+				'class' => MinervaUI::iconClass(
+					'search-base20', 'element', 'skin-minerva-search-trigger', 'wikimedia'
+				)
+			], wfMessage( 'searchbutton' )->escaped() ),
+			'userNotificationsHTML' => $data['userNotificationsHTML'] ?? '',
+			'data-main-menu' => $this->getMainMenuData( $data ),
 			'hasheadingholder' => $hasHeadingHolder,
 			'taglinehtml' => $data['taglinehtml'],
 			'internalBanner' => $internalBanner,
 			'prebodyhtml' => $preBodyHtml,
-			'headinghtml' => isset( $data['headinghtml'] ) ? $data['headinghtml'] : '',
-			'postheadinghtml' => isset( $data['postheadinghtml'] ) ? $data['postheadinghtml'] : '',
-			'haspageactions' => $hasPageActions,
-			'pageactionshtml' => $hasPageActions ? $this->getPageActionsHtml( $data ) : '',
+			'headinghtml' => $data['headinghtml'] ?? '',
+			'postheadinghtml' => $data['postheadinghtml'] ?? '',
+			'pageactionshtml' => $hasPageActions ? $this->getPageActionsHtml() : '',
+			'userMenuHTML' => $data['userMenuHTML'],
 			'subtitle' => $data['subtitle'],
 			'contenthtml' => $this->getContentHtml( $data ),
 			'secondaryactionshtml' => $this->getSecondaryActionsHtml(),
+			'dataAfterContent' => $this->get( 'dataAfterContent' ),
 			'footer' => $this->getFooterTemplateData( $data ),
-			'isBeta' => $skin->getSkinOption( SkinMinerva::OPTIONS_MOBILE_BETA ),
-			'tabs' => $hasTalkTabs && $skin->getSkinOption( SkinMinerva::OPTIONS_TALK_AT_TOP ) ? [
+			'isBeta' => $skinOptions->get( SkinOptions::BETA_MODE ),
+			'tabs' => $this->showTalkTabs( $hasPageActions, $skinOptions ) &&
+					  $skinOptions->get( SkinOptions::TALK_AT_TOP ) ? [
 				'items' => array_values( $data['content_navigation']['namespaces'] ),
 			] : false,
 		];
 		// begin rendering
-		echo $templateParser->processTemplate( 'minerva', $templateData );
+		echo $templateParser->processTemplate( 'skin', $templateData );
 		$this->printTrail();
 		?>
 		</body>
 		</html>
 		<?php
+	}
+
+	/**
+	 * @param IContextSource $context
+	 * @return bool
+	 */
+	private function hasPageActions( IContextSource $context ) {
+		return !$this->isSpecialPage && !$this->isMainPage &&
+		   Action::getActionName( $context ) === 'view';
+	}
+
+	/**
+	 * @param bool $hasPageActions
+	 * @param SkinOptions $skinOptions
+	 * @return bool
+	 */
+	private function showTalkTabs( $hasPageActions, SkinOptions $skinOptions ) {
+		$hasTalkTabs = $hasPageActions && !$this->isMainPageTalk;
+		if ( !$hasTalkTabs && $this->isSpecialPage &&
+			 $skinOptions->get( SkinOptions::TABS_ON_SPECIALS ) ) {
+			$hasTalkTabs = true;
+		}
+		return $hasTalkTabs;
 	}
 }

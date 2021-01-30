@@ -1,12 +1,13 @@
-var
+const
 	jQuery = require( '../../utils/jQuery' ),
 	dom = require( '../../utils/dom' ),
 	mediaWiki = require( '../../utils/mw' ),
 	oo = require( '../../utils/oo' ),
-	SearchGateway,
-	sandbox,
 	sinon = require( 'sinon' ),
 	util = require( '../../../../src/mobile.startup/util' );
+let
+	SearchGateway,
+	sandbox;
 
 QUnit.module( 'MobileFrontend: SearchGateway',
 	{
@@ -22,7 +23,7 @@ QUnit.module( 'MobileFrontend: SearchGateway',
 			SearchGateway = require( '../../../../src/mobile.startup/search/SearchGateway' );
 
 			sandbox.stub( mw.util, 'getUrl' ).returns( 'Title' );
-			sandbox.stub( mw.config, 'get', function ( name ) {
+			sandbox.stub( mw.config, 'get' ).callsFake( function ( name ) {
 				switch ( name ) {
 					case 'wgMFDisplayWikibaseDescriptions': return { search: '' };
 					case 'wgMFSearchGenerator': return { prefix: '' };
@@ -30,7 +31,7 @@ QUnit.module( 'MobileFrontend: SearchGateway',
 			} );
 
 			this.gateway = new SearchGateway( new mw.Api() );
-			sandbox.stub( this.gateway.api, 'get', function () {
+			sandbox.stub( this.gateway.api, 'get' ).callsFake( function () {
 				return util.Deferred().resolve( {
 					warnings: {
 						query: {
@@ -75,10 +76,9 @@ QUnit.module( 'MobileFrontend: SearchGateway',
 	},
 	function () {
 		QUnit.test( '._highlightSearchTerm', function ( assert ) {
-			var data,
-				gateway = this.gateway;
+			const gateway = this.gateway;
 
-			data = [
+			const data = [
 				[ 'Hello World', 'Hel', '<strong>Hel</strong>lo World' ],
 				[ 'Hello kitty', 'el', 'Hello kitty' ], // not at start
 				[ 'Hello worl', 'hel', '<strong>Hel</strong>lo worl' ],
@@ -113,7 +113,7 @@ QUnit.module( 'MobileFrontend: SearchGateway',
 
 		QUnit.module( 'MobileFrontend SearchGateway (Wikidata Descriptions)', {
 			beforeEach: function () {
-				var data = {
+				const data = {
 					query: {
 						pages: {
 							2: {
@@ -144,9 +144,9 @@ QUnit.module( 'MobileFrontend: SearchGateway',
 		} );
 
 		QUnit.test( 'Wikidata Description in search results', function ( assert ) {
-			var searchApi = new SearchGateway( new mw.Api() );
+			const searchApi = new SearchGateway( new mw.Api() );
 			return searchApi.search( 'brad' ).then( function ( resp ) {
-				var results = resp.results;
+				const results = resp.results;
 				assert.strictEqual(
 					results[0].wikidataDescription,
 					undefined,

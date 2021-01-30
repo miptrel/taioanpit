@@ -2,18 +2,18 @@
 
 namespace MobileFrontend\Transforms;
 
-use DOMElement;
 use DOMDocument;
+use DOMElement;
 
 class LazyImageTransform implements IMobileTransform {
+
 	/**
 	 * Do not lazy load images smaller than this size (in pixels)
-	 * @var int
 	 */
 	const SMALL_IMAGE_DIMENSION_THRESHOLD_IN_PX = 50;
+
 	/**
 	 * Do not lazy load images smaller than this size (in relative to x-height of the current font)
-	 * @var int
 	 */
 	const SMALL_IMAGE_DIMENSION_THRESHOLD_IN_EX = 10;
 
@@ -139,16 +139,19 @@ class LazyImageTransform implements IMobileTransform {
 		foreach ( $el->getElementsByTagName( 'img' ) as $img ) {
 			$parent = $img->parentNode;
 			$dimensions = $this->getImageDimensions( $img );
-
-			$dimensionsStyle = ( isset( $dimensions['width'] ) ? "width: {$dimensions['width']};" : '' ) .
-				( isset( $dimensions['height'] ) ? "height: {$dimensions['height']};" : '' );
+			$hasCompleteDimensions = isset( $dimensions['width'] ) && isset( $dimensions['height'] );
 
 			if ( $lazyLoadSkipSmallImages
 				&& $this->skipLazyLoadingForSmallDimensions( $dimensions )
 			) {
 				continue;
 			}
+			// T133085 - don't transform if we have no idea about dimensions of image
+			if ( !$hasCompleteDimensions ) {
+				continue;
+			}
 
+			$dimensionsStyle = "width: {$dimensions['width']};height: {$dimensions['height']};";
 			// HTML only clients
 			$noscript = $doc->createElement( 'noscript' );
 

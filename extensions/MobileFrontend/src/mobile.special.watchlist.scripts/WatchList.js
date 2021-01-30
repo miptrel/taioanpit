@@ -9,6 +9,7 @@ var
 /**
  * An extension of the WatchstarPageList which preloads pages as all being
  * watched.
+ *
  * @extends WatchstarPageList
  * @class WatchList
  * @uses ScrollEndEventEmitter
@@ -51,6 +52,7 @@ mfExtend( WatchList, WatchstarPageList, {
 	},
 	/**
 	 * Also sets a watch uploads funnel.
+	 *
 	 * @inheritdoc
 	 * @memberof WatchList
 	 * @instance
@@ -82,6 +84,7 @@ mfExtend( WatchList, WatchstarPageList, {
 	/**
 	 * Loads pages from the api and triggers render.
 	 * Infinite scroll is re-enabled in postRender.
+	 *
 	 * @memberof WatchList
 	 * @instance
 	 */
@@ -96,13 +99,14 @@ mfExtend( WatchList, WatchstarPageList, {
 
 	/**
 	 * Appends a list item
+	 *
 	 * @memberof WatchList
 	 * @instance
 	 * @param {Page} page
 	 */
 	appendPage: function ( page ) {
 		// wikidata descriptions should not show in this view.
-		var templateOptions = util.extend( {}, page.options, {
+		var templateOptions = util.extend( {}, page, {
 			wikidataDescription: undefined
 		} );
 		this.$el.append( this.templatePartials.item.render( templateOptions ) );
@@ -111,13 +115,14 @@ mfExtend( WatchList, WatchstarPageList, {
 	/**
 	 * Get the last title from the rendered HTML.
 	 * Used for initializing the API
+	 *
 	 * @memberof WatchList
 	 * @instance
 	 * @param {jQuery.Object} $el Dom element of the list
 	 * @return {string}
 	 */
 	getLastTitle: function ( $el ) {
-		return $el.find( 'li:last' ).attr( 'title' );
+		return $el.find( 'li' ).last().attr( 'title' );
 	}
 } );
 

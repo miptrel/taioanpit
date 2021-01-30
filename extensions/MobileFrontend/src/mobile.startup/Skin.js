@@ -1,10 +1,9 @@
-var
+var skin,
 	browser = require( './Browser' ).getSingleton(),
-	lazyImageLoader = require( './lazyImages/lazyImageLoader' ),
-	lazyImageTransformer = require( './lazyImages/lazyImageTransformer' ),
-	lazyReferencesLoader = require( './lazyReferencesLoader' ),
 	View = require( './View' ),
 	util = require( './util' ),
+	currentPage = require( './currentPage' ),
+	eventBus = require( './eventBusSingleton' ),
 	mfExtend = require( './mfExtend' );
 
 /**
@@ -15,51 +14,19 @@ var
  * @uses Browser
  * @uses Page
  * @fires Skin#click
- * @fires Skin#references-loaded
- * @fires Skin#changed
  * @param {Object} params Configuration options
  * @param {OO.EventEmitter} params.eventBus Object used to listen for
+ * @param {Page} params.page
  * scroll:throttled, resize:throttled, and section-toggled events
  */
 function Skin( params ) {
-	var self = this,
-		options = util.extend( {}, params );
+	var options = util.extend( {}, params );
 
 	this.page = options.page;
 	this.name = options.name;
-	if ( options.mainMenu ) {
-		this.mainMenu = options.mainMenu;
-		mw.log.warn( 'Skin: Use of mainMenu is deprecated.' );
-	}
 	this.eventBus = options.eventBus;
 	options.isBorderBox = false;
 	View.call( this, options );
-	this.referencesGateway = options.referencesGateway;
-
-	if (
-		mw.config.get( 'wgMFLazyLoadImages' )
-	) {
-		util.docReady( function () {
-			var
-				container = document.getElementById( 'content' ),
-				// todo: remove when tests are only headless. There is no #content in
-				//       Special:JavaScriptTest.
-				images = ( container && lazyImageLoader.queryPlaceholders( container ) ) || [];
-			self.lazyImageTransformer = lazyImageTransformer.newLazyImageTransformer(
-				self.eventBus, self.$el.find.bind( self.$el ),
-				util.getWindow().height() * 1.5, images
-			);
-			self.lazyImageTransformer.loadImages();
-		} );
-	}
-
-	if ( mw.config.get( 'wgMFLazyLoadReferences' ) ) {
-		this.eventBus.on( 'section-toggled', function ( data ) {
-			lazyReferencesLoader.loadReferences(
-				self.eventBus, data, self.referencesGateway, self.page
-			);
-		} );
-	}
 }
 
 mfExtend( Skin, View, {
@@ -69,7 +36,6 @@ mfExtend( Skin, View, {
 	 * @mixes View#defaults
 	 * @property {Object} defaults Default options hash.
 	 * @property {Page} defaults.page page the skin is currently rendering
-	 * @property {ReferencesGateway} defaults.referencesGateway instance of references gateway
 	 */
 	defaults: {
 		page: undefined
@@ -82,28 +48,25 @@ mfExtend( Skin, View, {
 	 */
 	postRender: function () {
 		var $el = this.$el;
-		if ( browser.supportsAnimations() ) {
-			$el.addClass( 'animations' );
-		}
+
 		if ( browser.supportsTouchEvents() ) {
 			$el.addClass( 'touch-events' );
-		}
-		util.parseHTML( '<div class="transparent-shield cloaked-element">' )
-			.appendTo( $el.find( '#mw-mf-page-center' ) );
-		if ( this.lazyImageTransformer ) {
-			this.lazyImageTransformer.loadImages();
 		}
 
 		/**
 		 * Fired when the skin is clicked.
+		 *
 		 * @event Skin#click
 		 */
-		this.$el.find( '#mw-mf-page-center' ).on( 'click', this.emit.bind( this, 'click' ) );
+		this.$el.find( '#mw-mf-page-center' ).on( 'click', ( ev ) => {
+			this.emit( 'click', ev );
+		} );
 	},
 
 	/**
 	 * Returns the appropriate license message including links/name to
 	 * terms of use (if any) and license page
+	 *
 	 * @memberof Skin
 	 * @instance
 	 * @return {string}
@@ -136,4 +99,19 @@ mfExtend( Skin, View, {
 	}
 } );
 
+/**
+ * Get a skin singleton
+ *
+ * @return {Skin}
+ */
+Skin.getSingleton = function () {
+	if ( !skin ) {
+		skin = new Skin( {
+			el: 'body',
+			page: currentPage(),
+			eventBus
+		} );
+	}
+	return skin;
+};
 module.exports = Skin;

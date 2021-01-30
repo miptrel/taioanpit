@@ -1,10 +1,11 @@
-var
+var util = require( './util.js' ),
 	mfExtend = require( './mfExtend' ),
 	View = require( './View' ),
 	browser = require( './Browser' ).getSingleton();
 
 /**
  * List of items page view
+ *
  * @class PageList
  * @extends View
  */
@@ -42,6 +43,7 @@ mfExtend( PageList, View, {
 	},
 	/**
 	 * Render page images for the existing page list. Assumes no page images have been loaded.
+	 *
 	 * @memberof PageList
 	 * @instance
 	 */
@@ -65,7 +67,13 @@ mfExtend( PageList, View, {
 	postRender: function () {
 		this.renderPageImages();
 	},
-	template: mw.template.get( 'mobile.startup', 'PageList.hogan' ),
+	template: util.template( `
+<ul class="page-list thumbs actionable">
+	{{#pages}}
+		{{>item}}
+	{{/pages}}
+</ul>
+	` ),
 	/**
 	 * @memberof PageList
 	 * @instance
@@ -74,7 +82,30 @@ mfExtend( PageList, View, {
 		// The server uses a very different structure in
 		// SpecialMobileEditWatchlist.getLineHtml(). Be aware of these differences
 		// when updating server rendered items.
-		item: mw.template.get( 'mobile.startup', 'PageListItem.hogan' )
+		item: util.template( `
+<li title="{{title}}" data-id="{{id}}" class="page-summary">
+  <a href="{{url}}" class="title {{#isMissing}}new{{/isMissing}}"
+    {{#anchor}}name="{{anchor}}"{{/anchor}}
+    {{#latitude}}data-latlng="{{latitude}},{{longitude}}"{{/latitude}}
+    data-title="{{title}}">
+    <div class="list-thumb
+      {{^thumbnail}}list-thumb-none list-thumb-x{{/thumbnail}}
+      {{#thumbnail.isLandscape}}list-thumb-y{{/thumbnail.isLandscape}}
+      {{^thumbnail.isLandscape}}list-thumb-x{{/thumbnail.isLandscape}}"
+      {{#thumbnail}}data-style="background-image: url( {{thumbnail.source}} )"{{/thumbnail}}></div>
+    <h3>{{{displayTitle}}}</h3>
+    {{#wikidataDescription}}
+    <div class="wikidata-description">{{wikidataDescription}}</div>
+    {{/wikidataDescription}}
+    {{#lastModified}}
+    <div class="info">{{lastModified}}</div>
+    {{/lastModified}}
+    {{#proximity}}
+    <div class="info proximity">{{proximity}}</div>
+    {{/proximity}}
+  </a>
+</li>
+	` )
 	}
 } );
 

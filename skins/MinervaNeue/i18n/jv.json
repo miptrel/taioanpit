@@ -31,7 +31,7 @@
 	"mobile-frontend-pageaction-edit-tooltip": "Besut pérangané bebuka kaca iki",
 	"mobile-frontend-placeholder": "Golèk ing {{SITENAME}}",
 	"mobile-frontend-random-button": "Sembarang",
-	"mobile-frontend-redirected-from": "Alihan saka \"$1\"",
+	"mobile-frontend-redirected-from": "Alihan saka \"[[$1]]\"",
 	"mobile-frontend-talk-back-to-filepage": "Bali menyang barkas \"$1\".",
 	"mobile-frontend-talk-back-to-page": "Bali menyang kaca \"$1\".",
 	"mobile-frontend-talk-back-to-projectpage": "Bali menyang kaca proyèk \"$1\".",
@@ -40,6 +40,5 @@
 	"mobile-frontend-user-newmessages": "Panjenengan antuk layang anyar ing kaca parembugané panjenengan",
 	"mobile-frontend-user-page-contributions": "Pasumbang",
 	"mobile-frontend-user-page-member-since": "{{GENDER:$2|Gabung}} $1",
-	"mobile-frontend-user-page-talk": "Parembugan",
-	"mobile-frontend-user-page-uploads": "Unggahan"
+	"mobile-frontend-user-page-talk": "Parembugan"
 }

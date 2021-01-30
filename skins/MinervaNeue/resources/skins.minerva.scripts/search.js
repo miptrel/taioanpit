@@ -1,9 +1,11 @@
-( function ( M ) {
+module.exports = function () {
 	var
+		// eslint-disable-next-line no-restricted-properties
+		M = mw.mobileFrontend,
 		mobile = M.require( 'mobile.startup' ),
 		SearchOverlay = mobile.search.SearchOverlay,
 		SearchGateway = mobile.search.SearchGateway,
-		overlayManager = M.require( 'skins.minerva.scripts/overlayManager' ),
+		overlayManager = mobile.OverlayManager.getSingleton(),
 		searchLogger = mobile.search.MobileWebSearchLogger,
 		// eslint-disable-next-line no-jquery/no-global-selector
 		$searchInput = $( '#searchInput' ),
@@ -75,4 +77,4 @@
 		getSearchOverlay().showKeyboard();
 	} );
 
-}( mw.mobileFrontend ) );
+};

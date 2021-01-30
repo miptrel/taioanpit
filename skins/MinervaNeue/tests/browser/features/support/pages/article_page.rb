@@ -1,10 +1,10 @@
-class ArticlePage
+class ArticlePage # rubocop:disable Metrics/ClassLength
   include PageObject
 
   page_url '<%=params[:article_name]%><%=params[:hash]%>'
 
   # UI elements
-  a(:mainmenu_button, id: 'mw-mf-main-menu-button')
+  label(:mainmenu_button, id: 'mw-mf-main-menu-button')
   body(:is_authenticated, css: '.is-authenticated')
 
   # pre-content
@@ -15,7 +15,7 @@ class ArticlePage
   a(:beta_mode_indicator, css: '.branding-box sup')
 
   # left nav
-  nav(:navigation, css: '#mw-mf-page-left')
+  div(:navigation, css: '#mw-mf-page-left')
   a(:about_link) { |page| page.navigation_element.link_element(text: /^About/) }
   a(:disclaimer_link) { |page| page.navigation_element.link_element(text: 'Disclaimers') }
 
@@ -53,8 +53,8 @@ class ArticlePage
   end
 
   ## watch star
-  a(:watch_star, text: 'Watch this page')
-  a(:unwatch_star, text: 'Stop watching')
+  a(:watch_star, text: 'Watch')
+  a(:unwatch_star, text: 'Unwatch')
   button(:watch_confirm, class: 'mw-htmlform-submit')
 
   # search
@@ -65,9 +65,9 @@ class ArticlePage
   text_field(:search_box2, name: 'search', index: 1)
   li(:search_results, css: '.search-overlay .page-list li')
   div(:search_watchstars, css: '.search-overlay .page-list li .watch-this-article')
-  div(:search_overlay, class: 'search-overlay')
+  div(:search_overlay, css: '.search-overlay')
   button(:search_overlay_close_button) do |page|
-    page.search_overlay_element.button_element(class: 'cancel')
+    page.search_overlay_element.button_element(css: '.header-action .cancel')
   end
   ul(:search_overlay_page_list) do |page|
     page.search_overlay_element.element.ul(class: 'page-list thumbs actionable')
@@ -79,7 +79,7 @@ class ArticlePage
     page.search_overlay_page_list_element.element.h3
   end
 
-  a(:notifications_button, css: '.user-button')
+  div(:notifications_button, css: '#pt-notifications-alert')
   div(:notifications_overlay, class: 'notifications-overlay')
   button(:notifications_overlay_close_button) do |page|
     page.notifications_overlay_element.button_element(class: 'cancel')
@@ -98,7 +98,7 @@ class ArticlePage
   div(:wikidata_description, css: '.tagline')
 
   # toc
-  div(:toc, css: '.toc-mobile')
+  div(:toc, css: '.toc')
 
   # editor (common)
   span(:overlay_editor_mode_switcher, css: '.editor-switcher .oo-ui-indicatorElement-indicator')
@@ -148,7 +148,7 @@ class ArticlePage
   # loader
   element(:content_wrapper, 'main')
   div(:content, id: 'bodyContent')
-
+  a(:transparent_shield, css: '.mw-mf-page-center__mask')
   # secondary menu
   ## languages
   a(:switch_language_page_action, css: '#page-actions .language-selector')
@@ -162,26 +162,23 @@ class ArticlePage
   a(:desktop_link, text: 'Desktop')
   a(:terms_link, css: '#footer-places-terms-use')
   a(:license_link, css: 'footer .license a')
-  a(:privacy_link, text: 'Privacy')
+  a(:privacy_link, text: 'Privacy policy')
 
   # pagelist
   ul(:page_list, css: '.page-list')
 
   # references
   a(:reference, css: 'sup.reference a')
-  a(:nested_reference, css: '.drawer.references sup.reference a')
-  a(:reference_drawer, css: '.drawer.references')
+  a(:nested_reference, css: '.drawer.references-drawer sup.reference a')
+  a(:reference_drawer, css: '.drawer.references-drawer')
 
   # sections
   h2(:first_section, css: '.section-heading', index: 0)
-  div(:first_section_content, id: 'content-collapsible-block-0')
+  section(:first_section_content, id: 'content-collapsible-block-0')
   h2(:third_section, css: '.collapsible-block', index: 2)
 
   # issues
-  # We use 2 selectors here - the first relates to the old treatment (A) and
-  # the 2nd relates to the new treatment (.issues-group-B .ambox)
-  # see https://phabricator.wikimedia.org/T206647
-  a(:issues_stamp, css: '.mw-mf-cleanup, .issues-group-B .ambox')
+  span(:issues_stamp, css: '.ambox-learn-more')
 
   # page info (action=info)
   td(:edit_count, css: '#mw-pageinfo-edits td', index: 1)
@@ -196,6 +193,6 @@ class ArticlePage
   p(:talk_overlay_content_header, css: '.talk-overlay .content-header')
   li(:talk_overlay_first_topic_title, css: '.talk-overlay .topic-title-list li:first-child')
   text_field(:talk_overlay_summary, css: '.talk-overlay input')
-  text_area(:talk_overlay_wikitext_editor, css: '.talk-overlay .wikitext-editor')
+  text_area(:talk_overlay_body, css: '.talk-overlay textarea')
   button(:talk_overlay_save_button, css: '.talk-overlay .confirm-save')
 end

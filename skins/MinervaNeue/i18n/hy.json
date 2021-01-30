@@ -1,6 +1,7 @@
 {
 	"@metadata": {
 		"authors": [
+			"Fitoschido",
 			"GrigorGB",
 			"Kareyac",
 			"Pandukht",
@@ -23,6 +24,8 @@
 	"mobile-frontend-pageaction-edit-tooltip": "Խմբագրել էջի ներածական մասը։",
 	"mobile-frontend-placeholder": "Որոնել {{SITENAME}} կայքում",
 	"mobile-frontend-random-button": "Պատահական",
-	"mobile-frontend-redirected-from": "Վերահղված է \"$1\"-ից",
-	"mobile-frontend-user-page-contributions": "Ներդրում"
+	"mobile-frontend-redirected-from": "Վերահղված է «[[$1]]»-ից",
+	"mobile-frontend-user-page-contributions": "Ներդրում",
+	"minerva-page-actions-overflow": "Ավելին",
+	"minerva-page-actions-history": "Պատմություն"
 }

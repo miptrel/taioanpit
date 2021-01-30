@@ -1,7 +1,7 @@
 // Tables
 @import 'mediawiki.mixins.less';
-@import '../../minerva.less/minerva.variables';
-@import '../../minerva.less/minerva.mixins';
+@import '../../minerva.less/minerva.variables.less';
+@import '../../minerva.less/minerva.mixins.less';
 
 // These are only intended for smaller screens.
 // This avoids having to undo them from another media query,
@@ -13,6 +13,14 @@
 		table {
 			display: block;
 			width: 100% !important;
+			box-sizing: border-box;
+
+			&.wikitable {
+				// Remove the outer table border as the table container may be
+				// wider than all the cells (T206762). In most cases the table
+				// border is not visible anyway due to border-collapse.
+				border: 0;
+			}
 		}
 
 		caption {

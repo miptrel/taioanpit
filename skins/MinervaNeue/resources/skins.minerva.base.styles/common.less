@@ -1,20 +1,12 @@
 @import 'mediawiki.mixins.less';
-@import '../../minerva.less/minerva.variables';
-@import '../../minerva.less/minerva.mixins';
+@import '../../minerva.less/minerva.variables.less';
+@import '../../minerva.less/minerva.mixins.less';
 
 .view-border-box *,
 .view-border-box {
 	.box-sizing( border-box );
 }
 
-/* Hide the table of contents `.toc-mobile` unless the user is viewing in tablet resolution or
- * higher */
-.toc-mobile,
-/* Table of contents `.toc` as provided by parser has no styling, this is a temporary measure
- * until we are able to commit more time to Minerva on desktop */
-.toc,
-/* We also need a more specific rule for tablet non-JS users who will load skins.minerva.tablet.styles */
-.client-nojs .toc-mobile,
 .client-js .mw-redirectedfrom,
 /* FIXME: Use generic rule for print stylesheets */
 .printfooter,
@@ -23,7 +15,7 @@
 }
 
 /* TODO: Fix specificity */
-/* stylelint-disable no-descending-specificity */
+/* stylelint-disable-next-line no-descending-specificity */
 .client-js .jsonly {
 	display: inherit;
 }
@@ -33,16 +25,24 @@
 	display: none !important;
 }
 
-#mw-mf-viewport {
+#mw-mf-viewport { // stylelint-disable-line selector-max-id
 	position: relative;
 	height: 100%;
 }
 
 // We need to ensure the content has the chrome background - otherwise it will
 // overlap the menu during the main menu reveal/hide animation
-#mw-mf-page-center {
+#mw-mf-page-center { // stylelint-disable-line selector-max-id
 	width: 100%;
+	min-height: 100%;
 	position: relative;
 	background-color: @chromeColor;
+}
+
+.content {
+	// Create a new stacking context. `transform: translateZ( 0 );` would be preferred but that
+	// triggers a browser bug which affects the edit cards in Visual Editor:
+	// https://bugs.chromium.org/p/chromium/issues/detail?id=20574
+	position: relative;
 	z-index: @z-indexBase;
 }

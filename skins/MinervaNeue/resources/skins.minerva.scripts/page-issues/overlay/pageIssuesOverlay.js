@@ -1,7 +1,7 @@
 ( function ( M, mwMsg ) {
 	var
 		Overlay = M.require( 'mobile.startup' ).Overlay,
-		IssueList = M.require( 'skins.minerva.scripts/IssueList' ),
+		IssueList = require( './IssueList.js' ),
 		KEYWORD_ALL_SECTIONS = 'all',
 		NS_MAIN = 0,
 		NS_TALK = 1,
@@ -37,6 +37,7 @@
 
 	/**
 	 * Obtain a suitable heading for the issues overlay based on the namespace
+	 *
 	 * @param {number} namespaceID is the namespace to generate heading for
 	 * @return {string} heading for overlay
 	 */
@@ -53,5 +54,7 @@
 		}
 	}
 
-	M.define( 'skins.minerva.scripts/pageIssuesOverlay', pageIssuesOverlay );
+	module.exports = pageIssuesOverlay;
+
+// eslint-disable-next-line no-restricted-properties
 }( mw.mobileFrontend, mw.msg ) );

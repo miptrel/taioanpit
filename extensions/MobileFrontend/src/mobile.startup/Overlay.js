@@ -1,53 +1,58 @@
 var
 	View = require( './View' ),
-	Icon = require( './Icon' ),
-	Button = require( './Button' ),
+	header = require( './headers' ).header,
 	Anchor = require( './Anchor' ),
-	icons = require( './icons' ),
 	util = require( './util' ),
 	browser = require( './Browser' ).getSingleton(),
 	mfExtend = require( './mfExtend' );
 
 /**
  * Mobile modal window
- * @typedef {Object} HeaderButtonDefinition
- * @property {string} href of button
- * @property {string} className of button
- * @property {boolean} disabled whether button is disabled initially
- * @property {string} msg button label
+ *
  * @class Overlay
  * @extends View
  * @uses Icon
  * @uses Button
- * @fires Overlay#Overlay-exit
  * @fires Overlay#hide
  * @param {Object} props
  * @param {Object} props.events - custom events to be bound to the overlay.
- * @param {View[]} props.headerActions children (usually buttons or icons)
- *   that should be placed in the header actions
+ * @param {boolean} [props.headerChrome] Whether the header has chrome.
+ * @param {View[]} [props.headerActions] children (usually buttons or icons)
+ *   that should be placed in the header actions. Ignored when `headers` used.
+ * @param {string} [props.heading] heading for the overlay header. Use `headers` where
+ *  overlays require more than one header. Ignored when `headers` used.
  * @param {boolean} props.noHeader renders an overlay without a header
+ * @param {Element[]} [props.headers] allows overlays to have more than one
+ *  header. When used it is an array of jQuery Objects representing
+ *  headers created via the header util function. It is expected that only one of these
+ *  should be visible. If undefined, headerActions and heading is used.
+ * @param {Object} [props.footerAnchor] options for an optional Anchor
+ *  that can appear in the footer
  * @param {Function} props.onBeforeExit allows a consumer to prevent exits in certain
  *  situations. This callback gets the following parameters:
  *  - 1) the exit function which should be run after the consumer has made their changes.
- * @param {HeaderButtonDefinition[]} [props.headerButtons] define buttons to go in header
+ *  - 2) the cancel function which should be run if the consumer explicitly changes their mind
  */
 function Overlay( props ) {
 	this.isIos = browser.isIos();
-	// Set to true when overlay has failed to load
-	this.hasLoadError = false;
 
 	View.call(
 		this,
 		util.extend(
 			true,
-			{ className: 'overlay' },
+			{
+				headerChrome: false,
+				className: 'overlay'
+			},
 			props,
 			{
 				events: util.extend(
 					{
 						// FIXME: Remove .initial-header selector
 						'click .cancel, .confirm, .initial-header .back': 'onExitClick',
-						click: 'stopPropagation'
+						click: ( ev ) => {
+							ev.stopPropagation();
+						}
 					},
 					props.events
 				)
@@ -57,95 +62,40 @@ function Overlay( props ) {
 }
 
 mfExtend( Overlay, View, {
-	/**
-	 * Is overlay fullscreen
-	 * @memberof Overlay
-	 * @instance
-	 * @property {boolean}
-	 */
-	fullScreen: true,
+	template: util.template( `
+{{^noHeader}}
+<div class="overlay-header-container header-container{{#headerChrome}}
+	header-chrome{{/headerChrome}} position-fixed">
+</div>
+{{/noHeader}}
+<div class="overlay-content">
+	{{>content}}
+</div>
+<div class="overlay-footer-container position-fixed"></div>
+	` ),
 
-	/**
-	 * True if this.hide() should be invoked before firing the Overlay-exit
-	 * event
-	 * @memberof Overlay
-	 * @instance
-	 * @property {boolean}
-	 */
-	hideOnExitClick: true,
-
-	templatePartials: {
-		header: mw.template.get( 'mobile.startup', 'header.hogan' ),
-		anchor: Anchor.prototype.template,
-		button: Button.prototype.template
-	},
-	template: mw.template.get( 'mobile.startup', 'Overlay.hogan' ),
-	/**
-	 * @memberof Overlay
-	 * @instance
-	 * @mixes View#defaults
-	 * @property {Object} defaults Default options hash.
-	 * @property {string} defaults.saveMessage Caption for save button on edit form.
-	 * @property {string} defaults.cancelButton HTML of the cancel button.
-	 * @property {string} defaults.backButton HTML of the back button.
-	 * @property {View[]} defaults.headerActions children (usually buttons or icons)
-	 *  that should be placed in the header actions
-	 * @property {HeaderButtonDefinition[]} defaults.headerButtons definitions
-	 * @property {boolean} defaults.headerChrome Whether the header has chrome.
-	 * @property {string} defaults.spinner HTML of the spinner icon.
-	 * @property {Object} [defaults.footerAnchor] options for an optional Anchor
-	 *  that can appear in the footer
-	 */
-	defaults: {
-		headerActions: [],
-		saveMsg: mw.config.get( 'wgEditSubmitButtonLabelPublish' ) ?
-			mw.msg( 'mobile-frontend-editor-publish' ) : mw.msg( 'mobile-frontend-editor-save' ),
-		cancelButton: icons.cancel().toHtmlString(),
-		backButton: new Icon( {
-			tagName: 'button',
-			name: 'back',
-			additionalClassNames: 'back',
-			label: mw.msg( 'mobile-frontend-overlay-close' )
-		} ).toHtmlString(),
-		headerChrome: false,
-		spinner: icons.spinner().toHtmlString()
-	},
-	/**
-	 * Flag overlay to close on content tap
-	 * @memberof Overlay
-	 * @instance
-	 * @property {boolean}
-	 */
-	closeOnContentTap: false,
+	hideTimeout: null,
 
 	/**
 	 * Shows the spinner right to the input field.
+	 *
 	 * @memberof Overlay
 	 * @instance
 	 * @method
 	 */
 	showSpinner: function () {
-		this.$spinner.removeClass( 'hidden' );
+		this.$el.find( '.spinner' ).removeClass( 'hidden' );
 	},
 
 	/**
 	 * Hide the spinner near to the input field.
+	 *
 	 * @memberof Overlay
 	 * @instance
 	 * @method
 	 */
 	hideSpinner: function () {
-		this.$spinner.addClass( 'hidden' );
-	},
-
-	/**
-	 * @inheritdoc
-	 * @memberof Overlay
-	 * @instance
-	 */
-	preRender: function () {
-		var props = this.options;
-		this.options.hasActions = props.headerButtons || props.headerActions.length;
+		this.$el.find( '.spinner' ).addClass( 'hidden' );
 	},
 
 	/**
@@ -154,56 +104,46 @@ mfExtend( Overlay, View, {
 	 * @instance
 	 */
 	postRender: function () {
+		const footerAnchor = this.options.footerAnchor;
 		this.$overlayContent = this.$el.find( '.overlay-content' );
-		this.$spinner = this.$el.find( '.spinner' );
 		if ( this.isIos ) {
 			this.$el.addClass( 'overlay-ios' );
 		}
-		// Truncate any text inside in the overlay header.
-		this.$el.find( '.overlay-header h2 span' ).addClass( 'truncated-text' );
-		this.$el.find( '.header-action' ).append(
-			this.options.headerActions.map( function ( component ) {
-				return component.$el;
-			} )
-		);
+		if ( footerAnchor ) {
+			this.$el.find( '.overlay-footer-container' ).append( new Anchor( footerAnchor ).$el );
+		}
+		const headers = this.options.headers || [
+			header(
+				this.options.heading,
+				this.options.headerActions
+			)
+		];
+		this.$el.find( '.overlay-header-container' ).append( headers );
 	},
 
 	/**
 	 * ClickBack event handler
+	 *
 	 * @memberof Overlay
 	 * @instance
 	 * @param {Object} ev event object
 	 */
 	onExitClick: function ( ev ) {
 		const exit = function () {
-			// FIXME: This check will be removed once ImageOverlay
-			// is using onBeforeExit.
-			if ( this.hideOnExitClick ) {
-				this.hide();
-			}
-			this.emit( Overlay.EVENT_EXIT );
+			this.hide();
 		}.bind( this );
 		ev.preventDefault();
 		ev.stopPropagation();
 		if ( this.options.onBeforeExit ) {
-			this.options.onBeforeExit( exit );
+			this.options.onBeforeExit( exit, function () {} );
 		} else {
 			exit();
 		}
 
 	},
 	/**
-	 * Stop clicks in the overlay from propagating to the page
-	 * (prevents non-fullscreen overlays from being closed when they're tapped)
-	 * @memberof Overlay
-	 * @instance
-	 * @param {Object} ev Event Object
-	 */
-	stopPropagation: function ( ev ) {
-		ev.stopPropagation();
-	},
-	/**
 	 * Attach overlay to current view and show it.
+	 *
 	 * @memberof Overlay
 	 * @instance
 	 */
@@ -212,37 +152,44 @@ mfExtend( Overlay, View, {
 
 		this.scrollTop = window.pageYOffset;
 
-		if ( this.fullScreen ) {
-			$html.addClass( 'overlay-enabled' );
-			// skip the URL bar if possible
-			window.scrollTo( 0, 1 );
-		}
-
-		if ( this.closeOnContentTap ) {
-			$html.find( '#mw-mf-page-center' ).one( 'click', this.hide.bind( this ) );
-		}
+		$html.addClass( 'overlay-enabled' );
+		// skip the URL bar if possible
+		window.scrollTo( 0, 1 );
 
 		this.$el.addClass( 'visible' );
+
+		// If .hide() was called earlier, and it scheduled an asynchronous detach
+		// but it hasn't happened yet, cancel it
+		if ( this.hideTimeout !== null ) {
+			clearTimeout( this.hideTimeout );
+			this.hideTimeout = null;
+		}
 	},
 	/**
 	 * Detach the overlay from the current view
+	 * Should not be overriden as soon to be deprecated.
+	 *
 	 * @memberof Overlay
 	 * @instance
+	 * @final
 	 * @return {boolean} Whether the overlay was successfully hidden or not
 	 */
 	hide: function () {
-		var $html = util.getDocument();
+		util.getDocument().removeClass( 'overlay-enabled' );
+		// return to last known scroll position
+		window.scrollTo( window.pageXOffset, this.scrollTop );
 
-		if ( this.fullScreen ) {
-			$html.removeClass( 'overlay-enabled' );
-			// return to last known scroll position
-			window.scrollTo( window.pageXOffset, this.scrollTop );
-		}
-
-		this.$el.detach();
+		// Since the hash change event caused by emitting hide will be detected later
+		// and to avoid the article being shown during a transition from one overlay to
+		// another, we regretfully detach the element asynchronously.
+		this.hideTimeout = setTimeout( function () {
+			this.$el.detach();
+			this.hideTimeout = null;
+		}.bind( this ), 0 );
 
 		/**
 		 * Fired when the overlay is closed.
+		 *
 		 * @event Overlay#hide
 		 */
 		this.emit( 'hide' );
@@ -255,6 +202,7 @@ mfExtend( Overlay, View, {
 	 * Also hide .hideable elements
 	 * Can't use jQuery's hide() and show() because show() sets display: block.
 	 * And we want display: table for headers.
+	 *
 	 * @memberof Overlay
 	 * @instance
 	 * @protected
@@ -266,15 +214,9 @@ mfExtend( Overlay, View, {
 	}
 } );
 
-/*
- * Fires when close button is clicked. Not to be confused with hide event.
- * @memberof Overlay
- * @event Overlay#Overlay-exit
- */
-Overlay.EVENT_EXIT = 'Overlay-exit';
-
 /**
  * Factory method for an overlay with a single child
+ *
  * @memberof Overlay
  * @instance
  * @protected

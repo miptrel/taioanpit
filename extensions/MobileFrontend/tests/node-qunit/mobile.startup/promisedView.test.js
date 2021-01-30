@@ -1,10 +1,12 @@
-var promisedView, View,
-	sandbox, happyView,
+let promisedView, View,
+	sandbox, happyView;
+const
 	util = require( '../../../src/mobile.startup/util' ),
 	jQuery = require( '../utils/jQuery' ),
 	dom = require( '../utils/dom' ),
 	oo = require( '../utils/oo' ),
 	mediaWiki = require( '../utils/mw' ),
+	mustache = require( '../utils/mustache' ),
 	sinon = require( 'sinon' );
 
 QUnit.module( 'MobileFrontend promisedView.js', {
@@ -14,6 +16,7 @@ QUnit.module( 'MobileFrontend promisedView.js', {
 		jQuery.setUp( sandbox, global );
 		oo.setUp( sandbox, global );
 		mediaWiki.setUp( sandbox, global );
+		mustache.setUp( sandbox, global );
 		View = require( './../../../src/mobile.startup/View' );
 		promisedView = require( './../../../src/mobile.startup/promisedView' );
 		happyView = new View( {
@@ -30,7 +33,7 @@ QUnit.module( 'MobileFrontend promisedView.js', {
 } );
 
 QUnit.test( '#constructor happyView', function ( assert ) {
-	var promise = util.Deferred(),
+	const promise = util.Deferred(),
 		viewSuccess = promisedView( promise );
 
 	assert.strictEqual( viewSuccess.$el.text(), '⌛', 'the view is waiting to resolve' );
@@ -43,7 +46,7 @@ QUnit.test( '#constructor happyView', function ( assert ) {
 } );
 
 QUnit.test( '#constructor when promise rejects but not to a sadView', function ( assert ) {
-	var
+	const
 		promise = util.Deferred().reject( new Error( 'fake test error' ) ),
 		viewFailure = promisedView( promise );
 
@@ -56,7 +59,7 @@ QUnit.test( '#constructor when promise rejects but not to a sadView', function (
 } );
 
 QUnit.test( '#constructor when promise rejects to a sadView', function ( assert ) {
-	var
+	const
 		sadView = new View( {
 			isBorderBox: false,
 			className: 'error'

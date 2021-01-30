@@ -1,7 +1,7 @@
-( function ( M ) {
+( function () {
 	var
-		newPageIssueLink = M.require( 'skins.minerva.scripts/page-issues/page/PageIssueLink' ),
-		newPageIssueLearnMoreLink = M.require( 'skins.minerva.scripts/page-issues/page/PageIssueLearnMoreLink' );
+		newPageIssueLink = require( './PageIssueLink.js' ),
+		newPageIssueLearnMoreLink = require( './PageIssueLearnMoreLink.js' );
 
 	/**
 	 * Modifies the `issue` DOM to create a banner designed for single / multiple issue templates,
@@ -20,7 +20,9 @@
 				issue.$el.find( '.mbox-text' ),
 			$clickContainer = multiple ? issue.$el.parents( '.mbox-text' ) : issue.$el;
 
-		$issueContainer.prepend( issue.iconString );
+		$issueContainer.prepend(
+			issue.issue.icon.$el.clone().addClass( 'mw-ui-icon-small' )
+		);
 		$issueContainer.prepend( $learnMoreEl );
 
 		$clickContainer.on( 'click', function () {
@@ -44,8 +46,8 @@
 		$link.insertAfter( $( 'h1#section_0' ) );
 	}
 
-	M.define( 'skins.minerva.scripts/page-issues/page/pageIssueFormatter', {
+	module.exports = {
 		insertPageIssueBanner: insertPageIssueBanner,
 		insertPageIssueNotice: insertPageIssueNotice
-	} );
-}( mw.mobileFrontend ) );
+	};
+}() );

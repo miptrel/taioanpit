@@ -2,6 +2,7 @@
 	"@metadata": {
 		"authors": [
 			"AnakngAraw",
+			"Brazal.dang",
 			"Jojit fb",
 			"Sky Harbor"
 		]
@@ -19,5 +20,6 @@
 	"mobile-frontend-pageaction-edit-tooltip": "Baguhin ang unang seksiyon ng pahinang ito.",
 	"mobile-frontend-placeholder": "Maghanap sa {{SITENAME}}",
 	"mobile-frontend-random-button": "Alin man",
-	"mobile-frontend-user-button-tooltip": "Ipakita ang aking mga notipikasyon."
+	"mobile-frontend-user-button-tooltip": "Ipakita ang aking mga notipikasyon.",
+	"minerva-page-actions-language-switcher": "Mga wika"
 }

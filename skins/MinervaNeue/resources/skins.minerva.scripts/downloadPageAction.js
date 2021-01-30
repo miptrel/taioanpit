@@ -9,6 +9,7 @@
 
 	/**
 	 * Helper function to retrieve the Android version
+	 *
 	 * @ignore
 	 * @param {string} userAgent User Agent
 	 * @return {number|false} An integer.
@@ -20,6 +21,7 @@
 
 	/**
 	 * Helper function to retrieve the Chrome/Chromium version
+	 *
 	 * @ignore
 	 * @param {string} userAgent User Agent
 	 * @return {number|false} An integer.
@@ -39,15 +41,16 @@
 	 * @param {string} userAgent User agent
 	 * @param {number[]} supportedNamespaces where printing is possible
 	 * @return {boolean}
-	*/
+	 */
 	function isAvailable( windowObj, page, userAgent, supportedNamespaces ) {
 		var androidVersion = getAndroidVersion( userAgent ),
 			chromeVersion = getChromeVersion( userAgent );
 
 		// Download button is restricted to certain namespaces T181152.
+		// Not shown on missing pages
 		// Defaults to 0, in case cached JS has been served.
 		if ( supportedNamespaces.indexOf( page.getNamespaceId() ) === -1 ||
-			page.isMainPage() ) {
+			page.isMainPage() || page.isMissing ) {
 			// namespace is not supported or it's a main page
 			return false;
 		}
@@ -65,11 +68,11 @@
 	}
 	/**
 	 * onClick handler for button that invokes print function
-	 * @param {Skin} skin
+	 *
 	 * @param {Icon} icon
 	 * @param {Icon} spinner
 	 */
-	function onClick( skin, icon, spinner ) {
+	function onClick( icon, spinner ) {
 		function doPrint() {
 			icon.timeout = clearTimeout( icon.timeout );
 			track( 'minerva.downloadAsPDF', {
@@ -105,13 +108,12 @@
 	 * Gets a click handler for the download icon
 	 * Expects to be run in the context of an icon using `Function.bind`
 	 *
-	 * @param {Skin} skin
 	 * @param {Icon} spinner
-	 * @returns {function}
+	 * @return {Function}
 	 */
-	function getOnClickHandler( skin, spinner ) {
+	function getOnClickHandler( spinner ) {
 		return function () {
-			onClick( skin, this, spinner );
+			onClick( this, spinner );
 		};
 	}
 
@@ -119,21 +121,24 @@
 	 * Generate a download icon for triggering print functionality if
 	 * printing is available
 	 *
-	 * @param {Skin} skin
+	 * @param {Page} page
 	 * @param {number[]} supportedNamespaces
 	 * @param {Window} [windowObj] window object
-	 * @returns {jQuery.Object|null}
+	 * @param {boolean} [hasText] Use icon + button style.
+	 * @return {jQuery.Object|null}
 	 */
-	function downloadPageAction( skin, supportedNamespaces, windowObj ) {
-		var icon, spinner = icons.spinner(),
-			// TODO: T213352 Temporary cache compatibility - to be deleted.
-			// Any conditionals using this boolean should be DELETED when the
-			// old page action menu is no longer being served to users.
-			// eslint-disable-next-line no-jquery/no-global-selector
-			oldPageActionsDOM = $( '#page-actions.hlist' ).length > 0;
+	function downloadPageAction( page, supportedNamespaces, windowObj, hasText ) {
+		var
+			modifier = hasText ? 'toggle-list-item__anchor toggle-list-item__label' : 'mw-ui-icon-element mw-ui-icon-with-label-desktop',
+			icon,
+			spinner = icons.spinner( {
+				hasText: hasText,
+				modifier: modifier
+			} );
+
 		if (
 			isAvailable(
-				windowObj, skin.page, navigator.userAgent,
+				windowObj, page, navigator.userAgent,
 				supportedNamespaces
 			)
 		) {
@@ -141,23 +146,29 @@
 				glyphPrefix: 'minerva',
 				title: msg( 'minerva-download' ),
 				name: GLYPH,
-				tagName: oldPageActionsDOM ? 'div' : 'button',
+				tagName: 'button',
 				events: {
 					// will be bound to `this`
-					click: getOnClickHandler( skin, spinner )
-				}
+					click: getOnClickHandler( spinner )
+				},
+				hasText: hasText,
+				label: mw.msg( 'minerva-download' ),
+				modifier: modifier
 			} );
-			if ( oldPageActionsDOM ) {
-				return $( '<li>' ).append( icon.$el ).append( spinner.$el.hide() );
-			} else {
-				return $( '<li>' ).addClass( 'page-actions-menu__list-item' ).append( icon.$el ).append( spinner.$el.hide() );
-			}
+
+			return $( '<li>' ).addClass( hasText ? 'toggle-list-item' : 'page-actions-menu__list-item' ).append( icon.$el ).append( spinner.$el.hide() );
 		} else {
 			return null;
 		}
 	}
 
-	M.define( 'skins.minerva.scripts/test/getOnClickHandler', getOnClickHandler );
-	M.define( 'skins.minerva.scripts/test/isAvailable', isAvailable );
-	M.define( 'skins.minerva.scripts/downloadPageAction', downloadPageAction );
+	module.exports = {
+		downloadPageAction: downloadPageAction,
+		test: {
+			isAvailable: isAvailable,
+			getOnClickHandler: getOnClickHandler
+		}
+	};
+
+// eslint-disable-next-line no-restricted-properties
 }( mw.mobileFrontend, mw.track, mw.msg ) );

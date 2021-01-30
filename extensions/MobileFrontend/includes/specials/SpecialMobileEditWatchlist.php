@@ -1,16 +1,19 @@
 <?php
 
+use MediaWiki\MediaWikiServices;
+
 /**
  * The mobile version of the watchlist editing page.
  */
 class SpecialMobileEditWatchlist extends SpecialEditWatchlist {
-	/** @var string $offsetTitle The name of the title to begin listing the watchlist from */
+	/** @var string The name of the title to begin listing the watchlist from */
 	protected $offsetTitle;
 
 	public function __construct() {
 		$req = $this->getRequest();
 		$this->offsetTitle = $req->getVal( 'from', '' );
-		parent::__construct();
+		$watchStoreItem = MediaWikiServices::getInstance()->getWatchedItemStore();
+		parent::__construct( $watchStoreItem );
 	}
 
 	/**
@@ -30,7 +33,7 @@ class SpecialMobileEditWatchlist extends SpecialEditWatchlist {
 	 * @return string
 	 */
 	protected function getLineHtml( MobilePage $mp ) {
-		$thumb = $mp->getSmallThumbnailHtml();
+		$thumb = $mp->getSmallThumbnailHtml( true );
 		$title = $mp->getTitle();
 		if ( !$thumb ) {
 			$thumb = MobilePage::getPlaceHolderThumbnailHtml( 'list-thumb-none', 'list-thumb-x' );
@@ -43,7 +46,7 @@ class SpecialMobileEditWatchlist extends SpecialEditWatchlist {
 				'mobile-frontend-last-modified-date',
 				$this->getLanguage()->userDate( $timestamp, $user ),
 				$this->getLanguage()->userTime( $timestamp, $user )
-			)->parse();
+			)->text();
 			$edit = $mp->getLatestEdit();
 			$dataAttrs = [
 				'data-timestamp' => $edit['timestamp'],
@@ -63,7 +66,7 @@ class SpecialMobileEditWatchlist extends SpecialEditWatchlist {
 				'title' => $titleText,
 				'data-id' => $title->getArticleID()
 			] ) .
-			Html::openElement( 'a', [ 'href' => $title->getLocalUrl(), 'class' => $className ] );
+			Html::openElement( 'a', [ 'href' => $title->getLocalURL(), 'class' => $className ] );
 		$html .= $thumb;
 		$html .=
 			Html::element( 'h3', [], $titleText );
@@ -85,6 +88,7 @@ class SpecialMobileEditWatchlist extends SpecialEditWatchlist {
 	 *
 	 * @param int $mode Whether the user is viewing, editing, or clearing their
 	 *  watchlist
+	 * @suppress PhanParamSignatureMismatch It is identical
 	 */
 	public function execute( $mode ) {
 		// Anons don't get a watchlist edit
@@ -137,7 +141,7 @@ class SpecialMobileEditWatchlist extends SpecialEditWatchlist {
 	 * Identify the next page to be shown
 	 *
 	 * @param array $pages
-	 * @return string|boolean representing title of next page to show or
+	 * @return string|bool representing title of next page to show or
 	 *  false if there isn't another page to show.
 	 */
 	private function getNextPage( $pages ) {
@@ -175,21 +179,21 @@ class SpecialMobileEditWatchlist extends SpecialEditWatchlist {
 
 		// Begin rendering of watchlist.
 		$watchlist = [ $ns => $allPages ];
-		Hooks::run( 'SpecialMobileEditWatchlist::images', [
-				$this->getContext(),
-				&$watchlist,
-				&$images
-			]
+		$services = MediaWikiServices::getInstance();
+		$services->getHookContainer()->run(
+			'SpecialMobileEditWatchlist::images',
+			[ $this->getContext(), &$watchlist, &$images ]
 		);
 
 		// create list of pages
 		$mobilePages = new MobileCollection();
 		$pageKeys = array_keys( $watchlist[$ns] );
+		$repoGroup = $services->getRepoGroup();
 		foreach ( $pageKeys as $dbkey ) {
 			if ( isset( $images[$ns][$dbkey] ) ) {
 				$page = new MobilePage(
 					Title::makeTitleSafe( $ns, $dbkey ),
-					wfFindFile( $images[$ns][$dbkey] )
+					$repoGroup->findFile( $images[$ns][$dbkey] )
 				);
 			} else {
 				$page = new MobilePage( Title::makeTitleSafe( $ns, $dbkey ) );
@@ -207,7 +211,7 @@ class SpecialMobileEditWatchlist extends SpecialEditWatchlist {
 			$qs = [ 'from' => $from ];
 			$html .= Html::element( 'a',
 				[
-					'class' => MobileUI::anchorClass( 'progressive', 'more' ),
+					'class' => MobileUI::anchorClass( 'progressive', 'mw-mf-watchlist-more' ),
 					'href' => SpecialPage::getTitleFor( 'EditWatchlist' )->getLocalURL( $qs ),
 				],
 				$this->msg( 'mobile-frontend-watchlist-more' )->text() );
@@ -218,6 +222,7 @@ class SpecialMobileEditWatchlist extends SpecialEditWatchlist {
 		$out->addModuleStyles(
 			[
 				'mobile.pagelist.styles',
+				"mobile.placeholder.images",
 				'mobile.pagesummary.styles',
 				'mobile.special.pagefeed.styles'
 			]
@@ -229,11 +234,12 @@ class SpecialMobileEditWatchlist extends SpecialEditWatchlist {
 	 * @return string html representation of collection in watchlist view
 	 */
 	protected function getViewHtml( MobileCollection $collection ) {
-		$html = '<ul class="watchlist content-unstyled page-list thumbs page-summary-list">';
+		$html = Html::openElement( 'ul', [ 'class' => 'content-unstyled page-list thumbs'
+			. ' page-summary-list mw-mf-watchlist-page-list' ] );
 		foreach ( $collection as $mobilePage ) {
 			$html .= $this->getLineHtml( $mobilePage );
 		}
-		$html .= '</ul>';
+		$html .= Html::closeElement( 'ul' );
 		return $html;
 	}
 }

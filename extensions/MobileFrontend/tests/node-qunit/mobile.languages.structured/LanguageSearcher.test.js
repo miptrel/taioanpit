@@ -1,9 +1,11 @@
 let
 	LanguageSearcher,
-	sandbox,
+	sandbox;
+const
 	jQuery = require( '../utils/jQuery' ),
 	dom = require( '../utils/dom' ),
 	mediaWiki = require( '../utils/mw' ),
+	mustache = require( '../utils/mustache' ),
 	oo = require( '../utils/oo' ),
 	sinon = require( 'sinon' ),
 	apiLanguages = [
@@ -91,6 +93,7 @@ QUnit.module( 'MobileFrontend LanguageSearcher.js', {
 		jQuery.setUp( sandbox, global );
 		oo.setUp( sandbox, global );
 		mediaWiki.setUp( sandbox, global );
+		mustache.setUp( sandbox, global );
 
 		LanguageSearcher = require( '../../../src/mobile.languages.structured/LanguageSearcher' );
 

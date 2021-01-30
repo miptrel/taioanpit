@@ -7,7 +7,9 @@
  * https://github.com/cucumber/cucumber-js/blob/master/docs/support_files/hooks.md
  */
 
-const { After, Before } = require( 'cucumber' );
+'use strict';
+
+const { After, Before } = require( 'cucumber' ); // eslint-disable-line node/no-missing-require
 
 Before( function () {
 	// This hook will be executed before ALL scenarios

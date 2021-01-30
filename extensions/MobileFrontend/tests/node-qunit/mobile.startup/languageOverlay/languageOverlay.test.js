@@ -1,7 +1,8 @@
 let
 	languageOverlay,
 	LanguageSearcher,
-	sandbox,
+	sandbox;
+const
 	headless = typeof window !== 'object',
 	m = require( '../../../../src/mobile.startup/moduleLoaderSingleton' ),
 	util = require( '../../../../src/mobile.startup/util' ),
@@ -9,6 +10,7 @@ let
 	dom = require( '../../utils/dom' ),
 	oo = require( '../../utils/oo' ),
 	mediaWiki = require( '../../utils/mw' ),
+	mustache = require( '../../utils/mustache' ),
 	sinon = require( 'sinon' );
 
 QUnit.module( 'MobileFrontend languageOverlay.js', {
@@ -18,6 +20,7 @@ QUnit.module( 'MobileFrontend languageOverlay.js', {
 		jQuery.setUp( sandbox, global );
 		oo.setUp( sandbox, global );
 		mediaWiki.setUp( sandbox, global );
+		mustache.setUp( sandbox, global );
 
 		LanguageSearcher = require( '../../../../src/mobile.languages.structured/LanguageSearcher' );
 		languageOverlay = require( '../../../../src/mobile.startup/languageOverlay/languageOverlay' );
@@ -32,7 +35,7 @@ QUnit.module( 'MobileFrontend languageOverlay.js', {
 		// languageOverlay uses a global navigator so we need to stub it for headless tests
 		if ( headless ) {
 			global.navigator = global.navigator || undefined;
-			sandbox.stub( global, 'navigator', {} );
+			sandbox.stub( global, 'navigator' ).callsFake( () => {} );
 		}
 
 		sandbox.stub( m, 'require' ).withArgs( 'mobile.languages.structured/LanguageSearcher' ).returns( LanguageSearcher );

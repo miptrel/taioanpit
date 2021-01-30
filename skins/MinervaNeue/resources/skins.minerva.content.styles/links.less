@@ -1,6 +1,6 @@
 @import 'mediawiki.mixins.less';
-@import '../../minerva.less/minerva.variables';
-@import '../../minerva.less/minerva.mixins';
+@import '../../minerva.less/minerva.variables.less';
+@import '../../minerva.less/minerva.mixins.less';
 
 /**
  * Note that certain links may not have an href selector.
@@ -8,7 +8,6 @@
  * links can be differentiated from other links. Thus we only apply the linkColor to links with href
  * attributes.
 */
-/* stylelint-disable no-descending-specificity */
 a:not( [ href ] ) {
 	color: @colorGray2;
 
@@ -16,9 +15,10 @@ a:not( [ href ] ) {
 	cursor: pointer;
 }
 
+/* stylelint-disable-next-line no-descending-specificity */
 a {
+	color: @color-link;
 	text-decoration: none;
-	color: @linkColor;
 
 	&:visited {
 		color: #6b4ba1;
@@ -35,10 +35,10 @@ a {
 	&.new,
 	&.new:visited,
 	&.new:hover {
-		color: @redLinkColor;
+		color: @color-link--new;
 		// Take care of headings in page lists.
 		> * {
-			color: @redLinkColor;
+			color: @color-link--new;
 		}
 	}
 
@@ -55,7 +55,7 @@ a {
 // Generic class name needed
 .return-link {
 	display: block;
-	font-size: 0.9em;
+	font-size: @font-size-minerva-small;
 	margin-top: 1.5em;
 }
 

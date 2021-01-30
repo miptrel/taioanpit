@@ -1,33 +1,23 @@
-( function ( M ) {
-	var MainMenu = M.require( 'skins.minerva.scripts/MainMenu' ),
-		mainMenu = createMainMenu();
+var BODY_NOTIFICATIONS_REVEAL_CLASS = 'navigation-enabled secondary-navigation-enabled';
 
-	/**
-	 * Creates an instance of the `MainMenu`, using the `wgMinervaMenuData` for configuration.
-	 *
-	 * N.B. that the activator - the UI element that the user must click in order to open the main
-	 * menu - is always `.header .main-menu-button`.
-	 *
-	 * @return {MainMenu}
-	 *
-	 * @ignore
-	 */
-	function createMainMenu() {
-		var options = mw.config.get( 'wgMinervaMenuData' );
+/**
+ * Wire up the main menu
+ */
+function init() {
 
-		options.activator = '.header .main-menu-button';
-
-		return new MainMenu( options );
-	}
-
-	$( function () {
-		// eslint-disable-next-line no-jquery/no-global-selector
-		if ( !$( '#mw-mf-page-left' ).find( '.menu' ).length ) {
-			// Now we have a main menu button register it.
-			mainMenu.registerClickEvents();
-			mainMenu.appendTo( '#mw-mf-page-left' );
+	// See I09c27a084100b223662f84de6cbe01bebe1fe774
+	// will trigger every time the Echo notification is opened or closed.
+	// This controls the drawer like behaviour of notifications
+	// on tablet in mobile mode.
+	mw.hook( 'echo.mobile' ).add( function ( isOpen ) {
+		if ( isOpen ) {
+			$( document.body ).addClass( BODY_NOTIFICATIONS_REVEAL_CLASS );
+		} else {
+			$( document.body ).removeClass( BODY_NOTIFICATIONS_REVEAL_CLASS );
 		}
 	} );
+}
 
-	M.define( 'skins.minerva.scripts/mainMenu', mainMenu );
-}( mw.mobileFrontend ) );
+module.exports = {
+	init: init
+};

@@ -11,12 +11,11 @@ interface IFeature {
 
 	/**
 	 * Beta mode defined in config
-	 * @var string
 	 */
 	const CONFIG_BETA = 'beta';
+
 	/**
 	 * Stable mode defined in config
-	 * @var string
 	 */
 	const CONFIG_STABLE = 'base';
 
@@ -43,21 +42,22 @@ interface IFeature {
 	public function __toString();
 
 	/**
-	 * Check feature availability in given user mode ( Stable, beta, alpha etc )
+	 * Check feature availability in given user mode ( base, beta, alpha etc )
 	 * @param IUserMode $mode UserMode
 	 * @return bool
 	 */
 	public function isAvailable( IUserMode $mode );
+
 	/**
 	 * The feature name defined as a translation tag
-	 * ex: mobile-frontend-mobile-option-MFLazyLoadReferences
+	 * ex: mobile-frontend-mobile-option-MFConfigFlag
 	 * @return string
 	 */
 	public function getNameKey();
 
 	/**
 	 * The feature name defined as a translation tag,
-	 * ex: mobile-frontend-mobile-option-MFLazyLoadReferences-description
+	 * ex: mobile-frontend-mobile-option-MFConfigFlag-description
 	 * @return string
 	 */
 	public function getDescriptionKey();

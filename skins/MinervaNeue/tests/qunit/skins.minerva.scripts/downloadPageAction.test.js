@@ -2,34 +2,28 @@
 	var VALID_UA = 'Mozilla/5.0 (Linux; Android 5.1.1; Nexus 6 Build/LYZ28E) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/61.0.3163.100 Mobile Safari/537.36',
 		VALID_SUPPORTED_NAMESPACES = [ 0 ],
 		mobile = M.require( 'mobile.startup' ),
-		Skin = mobile.Skin,
 		icons = mobile.icons,
 		Deferred = $.Deferred,
 		windowChrome = { chrome: true },
 		downloadIcon = icons.spinner(),
 		windowNotChrome = {},
-		getOnClickHandler = M.require( 'skins.minerva.scripts/test/getOnClickHandler' ),
-		isAvailable = M.require( 'skins.minerva.scripts/test/isAvailable' ),
+		downloadAction = require( '../../../resources/skins.minerva.scripts/downloadPageAction.js' ),
+		getOnClickHandler = downloadAction.test.getOnClickHandler,
+		isAvailable = downloadAction.test.isAvailable,
 		browser = mobile.Browser.getSingleton(),
 		lazyImageLoader = mobile.lazyImages.lazyImageLoader,
 		Page = mobile.Page;
 
 	QUnit.module( 'Minerva DownloadIcon', {
 		beforeEach: function () {
-			this.skin = new Skin( {
-				eventBus: {
-					on: function () {},
-					off: function () {}
-				}
-			} );
-			this.getOnClickHandler = function ( skin ) {
-				return getOnClickHandler( skin, icons.spinner() ).bind( downloadIcon );
+			this.getOnClickHandler = function () {
+				return getOnClickHandler( icons.spinner() ).bind( downloadIcon );
 			};
 		}
 	} );
 
 	QUnit.test( '#getOnClickHandler (print after image download)', function ( assert ) {
-		var handler = this.getOnClickHandler( this.skin ),
+		var handler = this.getOnClickHandler(),
 			d = Deferred(),
 			spy = this.sandbox.stub( window, 'print' );
 
@@ -45,7 +39,7 @@
 	} );
 
 	QUnit.test( '#getOnClickHandler (print via timeout)', function ( assert ) {
-		var handler = this.getOnClickHandler( this.skin ),
+		var handler = this.getOnClickHandler(),
 			d = Deferred(),
 			spy = this.sandbox.stub( window, 'print' );
 
@@ -66,7 +60,7 @@
 	} );
 
 	QUnit.test( '#getOnClickHandler (multiple clicks)', function ( assert ) {
-		var handler = this.getOnClickHandler( this.skin ),
+		var handler = this.getOnClickHandler(),
 			d = Deferred(),
 			spy = this.sandbox.stub( window, 'print' );
 
@@ -92,16 +86,10 @@
 			var page = new Page( {
 				id: 0,
 				title: 'Test',
+				isMissing: false,
 				isMainPage: false
 			} );
 			this.page = page;
-			this.skin = new Skin( {
-				eventBus: {
-					on: function () {},
-					off: function () {}
-				},
-				page: page
-			} );
 			this.isAvailable = function ( ua ) {
 				return isAvailable( windowChrome, page, ua,
 					VALID_SUPPORTED_NAMESPACES );
@@ -121,10 +109,20 @@
 		assert.notOk( isAvailable( windowChrome, this.page, VALID_UA, [ 9999 ] ) );
 	} );
 
+	QUnit.test( 'isAvailable() handles missing pages', function ( assert ) {
+		var page = new Page( {
+			id: 0,
+			title: 'Missing',
+			isMissing: true
+		} );
+		assert.notOk( isAvailable( windowChrome, page, VALID_UA, VALID_SUPPORTED_NAMESPACES ) );
+	} );
+
 	QUnit.test( 'isAvailable() handles properly main page', function ( assert ) {
 		var page = new Page( {
 			id: 0,
 			title: 'Test',
+			isMissing: false,
 			isMainPage: true
 		} );
 		assert.notOk( isAvailable( windowChrome, page, VALID_UA, VALID_SUPPORTED_NAMESPACES ) );

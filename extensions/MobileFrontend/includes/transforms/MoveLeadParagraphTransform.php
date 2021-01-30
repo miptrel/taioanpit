@@ -2,11 +2,11 @@
 
 namespace MobileFrontend\Transforms;
 
-use DOMXPath;
-use MobileContext;
-use DOMElement;
 use DOMDocument;
+use DOMElement;
 use DOMNode;
+use DOMXPath;
+use MediaWiki\MediaWikiServices;
 
 class MoveLeadParagraphTransform implements IMobileTransform {
 	/**
@@ -40,7 +40,7 @@ class MoveLeadParagraphTransform implements IMobileTransform {
 	/**
 	 * Helper function to verify that passed $node matched nodename and has set required classname
 	 * @param DOMElement $node Node to verify
-	 * @param string|boolean $requiredNodeName Required tag name, has to be lowercase
+	 * @param string|bool $requiredNodeName Required tag name, has to be lowercase
 	 *   if false it is ignored and requiredClass is used.
 	 * @param string $requiredClass Regular expression with required class name
 	 * @return bool
@@ -62,7 +62,12 @@ class MoveLeadParagraphTransform implements IMobileTransform {
 
 		// iterate to the top.
 		while ( $node->parentNode ) {
+			/** @phan-suppress-next-line PhanTypeMismatchArgument DOMNode vs. DOMElement */
 			if ( self::matchElement( $node, 'table', '/^infobox$/' ) ||
+				// infobox's can be divs
+				/** @phan-suppress-next-line PhanTypeMismatchArgument DOMNode vs. DOMElement */
+				self::matchElement( $node, 'div', '/^infobox$/' ) ||
+				/** @phan-suppress-next-line PhanTypeMismatchArgument DOMNode vs. DOMElement */
 				self::matchElement( $node, false, $wrapperClass ) ) {
 				$infobox = $node;
 			}
@@ -96,7 +101,7 @@ class MoveLeadParagraphTransform implements IMobileTransform {
 	 * @return DOMNode|null The first infobox
 	 */
 	private function identifyInfoboxElement( DOMXPath $xPath, DOMNode $body ) {
-		$xPathQueryInfoboxes = './/table[starts-with(@class,"infobox") or contains(@class," infobox")]';
+		$xPathQueryInfoboxes = './/*[starts-with(@class,"infobox") or contains(@class," infobox")]';
 		$infoboxes = $xPath->query( $xPathQueryInfoboxes, $body );
 
 		if ( $infoboxes->length > 0 ) {
@@ -111,13 +116,14 @@ class MoveLeadParagraphTransform implements IMobileTransform {
 	 * only.
 	 * example: `<p> <span> </span> </p>` is not a lead paragraph
 	 *
+	 * Keep in sync with mobile.init/identifyLeadParagraph.js.
+	 *
 	 * @param DOMXPath $xPath XPath object to execute the query
-	 * @param DOMNode $body Where to search for an paragraphs
+	 * @param DOMNode $body Where to search for paragraphs
 	 * @return DOMElement|null The lead paragraph
 	 */
 	private function identifyLeadParagraph( DOMXPath $xPath, DOMNode $body ) {
-		$xPathQueryIgnoreEmptyP = './p[translate(normalize-space(), \' \', \'\') != \'\']';
-		$paragraphs = $xPath->query( $xPathQueryIgnoreEmptyP, $body );
+		$paragraphs = $xPath->query( './p', $body );
 
 		$index = 0;
 		while ( $index < $paragraphs->length ) {
@@ -168,6 +174,7 @@ class MoveLeadParagraphTransform implements IMobileTransform {
 				$elementAfterParagraphQuery = $xPath->query( 'following-sibling::*[1]', $leadParagraph );
 				if ( $elementAfterParagraphQuery->length > 0 ) {
 					$elem = $elementAfterParagraphQuery->item( 0 );
+					/** @phan-suppress-next-line PhanUndeclaredProperty DOMNode vs. DOMElement */
 					if ( $elem->tagName === 'ol' || $elem->tagName === 'ul' ) {
 						$listElementAfterParagraph = $elem;
 					}
@@ -179,9 +186,11 @@ class MoveLeadParagraphTransform implements IMobileTransform {
 				}
 			} elseif ( !$isTopLevelInfobox ) {
 				$isInWrongPlace = $this->hasNoNonEmptyPrecedingParagraphs( $xPath,
+					/** @phan-suppress-next-line PhanTypeMismatchArgument DOMNode vs. DOMElement */
 					self::findParentWithParent( $infobox, $leadSectionBody )
 				);
-				$loggingEnabled = MobileContext::singleton()->getMFConfig()->get( 'MFLogWrappedInfoboxes' );
+				$loggingEnabled = MediaWikiServices::getInstance()
+					->getService( 'MobileFrontend.Config' )->get( 'MFLogWrappedInfoboxes' );
 				/**
 				 * @see https://phabricator.wikimedia.org/T149884
 				 * @todo remove after research is done
@@ -195,31 +204,21 @@ class MoveLeadParagraphTransform implements IMobileTransform {
 
 	/**
 	 * Check if the node contains any non-whitespace characters
+	 *
+	 * Keep in sync with mobile.init/identifyLeadParagraph.js.
+	 *
 	 * @param DOMNode $node
 	 * @return bool
 	 */
 	private function isNotEmptyNode( DOMNode $node ) {
-		$matches = null;
-		// try to match any non-whitespace character
-		$count = preg_match( '/\S/', $node->nodeValue, $matches );
-		if ( $count > 0 ) {
-			return true;
-		}
-		if ( $node->hasChildNodes() ) {
-			foreach ( $node->childNodes as $child ) {
-				// TODO: This can be resource heavy operation (due to recursion)
-				// Try to do it in single loop
-				if ( $this->isNotEmptyNode( $child ) ) {
-					return true;
-				}
-			}
-		}
-		return false;
+		return (bool)preg_match( '/\S/', $node->textContent );
 	}
 
 	/**
 	 * Checks if paragraph contains anything other than meta-data only (example: coordinates)
 	 * and can be treated as a lead paragrah (a paragraph with article content)
+	 *
+	 * Keep in sync with mobile.init/identifyLeadParagraph.js.
 	 *
 	 * @param DOMXPath $xPath An XPath query
 	 * @param DOMNode $node DOM Node to verify
@@ -227,6 +226,7 @@ class MoveLeadParagraphTransform implements IMobileTransform {
 	 */
 	private function isNonLeadParagraph( $xPath, $node ) {
 		if ( $node->nodeType === XML_ELEMENT_NODE
+			/** @phan-suppress-next-line PhanUndeclaredProperty DOMNode vs. DOMElement */
 			 && $node->tagName === 'p'
 			 && $this->isNotEmptyNode( $node )
 		) {
@@ -234,6 +234,16 @@ class MoveLeadParagraphTransform implements IMobileTransform {
 			$coords = $xPath->query( './/span[@id="coordinates"]', $node );
 			if ( $coords->length === 0 ) {
 				return false;
+			}
+			// getting textContent is a heavy operation, cache it as we might need it later
+			$nodeContent = trim( $node->textContent );
+
+			if ( $nodeContent ) {
+				// assume valid HTML and only one #coordinates element
+				// this may not behave correctly if garbage in.
+				$coordEl = $coords->item( 0 );
+				// Is there content of this node in addition to the coordinates ?
+				return $nodeContent === trim( $coordEl->textContent );
 			}
 		}
 		return true;

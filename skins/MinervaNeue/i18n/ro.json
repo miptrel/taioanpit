@@ -1,9 +1,12 @@
 {
 	"@metadata": {
 		"authors": [
+			"Adrianbblk",
+			"Andrei Stroe",
+			"Fitoschido",
+			"GabiBil",
 			"Minisarm",
-			"Strainu",
-			"Adrianbblk"
+			"Strainu"
 		]
 	},
 	"minerva-last-modified-date": "Ultima modificare pe $1, la $2",
@@ -13,9 +16,9 @@
 	"mobile-frontend-editor-redlink-create": "Creare pagină",
 	"mobile-frontend-editor-redlink-explain": "Această pagină nu a fost creată încă.",
 	"mobile-frontend-editor-redlink-leave": "Nu, mulțumesc.",
-	"mobile-frontend-history": "Vizualizează istoricul modificărilor pentru această pagină.",
+	"mobile-frontend-history": "Vezi istoricul modificărilor aceastei pagini.",
 	"mobile-frontend-home-button": "Acasă",
-	"mobile-frontend-language-article-heading": "Lecturare în altă limbă",
+	"mobile-frontend-language-article-heading": "Limbă",
 	"mobile-frontend-languages-not-available": "Această pagină nu este disponibilă în alte limbi.",
 	"mobile-frontend-logged-in-homepage-notification": "{{GENDER:$1|Bun venit}}, $1!",
 	"mobile-frontend-main-menu-button-tooltip": "Deschide meniul principal",
@@ -27,14 +30,14 @@
 	"mobile-frontend-main-menu-watchlist": "Pagini urmărite",
 	"mobile-frontend-meta-data-issues": "Problemele paginii",
 	"mobile-frontend-meta-data-issues-categories": "Despre această categorie",
-	"mobile-frontend-meta-data-issues-header": "Probleme",
+	"mobile-frontend-meta-data-issues-header": "Probleme în pagini",
 	"mobile-frontend-meta-data-issues-header-talk": "Despre această pagină",
 	"mobile-frontend-meta-data-issues-talk": "Despre această pagină de discuție",
 	"mobile-frontend-notifications-filter": "Filtrare",
 	"mobile-frontend-pageaction-edit-tooltip": "Modifică secțiunea de început a acestei pagini.",
 	"mobile-frontend-placeholder": "Căutare în {{SITENAME}}",
 	"mobile-frontend-random-button": "Aleatoriu",
-	"mobile-frontend-redirected-from": "Redirecționat de la „$1”",
+	"mobile-frontend-redirected-from": "Redirecționat de la „[[$1]]”",
 	"mobile-frontend-talk-back-to-filepage": "Înapoi la fișierul „$1”.",
 	"mobile-frontend-talk-back-to-page": "Înapoi la pagina „$1”.",
 	"mobile-frontend-talk-back-to-projectpage": "Înapoi la pagina de proiect „$1”.",
@@ -44,5 +47,6 @@
 	"mobile-frontend-user-page-contributions": "Contribuții",
 	"mobile-frontend-user-page-member-since": "{{GENDER:$2|S-a înscris}} în $1",
 	"mobile-frontend-user-page-talk": "Discuție",
-	"mobile-frontend-user-page-uploads": "Încărcări"
+	"minerva-page-actions-overflow": "Mai mult",
+	"minerva-page-actions-user-groups": "Grupuri de utilizatori"
 }

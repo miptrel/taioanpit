@@ -1,9 +1,11 @@
 var
 	mfExtend = require( './mfExtend' ),
+	util = require( './util' ),
 	View = require( './View' );
 
 /**
  * A wrapper for creating an icon.
+ *
  * @class Icon
  * @extends View
  *
@@ -11,10 +13,13 @@ var
  */
 function Icon( options ) {
 	if ( options.hasText ) {
-		options.modifier = 'mw-ui-icon-before';
+		options.modifier = `mw-ui-icon-before ${options.modifier || ''}`;
 	}
 	if ( options.href ) {
 		options.tagName = 'a';
+	}
+	if ( options.tagName === 'button' ) {
+		options.isTypeButton = true;
 	}
 	View.call( this, options );
 }
@@ -31,6 +36,7 @@ mfExtend( Icon, View, {
 	/**
 	 * Internal method that sets the correct rotation class for the icon
 	 * based on the value of rotation
+	 *
 	 * @memberof Icon
 	 * @instance
 	 * @private
@@ -82,6 +88,7 @@ mfExtend( Icon, View, {
 	 * @property {boolean} defaults.rotation will rotate the icon by a certain number
 	 *  of degrees.
 	 *  Must be ±90, 0 or ±180 or will throw exception.
+	 * @property {boolean} defaults.disabled should only be used with tagName button
 	 */
 	defaults: {
 		rotation: 0,
@@ -89,6 +96,7 @@ mfExtend( Icon, View, {
 		href: undefined,
 		glyphPrefix: 'mf',
 		tagName: 'div',
+		disabled: false,
 		isSmall: false,
 		base: 'mw-ui-icon',
 		name: '',
@@ -97,6 +105,7 @@ mfExtend( Icon, View, {
 	},
 	/**
 	 * Return the full class name that is required for the icon to render
+	 *
 	 * @memberof Icon
 	 * @instance
 	 * @return {string}
@@ -106,6 +115,7 @@ mfExtend( Icon, View, {
 	},
 	/**
 	 * Return the class that relates to the icon glyph
+	 *
 	 * @memberof Icon
 	 * @instance
 	 * @return {string}
@@ -113,16 +123,23 @@ mfExtend( Icon, View, {
 	getGlyphClassName: function () {
 		return this.options.base + '-' + this.options.glyphPrefix + '-' + this.options.name;
 	},
-	/**
-	 * Return the HTML representation of this view
-	 * @memberof Icon
-	 * @instance
-	 * @return {string}
-	 */
-	toHtmlString: function () {
-		return this.parseHTML( '<div>' ).append( this.$el ).html();
-	},
-	template: mw.template.get( 'mobile.startup', 'icon.hogan' )
+	template: util.template(
+		'<{{tagName}} {{#disabled}}disabled{{/disabled}} ' +
+			'{{#isTypeButton}}type="button"{{/isTypeButton}} ' +
+			'class="{{base}} ' +
+				'{{base}}-{{glyphPrefix}}-{{name}} ' +
+				'{{modifier}} ' +
+				'{{#isSmall}}mw-ui-icon-small{{/isSmall}} ' +
+				'{{#_rotationClass}}{{_rotationClass}}{{/_rotationClass}} ' +
+				'{{additionalClassNames}}" ' +
+			'{{#id}}id="{{id}}"{{/id}} ' +
+			'{{#href}}href="{{href}}"{{/href}} ' +
+			'{{#title}}title="{{title}}"{{/title}}>' +
+			'{{#hasText}}<span>{{/hasText}}' +
+				'{{label}}' +
+			'{{#hasText}}</span>{{/hasText}}' +
+		'</{{tagName}}>'
+	)
 } );
 
 module.exports = Icon;

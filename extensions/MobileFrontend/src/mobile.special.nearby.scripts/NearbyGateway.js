@@ -1,11 +1,12 @@
 var limit = 50,
-	Page = require( '../mobile.startup/Page' ),
+	pageJSONParser = require( '../mobile.startup/page/pageJSONParser' ),
 	ns = mw.config.get( 'wgContentNamespaces' ),
 	util = require( '../mobile.startup/util' ),
 	extendSearchParams = require( '../mobile.startup/extendSearchParams' );
 
 /**
  * API for retrieving nearby pages
+ *
  * @class NearbyGateway
  * @param {Object} options Configuration options
  * @param {mw.Api} options.api
@@ -18,6 +19,7 @@ NearbyGateway.prototype = {
 	/**
 	 * Returns a human readable string stating the distance in meters or kilometers
 	 * depending on size.
+	 *
 	 * @memberof NearbyGateway
 	 * @instance
 	 * @private
@@ -48,6 +50,7 @@ NearbyGateway.prototype = {
 	},
 	/**
 	 * Returns a list of pages around a given point
+	 *
 	 * @memberof NearbyGateway
 	 * @instance
 	 * @param {Object} coords In form { latitude: 0, longitude: 2 }
@@ -63,6 +66,7 @@ NearbyGateway.prototype = {
 
 	/**
 	 * Gets the pages around a page. It excludes itself from the search
+	 *
 	 * @memberof NearbyGateway
 	 * @instance
 	 * @param {string} page Page title like "W_San_Francisco"
@@ -77,12 +81,13 @@ NearbyGateway.prototype = {
 
 	/**
 	 * Searches for pages nearby
+	 *
 	 * @memberof NearbyGateway
 	 * @instance
 	 * @private
 	 * @param {Object} params Parameters to use for searching
 	 * @param {number} range Number of meters to perform a geosearch for
-	 * @param {string} exclude Name of a title to exclude from the list of results
+	 * @param {string} [exclude] Name of a title to exclude from the list of results
 	 * @return {jQuery.Deferred} Object taking list of pages as argument
 	 */
 	_search: function ( params, range, exclude ) {
@@ -118,7 +123,7 @@ NearbyGateway.prototype = {
 
 			pages = pages.map( function ( page, i ) {
 				var coords, p;
-				p = Page.newFromJSON( page );
+				p = pageJSONParser.parse( page );
 				p.anchor = 'item_' + i;
 
 				// protect against declined bug T49133
@@ -142,7 +147,11 @@ NearbyGateway.prototype = {
 			pages.sort( function ( a, b ) {
 				return a.dist > b.dist ? 1 : -1;
 			} );
-			d.resolve( pages );
+			if ( pages.length === 0 ) {
+				d.reject( 'empty' );
+			} else {
+				d.resolve( pages );
+			}
 		}, function ( error ) {
 			d.reject( error );
 		} );

@@ -15,13 +15,12 @@
  * allowing us to use the dependencies across scenarios.
  */
 
-const MwBot = require( 'mwbot' ),
-	mwCorePages = require( '../support/pages/mw_core_pages' ),
+'use strict';
+
+const mwCorePages = require( '../support/pages/mw_core_pages' ),
 	minervaPages = require( '../support/pages/minerva_pages' );
 
 function MinervaWorld() {
-	/* dependencies */
-	this.api = new MwBot();
 	/* pageObjects */
 	Object.assign( this, mwCorePages );
 	Object.assign( this, minervaPages );

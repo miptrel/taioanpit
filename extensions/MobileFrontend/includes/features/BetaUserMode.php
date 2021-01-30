@@ -1,4 +1,5 @@
 <?php
+
 namespace MobileFrontend\Features;
 
 /**
@@ -32,16 +33,6 @@ class BetaUserMode implements IUserMode {
 	 */
 	public function isEnabled() {
 		return $this->context->isBetaGroupMember();
-	}
-
-	/**
-	 * DO NOT USE
-	 * @param bool $isEnabled the new state of the service. Param is ignored
-	 * @throws \BadMethodCallException
-	 */
-	public function setEnabled( $isEnabled ) {
-		// TODO: See
-		throw new \BadMethodCallException( 'NOT_IMPLEMENTED' );
 	}
 
 	/**

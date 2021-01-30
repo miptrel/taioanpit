@@ -1,10 +1,12 @@
-var
+let
 	TalkSectionOverlay,
-	sandbox,
+	sandbox;
+const
 	util = require( '../../../src/mobile.startup/util' ),
 	jQuery = require( '../utils/jQuery' ),
 	dom = require( '../utils/dom' ),
 	mediaWiki = require( '../utils/mw' ),
+	mustache = require( '../utils/mustache' ),
 	oo = require( '../utils/oo' ),
 	sinon = require( 'sinon' );
 
@@ -15,14 +17,12 @@ QUnit.module( 'MobileFrontend TalkSectionOverlay.js - logged in', {
 		jQuery.setUp( sandbox, global );
 		oo.setUp( sandbox, global );
 		mediaWiki.setUp( sandbox, global );
+		mustache.setUp( sandbox, global );
 
 		TalkSectionOverlay = require( '../../../src/mobile.talk.overlays/TalkSectionOverlay' );
 
 		// don't create toasts in test environment
 		this.toastStub = sandbox.stub( mw, 'notify' );
-
-		sandbox.stub( mw.user, 'isAnon' ).returns( false );
-		this.renderFromApiSpy = sandbox.stub( TalkSectionOverlay.prototype, 'renderFromApi' );
 	},
 	afterEach: function () {
 		jQuery.tearDown();
@@ -30,24 +30,8 @@ QUnit.module( 'MobileFrontend TalkSectionOverlay.js - logged in', {
 	}
 } );
 
-QUnit.test( 'Load section from api only, if needed', function ( assert ) {
-	// eslint-disable-next-line no-new
-	new TalkSectionOverlay( {
-		api: {},
-		section: 'Testtext'
-	} );
-
-	assert.strictEqual( this.renderFromApiSpy.callCount, 0, 'Section requested from api, if no section given.' );
-
-	// eslint-disable-next-line no-new
-	new TalkSectionOverlay( {
-		api: {}
-	} );
-	assert.strictEqual( this.renderFromApiSpy.callCount, 1, 'No Api request, if section given' );
-} );
-
 QUnit.test( 'Check comment box for logged in users', function ( assert ) {
-	var overlay = new TalkSectionOverlay( {
+	const overlay = new TalkSectionOverlay( {
 		api: {},
 		section: 'Test'
 	} );
@@ -56,9 +40,7 @@ QUnit.test( 'Check comment box for logged in users', function ( assert ) {
 } );
 
 QUnit.test( 'Check error class on textarea', function ( assert ) {
-	var overlay;
-
-	overlay = new TalkSectionOverlay( {
+	const overlay = new TalkSectionOverlay( {
 		api: {},
 		section: 'Test'
 	} );
@@ -71,7 +53,7 @@ QUnit.test( 'Check error class on textarea', function ( assert ) {
 } );
 
 QUnit.test( 'Check api request on save', function ( assert ) {
-	var
+	const
 		deferred = util.Deferred().resolve(),
 		spy = sandbox.stub().returns( deferred ),
 		overlay = new TalkSectionOverlay( {
@@ -83,7 +65,7 @@ QUnit.test( 'Check api request on save', function ( assert ) {
 			section: 'Test'
 		} );
 
-	overlay.$textarea.val( 'Testcomment' );
+	overlay.state.text = 'Testcomment';
 	overlay.onSaveClick();
 
 	return deferred.then( function () {
@@ -104,6 +86,7 @@ QUnit.module( 'MobileFrontend TalkSectionOverlay.js - anonymous (logged out)', {
 		jQuery.setUp( sandbox, global );
 		oo.setUp( sandbox, global );
 		mediaWiki.setUp( sandbox, global );
+		mustache.setUp( sandbox, global );
 
 		TalkSectionOverlay = require( '../../../src/mobile.talk.overlays/TalkSectionOverlay' );
 
@@ -116,7 +99,7 @@ QUnit.module( 'MobileFrontend TalkSectionOverlay.js - anonymous (logged out)', {
 } );
 
 QUnit.test( 'Check comment box for logged out users', function ( assert ) {
-	var overlay = new TalkSectionOverlay( {
+	const overlay = new TalkSectionOverlay( {
 		api: {},
 		section: 'Test'
 	} );

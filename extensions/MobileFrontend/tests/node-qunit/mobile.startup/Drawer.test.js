@@ -1,16 +1,13 @@
-var
-	// Imports
+const // Imports
 	dom = require( '../utils/dom' ),
-	Drawer,
 	jQuery = require( '../utils/jQuery' ),
 	mw = require( '../utils/mw' ),
+	mustache = require( '../utils/mustache' ),
 	oo = require( '../utils/oo' ),
-	sandbox,
-	sinon = require( 'sinon' ),
-	util = require( '../../../src/mobile.startup/util' ),
-
-	// Variables
-	parent;
+	sinon = require( 'sinon' );
+let
+	Drawer,
+	sandbox;
 
 // util.docReady() usage appears to be necessary over
 // `document.addEventListener('DOMContentLoaded', ...)` as the latter fires before the subject's
@@ -18,8 +15,6 @@ var
 
 QUnit.module( 'MobileFrontend Drawer.js', {
 	beforeEach: function () {
-		var parentID = 'drawerParent';
-
 		sandbox = sinon.sandbox.create();
 
 		// Set up required by all Views.
@@ -29,24 +24,13 @@ QUnit.module( 'MobileFrontend Drawer.js', {
 
 		// Additional Drawer global dependency.
 		mw.setUp( sandbox, global );
+		mustache.setUp( sandbox, global );
 
 		// Dynamically import Drawer to use fresh sandboxed dependencies.
 		Drawer = require( '../../../src/mobile.startup/Drawer' );
-
-		// Rewire the prototype, not the instance, since this property is used during construction.
-		sandbox.stub( Drawer.prototype, 'appendToElement', '#' + parentID );
-
-		// Create a disposable host Element. See T209129.
-		parent = document.createElement( 'div' );
-		parent.id = parentID;
-		document.documentElement.appendChild( parent );
 	},
 
 	afterEach: function () {
-		// Discard host Element.
-		document.documentElement.removeChild( parent );
-		parent = undefined;
-
 		Drawer = undefined;
 
 		jQuery.tearDown();
@@ -55,135 +39,78 @@ QUnit.module( 'MobileFrontend Drawer.js', {
 	}
 } );
 
-QUnit.test( 'appends self to parent when DOM is loaded', function ( assert ) {
-	var
-		done = assert.async(),
-		subject = new Drawer();
-
-	util.docReady( function () {
-		assert.strictEqual( subject.$el.parent().get( 0 ), parent );
-		done();
-	} );
-} );
-
-QUnit.test( 'adds class to parent when DOM is loaded', function ( assert ) {
-	var done = assert.async();
-
-	new Drawer(); // eslint-disable-line no-new
-	util.docReady( function () {
-		assert.strictEqual( parent.className, 'has-drawer' );
-		done();
-	} );
-} );
-
-QUnit.test( 'consumes clicks', function ( assert ) {
-	var
-		done = assert.async(),
-		event = new window.Event( 'click' ),
-		subject = new Drawer();
-
-	event.stopPropagation = function () {
-		assert.ok( true );
-		done();
-	};
-	subject.$el.get( 0 ).dispatchEvent( event );
-} );
-
 QUnit.test( 'visible on show()', function ( assert ) {
-	var
+	const
 		done = assert.async(),
-		subject = new Drawer();
+		onShow = () => {
+			assertVisible( subject );
+			assert.ok( true );
+			done();
+		},
+		subject = new Drawer( {} );
 
-	subject.on( 'show', function () {
-		assertVisible();
-		assert.ok( true );
-		done();
+	subject.show().then( onShow ).then( () => {
+		// show again and it's still visible./
+		subject.show().then( onShow );
 	} );
+} );
+
+QUnit.test( 'accepts onShow and events', function ( assert ) {
+	const
+		done = assert.async(),
+		onShow = () => {
+			assert.ok( true );
+			done();
+		},
+		subject = new Drawer( {
+			events: {
+				'click .button': () => {}
+			},
+			onShow
+		} );
 
 	subject.show();
 } );
 
 QUnit.test( 'hidden on hide()', function ( assert ) {
-	var
+	const
 		done = assert.async(),
-		subject = new Drawer();
-
-	subject.on( 'hide', function () {
-		assertHidden();
-		assert.ok( true );
-		done();
-	} );
+		onBeforeHide = () => {
+			assertHidden( subject );
+			assert.ok( true );
+			done();
+		},
+		subject = new Drawer( { onBeforeHide } );
 
 	subject.hide();
 } );
 
-QUnit.test( 'hidden on click once presented', function ( assert ) {
-	var
+QUnit.test( 'hidden on mask click', function ( assert ) {
+	const
 		done = assert.async(),
-		subject = new Drawer();
-
-	subject.on( 'hide', function () {
-		assertHidden();
-		assert.ok( true );
-		done();
-	} );
-
-	callOnPresented( subject, function () {
-		parent.click();
-	} );
+		onBeforeHide = () => {
+			assertHidden( subject );
+			assert.ok( true );
+			done();
+		},
+		subject = new Drawer( { onBeforeHide } );
 
 	subject.show();
-} );
-
-QUnit.test( 'hidden on scroll once presented', function ( assert ) {
-	var
-		done = assert.async(),
-		subject = new Drawer();
-
-	subject.on( 'hide', function () {
-		assertHidden();
-		assert.ok( true );
-		done();
-	} );
-
-	callOnPresented( subject, function () {
-		// https://github.com/jsdom/jsdom/issues/1422
-		var event = new window.Event( 'scroll', { bubbles: true } );
-		parent.dispatchEvent( event );
-	} );
-
-	subject.show();
+	subject.$el.find( '.drawer-container__mask' )[0].dispatchEvent( new window.Event( 'click', { bubbles: true } ) );
 } );
 
 QUnit.test( 'HTML is valid', function ( assert ) {
-	var subject = new Drawer(),
-		done = assert.async();
-
-	util.docReady( function () {
-		assert.strictEqual(
-			subject.$el.get( 0 ).outerHTML, '<div class="drawer position-fixed view-border-box"></div>'
-		);
-		done();
-	} );
+	const subject = new Drawer( {} );
+	assert.strictEqual(
+		subject.$el.find( '.drawer' ).get( 0 ).outerHTML,
+		'<div class="drawer drawer-container__drawer position-fixed"><div class="mw-ui-icon mw-ui-icon-mf-expand mw-ui-icon-element   cancel"></div></div>'
+	);
 } );
 
-/**
- * @param {Drawer} subject
- * @param {Function} callback
- * @return {void}
-*/
-function callOnPresented( subject, callback ) {
-	// Wait for appearance.
-	subject.on( 'show', function () {
-		// Wait for minimum presentation duration to expire.
-		setTimeout( callback, subject.minHideDelay );
-	} );
+function assertVisible( drawer ) {
+	sinon.assert.match( drawer.$el.find( '.drawer' )[ 0 ].className, /.*\bvisible\b.*/ );
 }
 
-function assertVisible() {
-	sinon.assert.match( parent.className, /.*\bdrawer-visible\b.*/ );
-}
-
-function assertHidden() {
-	sinon.assert.match( parent.className, /^((?!\bdrawer-visible\b).)*$/ );
+function assertHidden( drawer ) {
+	sinon.assert.match( drawer.$el.find( '.drawer' )[ 0 ].className, /^((?!\bvisible\b).)*$/ );
 }

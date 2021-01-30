@@ -1,22 +1,23 @@
 var
 	mfExtend = require( '../mobile.startup/mfExtend' ),
+	headers = require( '../mobile.startup/headers' ),
 	Overlay = require( '../mobile.startup/Overlay' ),
 	PageGateway = require( '../mobile.startup/PageGateway' ),
 	util = require( '../mobile.startup/util' ),
-	makeAddTopicForm = require( './makeAddTopicForm' ),
-	toast = require( '../mobile.startup/toast' ),
-	Icon = require( '../mobile.startup/Icon' );
+	makeAddTopicForm = require( './makeAddTopicForm' );
 
 /**
  * Overlay for adding a talk section
+ *
  * @class TalkSectionAddOverlay
  * @extends Overlay
- * @uses Toast
  *
  * @param {Object} options Configuration options
+ * @param {mw.Api} options.api
  * @param {Object} options.title Title of the talk page being modified
+ * @param {string} options.licenseMsg
  * @param {Object} options.currentPageTitle Title of the page before the overlay appears
- * @param {OO.EventEmitter} options.eventBus Object used to emit talk-added-wo-overlay
+ * @param {Function} [options.onSaveComplete] executed when a save has completed
  * and talk-discussion-added events
  */
 function TalkSectionAddOverlay( options ) {
@@ -25,14 +26,15 @@ function TalkSectionAddOverlay( options ) {
 	Overlay.call( this,
 		util.extend( options, {
 			className: 'talk-overlay overlay',
+			onBeforeExit: this.onBeforeExit.bind( this ),
 			events: {
-				'click .confirm-save': 'onSaveClick'
+				'click .save': 'onSaveClick'
 			}
 		} )
 	);
+	this.onSaveComplete = options.onSaveComplete;
 	this.title = options.title;
 	this.currentPageTitle = options.currentPageTitle;
-	this.eventBus = options.eventBus;
 	// Variable to indicate, if the overlay will be closed by the save function
 	// or by the user. If this is false and there is content in the input fields,
 	// the user will be asked, if he want to abandon his changes before we close
@@ -41,53 +43,24 @@ function TalkSectionAddOverlay( options ) {
 }
 
 mfExtend( TalkSectionAddOverlay, Overlay, {
-	/**
-	 * @memberof TalkSectionAddOverlay
-	 * @instance
-	 * @mixes Overlay#defaults
-	 * @property {Object} defaults Default options hash.
-	 * @property {string} defaults.cancelMsg Caption for cancel button on edit form.
-	 * @property {string} defaults.topicTitlePlaceHolder Placeholder text to prompt user to add
-	 * a talk page topic subject.
-	 * @property {string} defaults.topicContentPlaceHolder Placeholder text to prompt user
-	 *  to add content to talk page content.
-	 * @property {string} defaults.editingMsg Label for button which
-	 *  submits a new talk page topic.
-	 */
-	defaults: util.extend( {}, Overlay.prototype.defaults, {
-		cancelMsg: mw.msg( 'mobile-frontend-editor-cancel' ),
-		editingMsg: mw.msg( 'mobile-frontend-talk-add-overlay-submit' ),
-		waitMsg: mw.msg( 'mobile-frontend-talk-topic-wait' ),
-		// icons.spinner can't be used, .loading has a fixed height, which breaks overlay-header
-		waitIcon: new Icon( {
-			name: 'spinner',
-			additionalClassNames: 'savespinner loading'
-		} ).toHtmlString()
-	} ),
-	/**
-	 * @inheritdoc
-	 * @memberof TalkSectionAddOverlay
-	 * @instance
-	 */
-	template: mw.template.get( 'mobile.talk.overlays', 'SectionAddOverlay.hogan' ),
-	/**
-	 * @inheritdoc
-	 * @memberof TalkSectionAddOverlay
-	 * @instance
-	 */
-	templatePartials: util.extend( {}, Overlay.prototype.templatePartials, {
-		contentHeader: mw.template.get( 'mobile.talk.overlays', 'SectionAddOverlay/contentHeader.hogan' ),
-		saveHeader: mw.template.get( 'mobile.editor.overlay', 'saveHeader.hogan' )
-	} ),
+	preRender: function () {
+		this.options.headers = [
+			// contentHeader
+			headers.saveHeader(
+				mw.msg( 'mobile-frontend-talk-add-overlay-submit' ),
+				'initial-header save-header'
+			),
+			headers.savingHeader( mw.msg( 'mobile-frontend-talk-topic-wait' ) )
+		];
+	},
 	/**
 	 * @inheritdoc
 	 * @memberof TalkSectionAddOverlay
 	 * @instance
 	 */
 	postRender: function () {
-		let topicForm;
 		Overlay.prototype.postRender.call( this );
-		topicForm = makeAddTopicForm( {
+		const topicForm = makeAddTopicForm( {
 			subject: '',
 			body: '',
 			disabled: false,
@@ -95,7 +68,7 @@ mfExtend( TalkSectionAddOverlay, Overlay, {
 			onTextInput: this.onTextInput.bind( this )
 		} );
 		this.showHidden( '.initial-header' );
-		this.$confirm = this.$el.find( 'button.confirm-save' );
+		this.$confirm = this.$el.find( 'button.save' );
 		this.$el.find( '.overlay-content' ).append( topicForm.$el );
 		this.$subject = topicForm.$el.find( 'input' );
 		this.$ta = topicForm.$el.find( '.wikitext-editor' );
@@ -105,20 +78,20 @@ mfExtend( TalkSectionAddOverlay, Overlay, {
 	 * @memberof TalkSectionAddOverlay
 	 * @instance
 	 */
-	hide: function () {
+	onBeforeExit: function ( exit ) {
 		var empty,
 			confirmMessage = mw.msg( 'mobile-frontend-editor-cancel-confirm' );
 
 		empty = ( !this.$subject.val() && !this.$ta.val() );
 		// TODO: Replace with an OOUI dialog
+		// eslint-disable-next-line no-alert
 		if ( this._saveHit || empty || window.confirm( confirmMessage ) ) {
-			return Overlay.prototype.hide.apply( this, arguments );
-		} else {
-			return false;
+			exit();
 		}
 	},
 	/**
 	 * Handles an input into a textarea and enables or disables the submit button
+	 *
 	 * @memberof TalkSectionAddOverlay
 	 * @param {string} subject
 	 * @param {string} body
@@ -139,23 +112,15 @@ mfExtend( TalkSectionAddOverlay, Overlay, {
 	},
 	/**
 	 * Handles a click on the save button
+	 *
 	 * @memberof TalkSectionAddOverlay
 	 * @instance
 	 */
 	onSaveClick: function () {
-		var isOnTalkPage = this.title === this.currentPageTitle;
-
 		this.showHidden( '.saving-header' );
 		this.save().then( function ( status ) {
-			if ( status === 'ok' ) {
-				if ( isOnTalkPage ) {
-					this.eventBus.emit( 'talk-added-wo-overlay' );
-				} else {
-					this.pageGateway.invalidatePage( this.title );
-					toast.show( mw.msg( 'mobile-frontend-talk-topic-feedback' ) );
-					this.eventBus.emit( 'talk-discussion-added' );
-					this.hide();
-				}
+			if ( status === 'ok' && this.options.onSaveComplete ) {
+				this.onSaveComplete();
 			}
 		}.bind( this ), function ( error ) {
 			var editMsg = mw.msg( 'mobile-frontend-talk-topic-error' );
@@ -180,12 +145,13 @@ mfExtend( TalkSectionAddOverlay, Overlay, {
 					break;
 			}
 
-			toast.show( editMsg, { type: 'error' } );
+			mw.notify( editMsg, { type: 'error' } );
 			this.showHidden( '.save-header, .save-panel' );
 		}.bind( this ) );
 	},
 	/**
 	 * Save new talk section
+	 *
 	 * @memberof TalkSectionAddOverlay
 	 * @instance
 	 * @return {jQuery.Deferred} Object that either will be resolved with ok parameter

@@ -1,4 +1,5 @@
-var Page = require( '../mobile.startup/Page' ),
+var
+	pageJSONParser = require( '../mobile.startup/page/pageJSONParser' ),
 	util = require( '../mobile.startup/util' ),
 	extendSearchParams = require( '../mobile.startup/extendSearchParams' );
 
@@ -31,6 +32,7 @@ function WatchListGateway( api, lastTitle ) {
 WatchListGateway.prototype = {
 	/**
 	 * Load the list of items on the watchlist
+	 *
 	 * @return {jQuery.Deferred}
 	 */
 	loadWatchlist: function () {
@@ -61,6 +63,7 @@ WatchListGateway.prototype = {
 
 	/**
 	 * Parse api response data into pagelist item format
+	 *
 	 * @param {Object[]} data
 	 * @return {Page[]}
 	 */
@@ -87,7 +90,7 @@ WatchListGateway.prototype = {
 		}
 
 		// Transform the items to a sensible format
-		return pages.map( Page.newFromJSON );
+		return pages.map( pageJSONParser.parse );
 	}
 
 };

@@ -1,23 +1,22 @@
 {
 	"@metadata": {
 		"authors": [
+			"Evropi",
 			"Geraki",
 			"Glavkos",
+			"KATRINE1993",
+			"Nikosgranturismogt",
 			"Nikosguard",
 			"SucreRouge",
 			"ZaDiak",
-			"Ανώνυμος Βικιπαιδιστής",
-			"Nikosgranturismogt",
-			"KATRINE1993"
+			"Ανώνυμος Βικιπαιδιστής"
 		]
 	},
 	"minerva-last-modified-date": "Τελευταία επεξεργασία στις $1, στις $2",
 	"minerva-talk-add-topic": "Προσθήκη συζήτησης",
 	"mobile-frontend-cookies-required": "Τα cookies είναι απαραίτητα για να αλλάξετε τρόπο προβολής. Παρακαλούμε ενεργοποιήστε τα και προσπαθήστε ξανά.",
 	"mobile-frontend-editor-edit": "Επεξεργασία",
-	"minerva-download": "Λήψη",
-	"skin-minerva-share": "Κοινοποίηση",
-	"skin-minerva-mobile-option-MinervaShareButton": "Κοινοποίηση",
+	"minerva-download": "Λήψη PDF",
 	"mobile-frontend-editor-redlink-create": "Δημιουργία σελίδας",
 	"mobile-frontend-editor-redlink-explain": "Αυτή η σελίδα δεν έχει δημιουργηθεί ακόμα.",
 	"mobile-frontend-editor-redlink-leave": "Όχι, ευχαριστώ",
@@ -42,7 +41,7 @@
 	"mobile-frontend-pageaction-edit-tooltip": "Επεξεργαστείτε το εισαγωγικό τμήμα αυτής της σελίδας",
 	"mobile-frontend-placeholder": "Αναζήτηση σε {{SITENAME}}",
 	"mobile-frontend-random-button": "Τυχαίο",
-	"mobile-frontend-redirected-from": "Ανακατευθύνθηκε από το \"$1\"",
+	"mobile-frontend-redirected-from": "Ανακατευθύνθηκε από το \"[[$1]]\"",
 	"mobile-frontend-talk-back-to-filepage": "Επιστροφή στο αρχείο \"$1\".",
 	"mobile-frontend-talk-back-to-page": "Επιστροφή στη σελίδα \"$1\".",
 	"mobile-frontend-talk-back-to-projectpage": "Επιστροφή στη σελίδα του εγχειρήματος \"$1\".",
@@ -52,12 +51,11 @@
 	"mobile-frontend-user-page-contributions": "Συνεισφορές",
 	"mobile-frontend-user-page-member-since": "{{GENDER:$2|Έγινε μέλος}} στο $1",
 	"mobile-frontend-user-page-talk": "Συζήτηση",
-	"mobile-frontend-user-page-uploads": "Επιφορτώσεις",
+	"minerva-page-actions-info": "Πληροφορίες σελίδας",
 	"minerva-skin-desc": "Ένα υπεύθυνο πρώτο θέμα κινητού",
 	"skin-minerva-issue-learn-more": "Μάθετε περισσότερα",
 	"skin-minerva-mobile-option-MinervaShowCategoriesButton": "Κατηγορίες",
 	"skin-minerva-mobile-option-MinervaShowCategoriesButton-description": "Προβολή κατηγοριών των σελίδων",
-	"skin-minerva-mobile-option-MinervaEnableBackToTop": "Πήδηση στη κορυφή",
 	"skin-minerva-mobile-option-MinervaPageIssuesNewTreatment": "Προβλήματα διαχείρησης για βελτίωση σελίδας",
 	"skin-minerva-mobile-option-MinervaPageIssuesNewTreatment-description": "Τυχόν προβλήματα με την σελίδα (Template:ambox) θα υπογραμμιστούν στο άρθρο."
 }

@@ -11,11 +11,11 @@ var View = require( '../mobile.startup/View' ),
 	} ),
 	slideLeftButton = new Icon( {
 		rotation: 90,
-		name: 'arrow-invert'
+		name: 'expand-invert'
 	} ),
 	slideRightButton = new Icon( {
 		rotation: -90,
-		name: 'arrow-invert'
+		name: 'expand-invert'
 	} ),
 	LoadErrorMessage = require( './LoadErrorMessage' ),
 	ImageGateway = require( './ImageGateway' ),
@@ -26,6 +26,7 @@ var View = require( '../mobile.startup/View' ),
 
 /**
  * Displays images in full screen overlay
+ *
  * @class ImageCarousel
  * @extends View
  * @param {Object} options Configuration options
@@ -37,6 +38,7 @@ function ImageCarousel( options ) {
 	} );
 	this.router = options.router || router;
 	this.eventBus = options.eventBus;
+	this.hasLoadError = false;
 
 	View.call(
 		this,
@@ -59,12 +61,21 @@ mfExtend( ImageCarousel, View, {
 	 * @memberof ImageCarousel
 	 * @instance
 	 */
-	hideOnExitClick: false,
-	/**
-	 * @memberof ImageCarousel
-	 * @instance
-	 */
-	template: mw.template.get( 'mobile.mediaViewer', 'ImageCarousel.hogan' ),
+	template: util.template( `
+<button class="prev slider-button"></button>
+<div class="main">
+	<div class="image-wrapper">
+		<div class="image"></div>
+	</div>
+	<!-- cancel button will go here -->
+	<div class="image-details">
+		<!-- details button will go here -->
+		<p class="truncated-text">{{caption}}</p>
+		<p class="license"><a href="#">{{licenseLinkMsg}}</a></p>
+	</div>
+</div>
+<button class="next slider-button"></button>
+	` ),
 
 	/**
 	 * @memberof ImageCarousel
@@ -81,6 +92,7 @@ mfExtend( ImageCarousel, View, {
 	} ),
 	/**
 	 * Event handler for slide event
+	 *
 	 * @memberof ImageCarousel
 	 * @instance
 	 * @param {jQuery.Event} ev
@@ -117,6 +129,7 @@ mfExtend( ImageCarousel, View, {
 	/**
 	 * Setup the next and previous images to enable the user to arrow through
 	 * all images in the set of images given in thumbs.
+	 *
 	 * @memberof ImageCarousel
 	 * @instance
 	 * @param {Array} thumbs A set of images, which are available
@@ -142,6 +155,7 @@ mfExtend( ImageCarousel, View, {
 	},
 	/**
 	 * Disables the possibility to arrow through all images of the page.
+	 *
 	 * @memberof ImageCarousel
 	 * @instance
 	 * @private
@@ -153,6 +167,7 @@ mfExtend( ImageCarousel, View, {
 	/**
 	 * Handler for retry event which triggers when user tries to reload overlay
 	 * after a loading error.
+	 *
 	 * @memberof ImageCarousel
 	 * @instance
 	 * @private
@@ -177,6 +192,7 @@ mfExtend( ImageCarousel, View, {
 
 		/**
 		 * Display media load failure message
+		 *
 		 * @method
 		 * @ignore
 		 */
@@ -197,6 +213,7 @@ mfExtend( ImageCarousel, View, {
 
 		/**
 		 * Start image load transitions
+		 *
 		 * @method
 		 * @ignore
 		 */
@@ -279,6 +296,7 @@ mfExtend( ImageCarousel, View, {
 
 	/**
 	 * Event handler that toggles the details bar.
+	 *
 	 * @memberof ImageCarousel
 	 * @instance
 	 */
@@ -293,6 +311,7 @@ mfExtend( ImageCarousel, View, {
 	 * Fit the image into the window if its dimensions are bigger than the window dimensions.
 	 * Compare window width to height ratio to that of image width to height when setting
 	 * image width or height.
+	 *
 	 * @memberof ImageCarousel
 	 * @instance
 	 * @private
@@ -303,6 +322,8 @@ mfExtend( ImageCarousel, View, {
 
 		this.adjustDetails();
 		// with a hidden details box we have a little bit more space, we just need to use it
+		// TODO: Get visibility from the model
+		// eslint-disable-next-line no-jquery/no-sizzle
 		detailsHeight = !this.$details.is( ':visible' ) ? 0 : this.$details.outerHeight();
 		windowWidth = $window.width();
 		windowHeight = $window.height() - detailsHeight;
@@ -332,6 +353,7 @@ mfExtend( ImageCarousel, View, {
 
 	/**
 	 * Function to adjust the height of details section to not more than 50% of window height.
+	 *
 	 * @memberof ImageCarousel
 	 * @instance
 	 */

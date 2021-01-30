@@ -1,22 +1,23 @@
 const
 	mfExtend = require( '../mobile.startup/mfExtend' ),
 	View = require( '../mobile.startup/View' ),
-	Panel = require( '../mobile.startup/Panel' ),
 	util = require( '../mobile.startup/util' );
 
 /**
  * Create a panel with a child
+ *
  * @param {jQuery.Object} $child
  * @return {Panel}
  */
 function makePanel( $child ) {
-	const panel = new Panel();
+	const panel = new View( { className: 'panel' } );
 	panel.$el.append( $child );
 	return panel;
 }
 
 /**
  * Form for adding a talk section
+ *
  * @class AddTopicForm
  * @extends View
  *
@@ -84,6 +85,7 @@ mfExtend( AddTopicForm, View, {
 	},
 	/**
 	 * Handles an input into a textarea and enables or disables the submit button
+	 *
 	 * @memberof AddTopicForm
 	 * @instance
 	 */

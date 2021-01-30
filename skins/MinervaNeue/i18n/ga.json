@@ -1,6 +1,7 @@
 {
 	"@metadata": {
 		"authors": [
+			"Smirkybec",
 			"Tem",
 			"පසිඳු කාවින්ද"
 		]
@@ -13,5 +14,6 @@
 	"mobile-frontend-main-menu-nearby": "In aice láimhe",
 	"mobile-frontend-main-menu-settings": "Sainroghanna",
 	"mobile-frontend-main-menu-watchlist": "Liosta faire",
-	"mobile-frontend-random-button": "Fánach"
+	"mobile-frontend-random-button": "Fánach",
+	"minerva-page-actions-logs": "Logaí"
 }

@@ -1,8 +1,10 @@
-var
+const
 	sinon = require( 'sinon' ),
 	dom = require( '../utils/dom' ),
 	jQuery = require( '../utils/jQuery' ),
-	oo = require( '../utils/oo' ),
+	mustache = require( '../utils/mustache' ),
+	oo = require( '../utils/oo' );
+let
 	Section,
 	sandbox;
 
@@ -11,6 +13,7 @@ QUnit.module( 'MobileFrontend Section.js', {
 		sandbox = sinon.sandbox.create();
 		dom.setUp( sandbox, global );
 		jQuery.setUp( sandbox, global );
+		mustache.setUp( sandbox, global );
 		oo.setUp( sandbox, global );
 		Section = require( '../../../src/mobile.startup/Section' );
 	},
@@ -21,7 +24,7 @@ QUnit.module( 'MobileFrontend Section.js', {
 } );
 
 QUnit.test( 'initialize with options', function ( assert ) {
-	var section = new Section( {
+	const section = new Section( {
 		level: '1',
 		line: 'Line',
 		text: 'Text',
@@ -39,7 +42,7 @@ QUnit.test( 'initialize with options', function ( assert ) {
 } );
 
 QUnit.test( 'initialize with subsections', function ( assert ) {
-	var
+	const
 		section = new Section( {
 			subsections: [ {
 				level: '',

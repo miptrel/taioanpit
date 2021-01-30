@@ -100,40 +100,6 @@ See: https://www.mediawiki.org/wiki/Analytics/Kraken/Data_Formats/X-Analytics
 * Type: `Boolean`
 * Default: `false`
 
-#### $wgMFAppPackageId
-
-ID of the App to deep link to replacing the browser. Set `false` to have no
-such link.
-
-See: <https://developers.google.com/app-indexing/webmasters/details>
-
-* Type: `Boolean|String`
-* Default: `false`
-
-#### $wgMFAppScheme
-
-Scheme to use for the deep link.
-
-* Type: `String`
-* Default: `'http'`
-
-#### $wgMFEditorOptions
-
-Options to control several functions of the mobile editor.  Possible values:
-
-* `skipPreview`: Should the mobile edit workflow contain an edit preview
-  (before save) to give the user the possibility to review the new text
-  resulting of his changes or not.
-
-
-* Type: `Array`
-* Default:
-```php
-  [
-    'skipPreview' => false,
-  ]
-```
-
 #### $wgMFUsePreferredEditor
 
 Use the user's preferred editor (i.e. visual editor or source editor) on first load. Uses the `visualeditor-editor` user option.
@@ -148,23 +114,20 @@ Enable mobile preferences in Special:Preferences (currently only accessible in d
 * Type: `Boolean`
 * Default: `false`
 
-#### $wgMFExperiments
+#### $wgMFUseDesktopSpecialHistoryPage
 
-A list of experiments active on the skin.
+Enables the desktop version of the history page if set to `true`. If set to
+`false`, the mobile version will be enabled but can still be overridden by the user's
+mobile preferences option.
 
 * Type: `Array`
 * Default:
 ```php
   [
-    // Experiment to prompts users to opt into the beta experience of the skin.
-    'betaoptin' => [
-      'name' => 'betaoptin',
-      'enabled' => false,
-      'buckets' => [
-        'control' => 0.97,
-        'A' => 0.03,
-      ],
-    ],
+    // Enable mobile version of history page for all users by default
+    'base' => false,
+    'beta' => false,
+    'amc' => false,
   ]
 ```
 
@@ -214,14 +177,6 @@ This should not be used in production, it is strictly for development purposes.
 * Type: `string`
 * Default: ''
 
-#### $wgMFMobileMainPageCss
-
-Allow editors to edit MediaWiki:MobileMainPage.css to serve render blocking css to the main
-page.
-
-* Type: `boolean`
-* Default: false
-
 #### $wgMFMwApiContentProviderBaseUri
 
 URL to be used by the MwApiMobileFormatter class. Points to a MediaWiki
@@ -237,15 +192,18 @@ When enabled the ContentProvider will run on desktop views as well as mobile vie
 * Type: `boolean`
 * Default: `false`
 
-#### $wgMFMobileFormatterHeadings
+#### $wgMFMobileFormatterOptions
 
-This is a list of html tags, that could be recognized as the first heading of
+This provides options for the MobileFormatter.
+* headings: is a list of html tags, that could be recognized as the first heading of
 a page.  This is an interim solution to fix Bug T110436 and shouldn't be used,
 if you don't know, what you do. Moreover, this configuration variable will be
 removed in the near future (hopefully).
+* maxImages - if a page has more than this number of image tags then the formatter will not run
+* maxHeadings - if a page has more than this number of heading tags then the formatter will not run
 
-* Type: `Array`
-* Default: `['h1', 'h2', 'h3', 'h4', 'h5', 'h6']`
+* Type: `Object`
+* Default: `{ headings: ['h1', 'h2', 'h3', 'h4', 'h5', 'h6'], maxImages: 1000, maxHeadings: 4000 }`
 
 #### $wgMFSiteStylesRenderBlocking
 
@@ -274,6 +232,9 @@ See <https://m.mediawiki.org/wiki/Mobile_Gateway/Mobile_homepage_formatting>
 Use is discouraged as it leads to unnecessary technical debt and on the long
 term the goal is to deprecate usage of this config variable. Use at your own
 risk!
+
+If this feature is enabled you can disable it temporarily by appending
+?debug=1&mfnolegacytransform=1 to the main page URI.
 
 * Type: `Boolean`
 * Default: `false`
@@ -423,7 +384,7 @@ appropriately, to avoid people receiving cached versions of pages intended for
 someone else's devices.*
 
 * Type: `Boolean`
-* Default: `false`
+* Default: `true`
 
 #### $wgMFVaryOnUA
 
@@ -513,27 +474,33 @@ include the preceding `.` (e.g. yes: `.wikipedia.org`, **no**: `wikipedia.org`)
 * Type: `String|null`
 * Default: `null`
 
-#### $wgMobileFrontendLogo
-
-Path to the logo used in the login/signup form.  The standard height is `72px`
-
-* Type: `Boolean`
-* Default: `false`
-
-
 #### $wgMFEnableBeta
 
 Whether beta mode is enabled.
 
 * Type: `Boolean`
-* Default: `false`
+* Default: `true`
 
 #### $wgMFAdvancedMobileContributions
 
-Whether Advanced Mobile Contributions mode is available for users.
+Whether Advanced mode is available for users.
 
 * Type: `Boolean`
 * Default: `false`
+
+#### $wgMFAmcOutreach
+
+Whether the AMC Outreach feature is available for users.
+
+* Type: `Boolean`
+* Default: `false`
+
+#### $wgMFAmcOutreachMinEditCount
+
+When Amc Outreach is enabled, this option sets the minimum number of edits a user must make before they are eligible to see the AMC Outreach feature.
+
+* Type: `Number`
+* Default: 100
 
 #### MFBetaFeedbackLink
 
@@ -542,12 +509,12 @@ Link to feedback page for beta features. If false no feedback link will be shown
 * Type: `String|false`
 * Default: `false`
 
-#### $wgMFDefaultSkinClass
+#### $wgDefaultMobileSkin
 
 The default skin for MobileFrontend.
 
 * Type: `String`
-* Default: `'SkinMinerva'`
+* Default: `'minerva'`
 
 #### $wgMFNamespacesWithoutCollapsibleSections
 
@@ -582,22 +549,6 @@ Set to `false` for "dictionary style", sections are not collapsed.
 
 * Type: `Boolean`
 * Default: `true`
-
-#### $wgMFPhotoUploadWiki
-
-The wiki id/dbname for where photos are uploaded, if photos are uploaded to
-a wiki other than the local wiki (eg commonswiki).
-
-* Type: `String|null`
-* Default: `null`
-
-#### $wgMFPhotoUploadEndpoint
-
-An api to which any photos should be uploaded.
-e.g. `$wgMFPhotoUploadEndpoint = 'https://commons.wikimedia.org/w/api.php';`
-
-* Type: `String`
-* Default: Defaults to the current wiki
 
 #### $wgMFUseWikibase
 
@@ -684,3 +635,27 @@ usually are diagrams that compress well and benefit from the higher resolution.
     "image/svg+xml",
   ]
 ```
+
+#### $wgMFNamespacesWithLeadParagraphs
+
+A list of namespace codes that have lead paragraphs. Lead paragraphs will be
+shown before infoboxes if `$wgMFShowFirstParagraphBeforeInfobox` is enabled.
+
+* Type: `Array`
+* Default:
+```php
+  [
+    0
+  ]
+```
+
+#### $wgMFStopMobileRedirectCookieSecureValue
+
+The default value of the 'secure' cookie parameter that controls
+MobileFrontend's mobile redirect behavior.  This variable defaults to true to
+encourage the use of TLS on any servers hosting MediaWiki and to avoid the
+disclosure of minor user privacy issues regarding a user's mobile browsing
+preferences.
+
+* Type: `Boolean`
+* Default: `true`

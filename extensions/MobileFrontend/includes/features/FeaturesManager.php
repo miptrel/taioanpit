@@ -2,20 +2,19 @@
 
 namespace MobileFrontend\Features;
 
-use MobileContext;
-use Hooks;
+use MediaWiki\MediaWikiServices;
 
 /**
- * A wrapper for all available mobile frontend features.
+ * A facade for UserModes and MobileFrontend Features system.
+ *
+ * FeaturesManager takes care about all available user modes and features
+ * It handles relations between mode and features (one to many relation)
+ * and allows an easy acecss to single mode/feature so there is no need
+ * to retrieve objects from the MediaWikiServices.
  *
  * @package MobileFrontend\Features
  */
 class FeaturesManager {
-
-	/**
-	 * @var bool
-	 */
-	private $initialized = false;
 
 	/**
 	 * A collection of available features
@@ -37,18 +36,11 @@ class FeaturesManager {
 	}
 
 	/**
-	 * Setup the Features Manager and register all 3rd party features
-	 * The $initialized lock is required due to bug T165068
-	 * There is no other way to register feature other than on onRequestContextCreateSkin
-	 * hook, but this hook might be called more than once due to special pages transclusion.
-	 *
-	 * @see https://phabricator.wikimedia.org/T165068
+	 * Allow other extensions to register features
 	 */
-	public function setup() {
-		if ( !$this->initialized ) {
-			Hooks::run( 'MobileFrontendFeaturesRegistration', [ $this ] );
-			$this->initialized = true;
-		}
+	public function useHookToRegisterExtensionOrSkinFeatures() {
+		$hookContainer = MediaWikiServices::getInstance()->getHookContainer();
+		$hookContainer->run( 'MobileFrontendFeaturesRegistration', [ $this ] );
 	}
 
 	/**
@@ -89,7 +81,7 @@ class FeaturesManager {
 	}
 
 	/**
-	 * Check if given feature is available for currently logged in user
+	 * Check if given feature is available for current user
 	 *
 	 * @param string $featureId Feature identifier
 	 * @return bool
@@ -107,15 +99,12 @@ class FeaturesManager {
 	}
 
 	/**
-	 * Verify that feature $featureId is available to the current user.
+	 * Retrieve the current mode
 	 *
-	 * @param string $featureId Feature id to verify
-	 * @param MobileContext $context Mobile context to check
-	 * @deprecated Use FeaturesManager::isFeatureAvailableForCurrentUser() instead
-	 * @return bool
+	 * @param string $modeIdentifier Mode identifier
+	 * @return IUserMode
 	 */
-	public function isFeatureAvailableInContext( $featureId, MobileContext $context ) {
-		// ignore $context, user is retrieved from the current session
-		return $this->isFeatureAvailableForCurrentUser( $featureId );
+	public function getMode( $modeIdentifier ) {
+		return $this->userModes->getMode( $modeIdentifier );
 	}
 }

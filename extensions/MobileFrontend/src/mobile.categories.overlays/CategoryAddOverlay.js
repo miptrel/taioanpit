@@ -1,29 +1,33 @@
 var
 	Overlay = require( '../mobile.startup/Overlay' ),
 	mfExtend = require( '../mobile.startup/mfExtend' ),
+	headers = require( '../mobile.startup/headers' ),
 	util = require( '../mobile.startup/util' ),
 	CategoryGateway = require( './CategoryGateway' ),
 	CategoryLookupInputWidget = require( './CategoryLookupInputWidget' ),
-	icons = require( '../mobile.startup/icons' ),
-	toast = require( '../mobile.startup/toast' ),
 	router = mw.loader.require( 'mediawiki.router' );
 
 /**
  * Displays the list of categories for a page
+ *
  * @class CategoryAddOverlay
  * @extends Overlay
  * @uses CategoryGateway
  * @param {Object} options Configuration options
- * @param {OO.EventEmitter} options.eventBus Object used to emit category-added events
  */
 function CategoryAddOverlay( options ) {
-	options.heading = mw.msg( 'mobile-frontend-categories-add-heading', options.title );
-	this.eventBus = options.eventBus;
 	Overlay.call(
 		this,
 		util.extend(
 			true,
 			{
+				headers: [
+					headers.saveHeader(
+						mw.msg( 'mobile-frontend-categories-add-heading', options.title ),
+						'initial-header'
+					),
+					headers.savingHeader( mw.msg( 'mobile-frontend-categories-add-wait' ) )
+				],
 				className: 'category-overlay overlay',
 				events: {
 					'click .save': 'onSaveClick',
@@ -37,34 +41,22 @@ function CategoryAddOverlay( options ) {
 
 mfExtend( CategoryAddOverlay, Overlay, {
 	/**
-	 * @memberof CategoryAddOverlay
-	 * @instance
-	 * @mixes Overlay#defaults
-	 * @property {Object} defaults Default options hash.
-	 * @property {mw.Api} defaults.api to use to construct gateway
-	 * @property {string} defaults.waitMsg Text that displays while a page edit is being saved.
-	 * @property {string} defaults.waitIcon HTML of the icon that displays while a page edit
-	 * is being saved.
-	 */
-	defaults: util.extend( {}, Overlay.prototype.defaults, {
-		waitMsg: mw.msg( 'mobile-frontend-categories-add-wait' ),
-		waitIcon: icons.spinner().toHtmlString()
-	} ),
-	/**
 	 * @inheritdoc
 	 * @memberof CategoryAddOverlay
 	 * @instance
 	 */
-	template: mw.template.get( 'mobile.categories.overlays', 'CategoryAddOverlay.hogan' ),
-	/**
-	 * @inheritdoc
-	 * @memberof CategoryAddOverlay
-	 * @instance
-	 */
-	templatePartials: util.extend( {}, Overlay.prototype.templatePartials, {
-		header: mw.template.get( 'mobile.categories.overlays', 'CategoryAddOverlayHeader.hogan' ),
-		saveHeader: mw.template.get( 'mobile.editor.overlay', 'saveHeader.hogan' )
-	} ),
+	template: util.template( `
+<div class="overlay-header-container header-container position-fixed"></div>
+<div class="overlay-content">
+	<!-- Should be broken out into separate component -->
+	<div class="category-editor">
+		<div class="content-header panel add-panel">
+			<div class="category-add-input"></div>
+		</div>
+		<p class="overlay-content category-suggestions panel"></p>
+	</div>
+</div>
+	` ),
 
 	/**
 	 * @inheritdoc
@@ -95,6 +87,7 @@ mfExtend( CategoryAddOverlay, Overlay, {
 
 	/**
 	 * Handle a click on an added category
+	 *
 	 * @memberof CategoryAddOverlay
 	 * @instance
 	 * @param {jQuery.Event} ev
@@ -111,6 +104,7 @@ mfExtend( CategoryAddOverlay, Overlay, {
 	/**
 	 * Handle the click on the save button. Builds a string of new categories
 	 * and add it to the article.
+	 *
 	 * @memberof CategoryAddOverlay
 	 * @instance
 	 */
@@ -134,7 +128,7 @@ mfExtend( CategoryAddOverlay, Overlay, {
 		// if there are no categories added, don't do anything (the user shouldn't see the save
 		// button)
 		if ( newCategories.length === 0 ) {
-			toast.show( mw.msg( 'mobile-frontend-categories-nodata' ), { type: 'error' } );
+			mw.notify( mw.msg( 'mobile-frontend-categories-nodata' ), { type: 'error' } );
 		} else {
 			// save the new categories
 			this.gateway.save( this.title, newCategories ).then( function () {
@@ -146,7 +140,7 @@ mfExtend( CategoryAddOverlay, Overlay, {
 				self.showHidden( '.initial-header' );
 				self.$safeButton.prop( 'disabled', false );
 				// FIXME: Should be a better error message
-				toast.show( mw.msg( 'mobile-frontend-categories-nodata' ), { type: 'error' } );
+				mw.notify( mw.msg( 'mobile-frontend-categories-nodata' ), { type: 'error' } );
 			} );
 		}
 	}

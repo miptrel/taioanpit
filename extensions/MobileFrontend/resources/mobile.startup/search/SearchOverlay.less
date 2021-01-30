@@ -1,5 +1,6 @@
-@import '../../../mobile.less/mobile.variables';
-@import 'mediawiki.mixins.animation';
+@import '../../../mobile.less/mobile.variables.less';
+@import 'mediawiki.mixins.animation.less';
+@import 'SearchResultsView.less';
 
 @thumbGap: 15px;
 @thumbWidth: 70px;
@@ -8,10 +9,6 @@
 
 .overlay.search-overlay {
 	background: #fff;
-
-	a.mw-ui-icon {
-		display: inline-block;
-	}
 
 	.spinner-container {
 		background-color: @colorSpinnerOverlayBackground;
@@ -45,6 +42,16 @@
 		background-color: transparent;
 	}
 
+	// The search overlay header is a little special so make some tweaks to the CSS
+	// while using the same HTML.
+	.header-cancel {
+		display: none;
+	}
+
+	.header-action {
+		width: auto;
+	}
+
 	.overlay-title {
 		// because the clear icon is absolutely positioned
 		position: relative;
@@ -52,7 +59,6 @@
 	}
 
 	.header input {
-		border: 0;
 		// save space for the clear icon
 		padding-right: ( @iconSize + @iconGutterWidth + @clearIconRightGutterWidth );
 
@@ -67,6 +73,7 @@
 		// used to close the overlay in firefox
 		height: 100%;
 		width: 100%;
+		box-sizing: border-box;
 	}
 
 	.search-content {
@@ -75,12 +82,6 @@
 
 		.caption {
 			padding: 1em 0;
-		}
-
-		// FIXME: This is not a overlay-header so please find a more meaningful class name
-		&.overlay-header {
-			// Reset any tablet specific padding rules
-			padding: 0;
 		}
 	}
 
@@ -131,6 +132,15 @@
 	&.no-results .search-feedback {
 		border-top: 0;
 	}
+
+	&.visible {
+		.animation( fadeIn 0.5s );
+	}
+
+	// see T156509
+	&.overlay-ios {
+		.animation( none );
+	}
 }
 
 @-webkit-keyframes fadeIn {
@@ -170,18 +180,5 @@
 
 	to {
 		opacity: 0;
-	}
-}
-
-.animations {
-	.overlay.search-overlay {
-		&.visible {
-			.animation( fadeIn 0.5s );
-		}
-
-		// see T156509
-		&.overlay-ios {
-			.animation( none );
-		}
 	}
 }

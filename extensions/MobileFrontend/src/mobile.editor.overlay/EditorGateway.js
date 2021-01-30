@@ -1,17 +1,18 @@
 var util = require( '../mobile.startup/util' ),
-	parseSaveError = require( './parseSaveError' ),
 	actionParams = require( '../mobile.startup/actionParams' );
 
 /**
  * API that helps save and retrieve page content
+ *
  * @class EditorGateway
  *
  * @param {Object} options Configuration options
  * @param {mw.Api} options.api an Api to use.
  * @param {string} options.title the title to edit
- * @param {number} options.sectionId the id of the section to operate edits on.
+ * @param {string|null} options.sectionId the id of the section to operate edits on.
  * @param {number} [options.oldId] revision to operate on. If absent defaults to latest.
  * @param {boolean} [options.isNewPage] whether the page being created is new
+ * @param {boolean} [options.fromModified] whether the page was loaded in a modified state
  */
 function EditorGateway( options ) {
 	this.api = options.api;
@@ -20,14 +21,17 @@ function EditorGateway( options ) {
 	this.oldId = options.oldId;
 	// return an empty section for new pages
 	this.content = options.isNewPage ? '' : undefined;
-	this.hasChanged = false;
+	this.fromModified = options.fromModified;
+	this.hasChanged = options.fromModified;
 }
 
 EditorGateway.prototype = {
+
 	/**
 	 * Get the block (if there is one) from the result.
+	 *
 	 * @memberof EditorGateway
-	 * @param {Object} pageObj
+	 * @param {Object} pageObj Page object
 	 * @return {Object|null}
 	 */
 	getBlockInfo: function ( pageObj ) {
@@ -46,10 +50,6 @@ EditorGateway.prototype = {
 			} );
 
 			if ( blockedError && blockedError.data && blockedError.data.blockinfo ) {
-				// Preload library used by EditorOverlay
-				// to format block expiry datetime and duration
-				mw.loader.load( 'moment' );
-
 				return blockedError.data.blockinfo;
 			}
 		}
@@ -58,6 +58,7 @@ EditorGateway.prototype = {
 	},
 	/**
 	 * Get the content of a page.
+	 *
 	 * @memberof EditorGateway
 	 * @instance
 	 * @return {jQuery.Promise}
@@ -69,8 +70,7 @@ EditorGateway.prototype = {
 		function resolve() {
 			return util.Deferred().resolve( {
 				text: self.content || '',
-				blockinfo: self.blockinfo,
-				userinfo: self.userinfo
+				blockinfo: self.blockinfo
 			} );
 		}
 
@@ -79,20 +79,18 @@ EditorGateway.prototype = {
 		} else {
 			options = actionParams( {
 				prop: [ 'revisions', 'info' ],
-				meta: 'userinfo',
 				rvprop: [ 'content', 'timestamp' ],
 				titles: self.title,
 				// get block information for this user
 				intestactions: 'edit',
-				intestactionsdetail: 'full',
-				uiprop: 'options'
+				intestactionsdetail: 'full'
 			} );
 			// Load text of old revision if desired
 			if ( this.oldId ) {
 				options.rvstartid = this.oldId;
 			}
 			// See Bug 50136 - passing rvsection will fail with non wikitext
-			if ( util.isNumeric( this.sectionId ) ) {
+			if ( this.sectionId ) {
 				options.rvsection = this.sectionId;
 			}
 			return this.api.get( options ).then( function ( resp ) {
@@ -112,8 +110,6 @@ EditorGateway.prototype = {
 					self.timestamp = revision.timestamp;
 				}
 
-				self.userinfo = resp.query.userinfo;
-
 				// save content a second time to be able to check for changes
 				self.originalContent = self.content;
 				self.blockinfo = self.getBlockInfo( pageObj );
@@ -126,12 +122,13 @@ EditorGateway.prototype = {
 	/**
 	 * Mark content as modified and set changes to be submitted when #save
 	 * is invoked.
+	 *
 	 * @memberof EditorGateway
 	 * @instance
 	 * @param {string} content New section content.
 	 */
 	setContent: function ( content ) {
-		if ( this.originalContent !== content ) {
+		if ( this.originalContent !== content || this.fromModified ) {
 			this.hasChanged = true;
 		} else {
 			this.hasChanged = false;
@@ -142,6 +139,7 @@ EditorGateway.prototype = {
 	/**
 	 * Mark content as modified and set text that should be prepended to given
 	 * section when #save is invoked.
+	 *
 	 * @memberof EditorGateway
 	 * @instance
 	 * @param {string} text Text to be prepended.
@@ -153,6 +151,7 @@ EditorGateway.prototype = {
 
 	/**
 	 * Save the new content of the section, previously set using #setContent.
+	 *
 	 * @memberof EditorGateway
 	 * @instance
 	 * @param {Object} options Configuration options
@@ -173,11 +172,16 @@ EditorGateway.prototype = {
 
 		/**
 		 * Save content. Make an API request.
+		 *
 		 * @return {jQuery.Deferred}
 		 */
 		function saveContent() {
 			var apiOptions = {
 				action: 'edit',
+				errorformat: 'html',
+				errorlang: mw.config.get( 'wgUserLanguage' ),
+				errorsuselocal: 1,
+				formatversion: 2,
 				title: self.title,
 				summary: options.summary,
 				captchaid: options.captchaId,
@@ -192,19 +196,19 @@ EditorGateway.prototype = {
 				apiOptions.prependtext = self.prependtext;
 			}
 
-			if ( util.isNumeric( self.sectionId ) ) {
+			if ( self.sectionId ) {
 				apiOptions.section = self.sectionId;
 			}
 
 			self.api.postWithToken( 'csrf', apiOptions ).then( function ( data ) {
 				if ( data && data.edit && data.edit.result === 'Success' ) {
 					self.hasChanged = false;
-					result.resolve();
+					result.resolve( data.edit.newrevid );
 				} else {
-					result.reject( parseSaveError( data ) );
+					result.reject( data );
 				}
 			}, function ( code, data ) {
-				result.reject( parseSaveError( data, code || 'unknown' ) );
+				result.reject( data );
 			} );
 			return result;
 		}
@@ -214,6 +218,7 @@ EditorGateway.prototype = {
 
 	/**
 	 * Abort any pending previews.
+	 *
 	 * @memberof EditorGateway
 	 * @instance
 	 */
@@ -225,22 +230,24 @@ EditorGateway.prototype = {
 
 	/**
 	 * Get page preview from the API and abort any existing previews.
+	 *
 	 * @memberof EditorGateway
 	 * @instance
 	 * @param {Object} options API query parameters
 	 * @return {jQuery.Deferred}
 	 */
 	getPreview: function ( options ) {
-		var result = util.Deferred(),
+		var
 			sectionLine = '',
 			sectionId = '',
-			request,
 			self = this;
 
 		util.extend( options, {
 			action: 'parse',
 			// Enable section preview mode to avoid errors (bug 49218)
 			sectionpreview: true,
+			// Hide section edit links
+			disableeditsection: true,
 			// needed for pre-save transform to work (bug 53692)
 			pst: true,
 			// Output mobile HTML (bug 54243)
@@ -250,12 +257,12 @@ EditorGateway.prototype = {
 		} );
 
 		this.abortPreview();
+		this._pending = this.api.post( options );
 
-		request = this.api.post( options );
-		this._pending = request.then( function ( resp ) {
+		return this._pending.then( function ( resp ) {
 			if ( resp && resp.parse && resp.parse.text ) {
 				// section 0 haven't a section name so skip
-				if ( self.sectionId !== 0 &&
+				if ( self.sectionId !== '0' &&
 					resp.parse.sections !== undefined &&
 					resp.parse.sections[0] !== undefined
 				) {
@@ -266,21 +273,17 @@ EditorGateway.prototype = {
 						sectionLine = resp.parse.sections[0].line;
 					}
 				}
-				result.resolve( {
+				return {
 					text: resp.parse.text['*'],
 					id: sectionId,
 					line: sectionLine
-				} );
+				};
 			} else {
-				result.reject();
+				return util.Deferred().reject();
 			}
-		}, function () {
-			result.reject();
 		} ).promise( {
-			abort: function () { request.abort(); }
+			abort: function () { self._pending.abort(); }
 		} );
-
-		return result;
 	}
 };
 

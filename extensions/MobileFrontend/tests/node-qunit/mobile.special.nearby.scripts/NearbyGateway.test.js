@@ -1,7 +1,8 @@
-var
+let
 	sandbox,
 	NearbyGateway,
-	util,
+	util;
+const
 	jQuery = require( '../utils/jQuery' ),
 	dom = require( '../utils/dom' ),
 	mediaWiki = require( '../utils/mw' ),
@@ -10,8 +11,6 @@ var
 
 QUnit.module( 'MobileFrontend NearbyGateway.js', {
 	beforeEach: function () {
-		var api;
-
 		sandbox = sinon.sandbox.create();
 		dom.setUp( sandbox, global );
 		jQuery.setUp( sandbox, global );
@@ -22,7 +21,7 @@ QUnit.module( 'MobileFrontend NearbyGateway.js', {
 		// supporting wikibase descriptions in headless tests
 		sandbox.stub( mw.config, 'get' )
 			.withArgs( 'wgArticlePath' ).returns( '/w/' )
-			.withArgs( 'wgMFDisplayWikibaseDescriptions', {} )
+			.withArgs( 'wgMFDisplayWikibaseDescriptions' )
 			.returns( {
 				nearby: true
 			} )
@@ -33,7 +32,7 @@ QUnit.module( 'MobileFrontend NearbyGateway.js', {
 		util = require( '../../../src/mobile.startup/util' );
 		NearbyGateway = require( '../../../src/mobile.special.nearby.scripts/NearbyGateway' );
 
-		api = {
+		const api = {
 			ajax: function () {}
 		};
 
@@ -42,11 +41,11 @@ QUnit.module( 'MobileFrontend NearbyGateway.js', {
 		this.nearbyGateway = new NearbyGateway( { api: api } );
 
 		// stub mw.language behavior so we don't have to bring in the real thing
-		sandbox.stub( mw.language, 'convertNumber', function ( arg ) {
+		sandbox.stub( mw.language, 'convertNumber' ).callsFake( function ( arg ) {
 			return arg === '1.20' ? '1.2' : String( arg );
 		} );
 
-		sandbox.stub( api, 'ajax', function () {
+		sandbox.stub( api, 'ajax' ).callsFake( function () {
 			return util.Deferred().resolve( {
 				query: {
 					pages: [
@@ -110,7 +109,7 @@ QUnit.module( 'MobileFrontend NearbyGateway.js', {
 } );
 
 QUnit.test( '_distanceMessage()', function ( assert ) {
-	var
+	const
 		self = this,
 		msgKm = 'mobile-frontend-nearby-distance',
 		msgM = 'mobile-frontend-nearby-distance-meters',

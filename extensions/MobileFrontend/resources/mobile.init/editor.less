@@ -1,10 +1,3 @@
-.overlay-loading-ve {
-	position: fixed;
-	top: 50%;
-	width: 100%;
-	z-index: 2;
-}
-
 // We want these transitions to only occur when entering the editor, but not when leaving it.
 // Leaving uses browser back navigation and we shouldn't "delay" it.
 .ve-loading {
@@ -13,15 +6,11 @@
 	@timing: 400ms 100ms;
 
 	.content .section-heading .indicator {
-		transition: width @timing, min-width @timing, opacity @timing;
+		transition: width @timing, min-width @timing, padding @timing, opacity @timing;
 		width: 0;
 		min-width: 0;
+		padding-right: 0;
 		opacity: 0;
-
-		&:before {
-			// Prevent icon from scaling during the transition
-			width: 1.5em;
-		}
 	}
 
 	.mw-editsection {
@@ -34,8 +23,24 @@
 		border-bottom-color: transparent;
 	}
 
-	#content {
+	.mw-body {
 		transition: padding-bottom @timing, margin-bottom @timing, transform @timing;
 		// Values set dynamically in JS code
 	}
+}
+
+// Note that these classes are also used by VisualEditor code for the real toolbar:
+.toolbar-hidden {
+	transform: translateY( -100% );
+}
+
+.toolbar-shown {
+	transition: transform 250ms ease;
+	transform: translateY( 0 );
+	opacity: 1;
+}
+
+.toolbar-shown-done {
+	/* Turn off transforms when done to avoid Safari rendering bugs (T202935) */
+	transform: none;
 }

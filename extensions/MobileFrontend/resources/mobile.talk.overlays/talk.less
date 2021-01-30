@@ -1,18 +1,18 @@
-@import '../../mobile.less/mobile.variables';
+@import '../../mobile.less/mobile.variables.less';
 
 .talk-overlay {
 	// src/mobile.talk.overlays/TalkSectionOverlay.js
 	// Could this be generalised? e.g. MessageBox
 	.error {
-		border: 1px solid @colorErrorText;
+		border: 1px solid @borderColorError;
 	}
 
-	// resources/mobile.talk.overlays/talkSectionContent.hogan
+	// src/mobile.talk.overlays/TalkSectionOverlay.js
 	.comment {
 		margin: 40px 0 10px 0;
 
 		// src/mobile.talk.overlays/TalkSectionAddOverlay.js
-		// FIXME: Could this be generalised with rules in src/mobile.editor.overlay/EditorOverlay.js ?
+		// FIXME: Could this be generalised with rules in src/mobile.editor.overlay/SourceEditorOverlay.js ?
 		.wikitext-editor {
 			margin-top: 1em;
 			// Normally, wikitext editors don't have a border
@@ -38,14 +38,19 @@
 }
 
 .add-topic-form {
-	// resources/mobile.talk.overlays/talkSectionAdd.hogan
+	// src/mobile.talk.overlays/TalkSectionAddOverlay.js
 	.panel {
 		padding: 0;
+
+		input:only-child,
+		textarea:only-child {
+			border: 0;
+		}
 	}
 }
 
 @media all and ( min-width: @width-breakpoint-tablet ) {
-	// resources/mobile.talk.overlays/talkSectionContent.hogan
+	// src/mobile.talk.overlays/TalkSectionOverlay.js
 	.content.talk-section {
 		margin: 0 auto 0 0;
 	}

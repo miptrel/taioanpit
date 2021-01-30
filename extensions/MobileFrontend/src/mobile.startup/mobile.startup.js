@@ -1,6 +1,6 @@
 var
 	moduleLoader = require( './moduleLoaderSingleton' ),
-	schemaMobileWebSearch = require( './search/schemaMobileWebSearch' );
+	util = require( './util' );
 
 // Expose the entry chunk through libraryTarget and library. This allows
 // arbitrary file access via ResourceLoader like
@@ -8,37 +8,46 @@ var
 module.exports = {
 	moduleLoader: moduleLoader,
 	mfExtend: require( './mfExtend' ),
-	context: require( './context' ),
 	time: require( './time' ),
-	util: require( './util' ),
+	util,
+	headers: require( './headers' ),
 	View: require( './View' ),
 	PageGateway: require( './PageGateway' ),
 	Browser: require( './Browser' ),
 	Button: require( './Button' ),
 	Icon: require( './Icon' ),
-	ReferencesDrawer: require( './references/ReferencesDrawer' ),
 	ReferencesGateway: require( './references/ReferencesGateway' ),
 	ReferencesHtmlScraperGateway: require( './references/ReferencesHtmlScraperGateway' ),
-	ReferencesMobileViewGateway: require( './references/ReferencesMobileViewGateway' ),
 	icons: require( './icons' ),
 	Page: require( './Page' ),
+	currentPage: require( './currentPage' ),
+	PageHTMLParser: require( './PageHTMLParser' ),
+	currentPageHTMLParser: require( './currentPageHTMLParser' ),
 	Anchor: require( './Anchor' ),
 	Skin: require( './Skin' ),
 	OverlayManager: require( './OverlayManager' ),
 	Overlay: require( './Overlay' ),
 	loadingOverlay: require( './loadingOverlay' ),
+	Drawer: require( './Drawer' ),
 	CtaDrawer: require( './CtaDrawer' ),
-	toast: require( './toast' ),
-	Watchstar: require( './watchstar/Watchstar' ),
-	rlModuleLoader: require( './rlModuleLoader' ),
+	showOnPageReload: require( './showOnPageReload' ),
+	// For Minerva compatibility (access deprecated)
+	toast: require( './showOnPageReload' ),
+	Watchstar: require( './watchstar/watchstar' ),
+	categoryOverlay: require( './categoryOverlay' ),
 	eventBusSingleton: require( './eventBusSingleton' ),
+	promisedView: require( './promisedView' ),
 	Toggler: require( './Toggler' ),
 	toc: {
-		TableOfContents: require( './toc/TableOfContents' )
+		// In case any old version of Minerva is cached.
+		TableOfContents: () => {
+			return {
+				// in the unlikely event old Minerva code got loaded with new MF.
+				$el: util.parseHTML( '<div>' )
+			};
+		}
 	},
-	notifications: {
-		overlay: require( './notifications/overlay' )
-	},
+	references: require( './references/references' ),
 	search: {
 		SearchOverlay: require( './search/SearchOverlay' ),
 		MobileWebSearchLogger: require( './search/MobileWebSearchLogger' ),
@@ -47,10 +56,12 @@ module.exports = {
 	lazyImages: {
 		lazyImageLoader: require( './lazyImages/lazyImageLoader' )
 	},
-	talk: {
-		overlay: require( './talk/overlay' )
+	languageOverlay: require( './languageOverlay/languageOverlay' ),
+	mediaViewer: {
+		overlay: require( './mediaViewer/overlay' )
 	},
-	languageOverlay: require( './languageOverlay/languageOverlay' )
+	amcOutreach: require( './amcOutreach/amcOutreach' ),
+	Section: require( './Section' )
 };
 
 mw.mobileFrontend = moduleLoader;
@@ -58,5 +69,3 @@ mw.mobileFrontend = moduleLoader;
 // Setup a single export for new modules to fold all of the above lines into.
 // One export to rule them all!
 moduleLoader.define( 'mobile.startup', module.exports );
-
-schemaMobileWebSearch.subscribeMobileWebSearchSchema();

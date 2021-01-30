@@ -1,10 +1,10 @@
-var
+var util = require( './util.js' ),
 	mfExtend = require( './mfExtend' ),
-	icons = require( './icons' ),
 	View = require( './View' );
 
 /**
  * Builds a section of a page
+ *
  * @class Section
  * @extends View
  *
@@ -26,19 +26,20 @@ function Section( options ) {
 }
 
 mfExtend( Section, View, {
-	template: mw.template.get( 'mobile.startup', 'Section.hogan' ),
+	template: util.template( `
+<h{{level}} id="{{anchor}}">{{{line}}}</h{{level}}>
+{{{text}}}
+	` ),
 	/**
 	 * @memberof Section
 	 * @instance
 	 * @mixes View#defaults
 	 * @property {Object} defaults Default options hash.
 	 * @property {string} defaults.text Section text.
-	 * @property {string} defaults.spinner HTML of the spinner icon.
 	 */
 	defaults: {
 		line: undefined,
-		text: '',
-		spinner: icons.spinner().toHtmlString()
+		text: ''
 	}
 } );
 

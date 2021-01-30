@@ -1,9 +1,10 @@
-var
+const
 	util = require( '../../../../src/mobile.startup/util' ),
 	dom = require( '../../utils/dom' ),
 	jQuery = require( '../../utils/jQuery' ),
 	sinon = require( 'sinon' ),
 	mediawiki = require( '../../utils/mw' ),
+	mustache = require( '../../utils/mustache' ),
 	oo = require( '../../utils/oo' ),
 	apiResp = {
 		query: {
@@ -17,7 +18,8 @@ var
 				watched: false
 			} ]
 		}
-	},
+	};
+let
 	user,
 	Icon,
 	WatchstarPageList,
@@ -31,15 +33,23 @@ QUnit.module( 'MobileFrontend mobile.startup/WatchstarPageList', {
 		dom.setUp( sandbox, global );
 		jQuery.setUp( sandbox, global );
 		mediawiki.setUp( sandbox, global );
+		mustache.setUp( sandbox, global );
 		oo.setUp( sandbox, global );
 
 		// loaded after globals
+		sandbox.stub( global.mw.loader, 'require' ).withArgs( 'mediawiki.page.watch.ajax' ).returns( {
+			watchstar: () => {}
+		} );
+		sandbox.stub( global.mw.Title, 'newFromText' ).returns(
+			{ getUrl: function () {} }
+		);
 		WatchstarPageList = require( '../../../../src/mobile.startup/watchstar/WatchstarPageList' );
 		user = mw.user;
 		Icon = require( '../../../../src/mobile.startup/Icon' );
 
 		watchIconName = new Icon( {
-			name: 'watched'
+			glyphPrefix: 'wikimedia',
+			name: 'unStar-progressive'
 		} ).getGlyphClassName();
 		sandbox.stub( user, 'isAnon' ).returns( false );
 	},
@@ -50,7 +60,7 @@ QUnit.module( 'MobileFrontend mobile.startup/WatchstarPageList', {
 } );
 
 QUnit.test( 'Watchlist status check if no ids', function ( assert ) {
-	var
+	const
 		done = assert.async(),
 		mwApi = new mw.Api(),
 		apiSpy = sandbox.stub( mwApi, 'get' ).returns( util.Deferred().resolve( apiResp ) ),
@@ -79,7 +89,7 @@ QUnit.test( 'Watchlist status check if no ids', function ( assert ) {
 } );
 
 QUnit.test( 'Checks watchlist status once', function ( assert ) {
-	var
+	const
 		done = assert.async(),
 		mwApi = new mw.Api(),
 		apiSpy = sandbox.stub( mwApi, 'get' ).returns( util.Deferred().resolve( apiResp ) ),

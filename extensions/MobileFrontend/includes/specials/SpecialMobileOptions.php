@@ -1,18 +1,17 @@
 <?php
 
 use MediaWiki\MediaWikiServices;
+use MobileFrontend\Features\IFeature;
 
 /**
  * Adds a special page with mobile specific preferences
  */
 class SpecialMobileOptions extends MobileSpecialPage {
-	/** @var Title The title of page to return to after save */
-	private $returnToTitle;
-	/** @var boolean $hasDesktopVersion Whether this special page has a desktop version or not */
+	/** @var bool Whether this special page has a desktop version or not */
 	protected $hasDesktopVersion = true;
 
 	/**
-	 * @var MediaWikiServices;
+	 * @var MediaWikiServices
 	 */
 	private $services;
 
@@ -22,10 +21,16 @@ class SpecialMobileOptions extends MobileSpecialPage {
 	 */
 	private $amc;
 
+	/**
+	 * @var \MobileFrontend\Features\FeaturesManager
+	 */
+	private $featureManager;
+
 	public function __construct() {
 		parent::__construct( 'MobileOptions' );
 		$this->services = MediaWikiServices::getInstance();
 		$this->amc = $this->services->getService( 'MobileFrontend.AMC.Manager' );
+		$this->featureManager = $this->services->getService( 'MobileFrontend.FeaturesManager' );
 	}
 
 	/**
@@ -39,32 +44,25 @@ class SpecialMobileOptions extends MobileSpecialPage {
 	 * Set the required config for the page.
 	 */
 	public function setJsConfigVars() {
-		$context = MobileContext::singleton();
-		$featureManager = \MediaWiki\MediaWikiServices::getInstance()
-			->getService( 'MobileFrontend.FeaturesManager' );
 		$this->getOutput()->addJsConfigVars( [
-			'wgMFEnableFontChanger' =>
-				$featureManager->isFeatureAvailableInContext( 'MFEnableFontChanger', $context ),
+			'wgMFEnableFontChanger' => $this->featureManager->isFeatureAvailableForCurrentUser(
+				'MFEnableFontChanger'
+			),
 		] );
 	}
+
 	/**
 	 * Render the special page
 	 * @param string|null $par Parameter submitted as subpage
 	 */
 	public function execute( $par = '' ) {
 		parent::execute( $par );
-		$context = MobileContext::singleton();
-
-		$this->returnToTitle = Title::newFromText( $this->getRequest()->getText( 'returnto' ) );
-		if ( !$this->returnToTitle ) {
-			$this->returnToTitle = Title::newMainPage();
-		}
 
 		$this->setHeaders();
 		$this->setJsConfigVars();
 
-		$context->setForceMobileView( true );
-		$context->setContentTransformations( false );
+		$this->mobileContext->setForceMobileView( true );
+		$this->mobileContext->setContentTransformations( false );
 
 		if ( $this->getRequest()->wasPosted() ) {
 			$this->submitSettingsForm();
@@ -126,13 +124,13 @@ class SpecialMobileOptions extends MobileSpecialPage {
 			) );
 			return $layout;
 	}
+
 	/**
 	 * Render the settings form (with actual set settings) and add it to the
 	 * output as well as any supporting modules.
 	 */
 	private function addSettingsForm() {
 		$out = $this->getOutput();
-		$context = MobileContext::singleton();
 		$user = $this->getUser();
 
 		$out->setPageTitle( $this->msg( 'mobile-frontend-main-menu-settings-heading' ) );
@@ -141,7 +139,7 @@ class SpecialMobileOptions extends MobileSpecialPage {
 		if ( $this->getRequest()->getCheck( 'success' ) ) {
 			$out->wrapWikiMsg(
 				MobileUI::contentElement(
-					Html::successBox( $this->msg( 'savedprefs' ) )
+					Html::successBox( $this->msg( 'savedprefs' )->parse() )
 				)
 			);
 		}
@@ -158,8 +156,8 @@ class SpecialMobileOptions extends MobileSpecialPage {
 			$fields[] = $this->buildAMCToggle();
 		}
 		// beta settings
-		$isInBeta = $context->isBetaGroupMember();
-		if ( $this->getMFConfig()->get( 'MFEnableBeta' ) ) {
+		$isInBeta = $this->mobileContext->isBetaGroupMember();
+		if ( $this->config->get( 'MFEnableBeta' ) ) {
 			$input = new OOUI\CheckboxInputWidget( [
 				'name' => 'enableBeta',
 				'infusable' => true,
@@ -187,10 +185,11 @@ class SpecialMobileOptions extends MobileSpecialPage {
 			);
 
 			$manager = $this->services->getService( 'MobileFrontend.FeaturesManager' );
-
+			// TODO The userMode should know how to retrieve features assigned to that mode,
+			// we shouldn't do any special logic like this in anywhere else in the code
 			$features = array_diff(
-				$manager->getAvailableForMode( new \MobileFrontend\Features\BetaUserMode( $context ) ),
-				$manager->getAvailableForMode( new \MobileFrontend\Features\StableUserMode( $context ) )
+				$manager->getAvailableForMode( $manager->getMode( IFeature::CONFIG_BETA ) ),
+				$manager->getAvailableForMode( $manager->getMode( IFeature::CONFIG_STABLE ) )
 			);
 
 			$classNames = [ 'mobile-options-beta-feature' ];
@@ -200,7 +199,7 @@ class SpecialMobileOptions extends MobileSpecialPage {
 			} else {
 				$icon = 'lock';
 			}
-			/** @var \MobileFrontend\Features\IFeature $feature */
+			/** @var IFeature $feature */
 			foreach ( $features as $feature ) {
 				$fields[] = new OOUI\FieldLayout(
 					new OOUI\IconWidget( [
@@ -253,23 +252,63 @@ class SpecialMobileOptions extends MobileSpecialPage {
 		}
 
 		$form->appendContent(
-			$fields
+			...$fields
 		);
 		$out->addHTML( $form );
+	}
+
+	/**
+	 * @param WebRequest $request
+	 * @return string url to redirect to
+	 */
+	private function getRedirectUrl( WebRequest $request ) {
+		$returnTo = $request->getText( 'returnto' );
+		if ( $returnTo !== '' ) {
+			$title = Title::newFromText( $returnTo );
+
+			if ( $title !== null ) {
+				return $title->getFullURL( $request->getText( 'returntoquery' ) );
+			}
+		}
+
+		return $this->mobileContext->getMobileUrl(
+			$this->getPageTitle()->getFullURL( 'success' )
+		);
+	}
+
+	/**
+	 * @param WebRequest $request
+	 */
+	private function updateAmc( WebRequest $request ) {
+		if ( !$this->amc->isAvailable() ) {
+			return;
+		}
+
+		/** @var \MobileFrontend\AMC\UserMode $userMode */
+		$userMode = $this->services->getService( 'MobileFrontend.AMC.UserMode' );
+		$userMode->setEnabled( $request->getBool( 'enableAMC' ) );
+	}
+
+	/**
+	 * @param WebRequest $request
+	 */
+	private function updateBeta( WebRequest $request ) {
+		$group = $request->getBool( 'enableBeta' ) ? 'beta' : '';
+		$this->mobileContext->setMobileMode( $group );
 	}
 
 	/**
 	 * Saves the settings submitted by the settings form
 	 */
 	private function submitSettingsForm() {
-		$context = MobileContext::singleton();
 		$request = $this->getRequest();
 		$user = $this->getUser();
+		$output = $this->getOutput();
 
 		if ( $user->isLoggedIn() && !$user->matchEditToken( $request->getVal( 'token' ) ) ) {
 			$errorText = __METHOD__ . '(): token mismatch';
 			wfDebugLog( 'mobile', $errorText );
-			$this->getOutput()->addHTML( '<div class="error">'
+			$output->addHTML( '<div class="errorbox">'
 				. $this->msg( "mobile-frontend-save-error" )->parse()
 				. '</div>'
 			);
@@ -277,15 +316,20 @@ class SpecialMobileOptions extends MobileSpecialPage {
 			return;
 		}
 
-		$group = $request->getBool( 'enableBeta' ) ? 'beta' : '';
-		if ( $this->amc->isAvailable() ) {
-			/** @var \MobileFrontend\AMC\UserMode $userMode */
-			$userMode = $this->services->getService( 'MobileFrontend.AMC.UserMode' );
-			$userMode->setEnabled( $request->getBool( 'enableAMC' ) );
+		// We must treat forms that only update a single field specially because if we
+		// don't, all the other options will be clobbered with default values
+		switch ( $request->getRawVal( 'updateSingleOption' ) ) {
+			case 'enableAMC':
+				$this->updateAmc( $request );
+				break;
+			case 'enableBeta':
+				$this->updateBeta( $request );
+				break;
+			default:
+				$this->updateAmc( $request );
+				$this->updateBeta( $request );
 		}
 
-		$context->setMobileMode( $group );
-		$url = $this->getPageTitle()->getFullURL( 'success' );
-		$context->getOutput()->redirect( MobileContext::singleton()->getMobileUrl( $url ) );
+		$output->redirect( $this->getRedirectUrl( $request ) );
 	}
 }

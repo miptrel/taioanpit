@@ -1,10 +1,12 @@
-var
+let
 	TalkSectionAddOverlay,
-	sandbox,
+	sandbox;
+const
 	util = require( '../../../src/mobile.startup/util' ),
 	jQuery = require( '../utils/jQuery' ),
 	dom = require( '../utils/dom' ),
 	mediaWiki = require( '../utils/mw' ),
+	mustache = require( '../utils/mustache' ),
 	oo = require( '../utils/oo' ),
 	sinon = require( 'sinon' );
 
@@ -15,6 +17,7 @@ QUnit.module( 'MobileFrontend TalkSectionAddOverlay', {
 		jQuery.setUp( sandbox, global );
 		oo.setUp( sandbox, global );
 		mediaWiki.setUp( sandbox, global );
+		mustache.setUp( sandbox, global );
 
 		TalkSectionAddOverlay = require( '../../../src/mobile.talk.overlays/TalkSectionAddOverlay' );
 	},
@@ -25,7 +28,7 @@ QUnit.module( 'MobileFrontend TalkSectionAddOverlay', {
 } );
 
 QUnit.test( 'save()', function ( assert ) {
-	var overlay = new TalkSectionAddOverlay( {
+	const overlay = new TalkSectionAddOverlay( {
 		api: {
 			postWithToken: sandbox.stub().returns(
 				util.Deferred().resolve()

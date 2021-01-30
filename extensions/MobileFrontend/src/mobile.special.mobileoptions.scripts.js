@@ -1,24 +1,27 @@
-/* global $, OO */
+/* global $ */
 var storage = mw.storage,
 	browser = require( './mobile.startup/Browser' ).getSingleton(),
-	toast = require( './mobile.startup/toast' ),
+	toast = require( './mobile.startup/showOnPageReload' ),
+	amcOutreach = require( './mobile.startup/amcOutreach/amcOutreach' ),
 	EXPAND_SECTIONS_KEY = 'expandSections',
 	msg = mw.msg,
 	FONT_SIZE_KEY = 'userFontSize';
 
 /**
  * Notifies the user that settings were asynchronously saved.
+ *
  * @param {boolean} [isPending] if set toast will show after page has been reloaded.
  */
 function notify( isPending ) {
 	if ( isPending ) {
 		toast.showOnPageReload( msg( 'mobile-frontend-settings-save' ) );
 	} else {
-		toast.show( msg( 'mobile-frontend-settings-save' ) );
+		mw.notify( msg( 'mobile-frontend-settings-save' ) );
 	}
 }
 /**
  * Creates a label for use with a form input
+ *
  * @param {string} heading
  * @param {string} description
  * @return {OO.ui.LabelWidget}
@@ -39,6 +42,7 @@ function createLabel( heading, description ) {
 
 /**
  * Adds a font changer field to the form
+ *
  * @param {jQuery.Object} $form
  */
 function addFontChangerToForm( $form ) {
@@ -83,6 +87,7 @@ function addFontChangerToForm( $form ) {
 
 /**
  * Adds an expand all sections field to the form
+ *
  * @param {jQuery.Object} $form
  */
 function addExpandAllSectionsToForm( $form ) {
@@ -113,12 +118,14 @@ function addExpandAllSectionsToForm( $form ) {
  * Helper method to infuse checkbox elements with OO magic
  * Additionally it applies all known hacks to make it mobile friendly
  *
- * @param {jQuery.Object[]} toggleElements an array of toggle elements to infuse
+ * @param {Object[]} toggleObjects an array of toggle objects to infuse
  * @param {jQuery.Object} $form form to submit when there is interaction with toggle
  */
-function infuseToggles( toggleElements, $form ) {
-	toggleElements.forEach( function ( $toggleElement ) {
-		var toggleSwitch,
+function infuseToggles( toggleObjects, $form ) {
+	toggleObjects.forEach( function ( toggleObject ) {
+		var
+			$toggleElement = toggleObject.$el,
+			toggleSwitch,
 			enableToggle,
 			$checkbox;
 
@@ -146,6 +153,9 @@ function infuseToggles( toggleElements, $form ) {
 			toggleSwitch.setValue( enableToggle.isSelected() );
 		} );
 		toggleSwitch.on( 'change', function ( value ) {
+			// execute callback
+			toggleObject.onToggle( value );
+
 			// ugly hack, we're delaying submit form by 0.25s
 			// and we want to disable registering clicks
 			// we want to disable the toggleSwitch
@@ -172,15 +182,27 @@ function infuseToggles( toggleElements, $form ) {
  */
 function initMobileOptions() {
 	var $form = $( '#mobile-options' ),
-		betaToggle = $( '#enable-beta-toggle' ),
-		amcToggle = $( '#enable-amc-toggle' ),
+		$betaToggle = $( '#enable-beta-toggle' ),
+		$amcToggle = $( '#enable-amc-toggle' ),
 		toggles = [];
 
-	if ( betaToggle.length ) {
-		toggles.push( betaToggle );
+	if ( $betaToggle.length ) {
+		toggles.push( {
+			$el: $betaToggle,
+			onToggle: function () {}
+		} );
 	}
-	if ( amcToggle.length ) {
-		toggles.push( amcToggle );
+	if ( $amcToggle.length ) {
+		toggles.push( {
+			$el: $amcToggle,
+			onToggle: function ( value ) {
+				if ( !value && amcOutreach.loadCampaign().isCampaignActive() ) {
+					// Make all amc outreach actions ineligible so the user doesn't have
+					// to see the outreach drawer again
+					amcOutreach.loadCampaign().makeAllActionsIneligible();
+				}
+			}
+		} );
 	}
 	infuseToggles( toggles, $form );
 

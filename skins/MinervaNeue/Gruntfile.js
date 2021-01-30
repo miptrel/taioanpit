@@ -5,7 +5,6 @@ module.exports = function ( grunt ) {
 	grunt.loadNpmTasks( 'grunt-banana-checker' );
 	grunt.loadNpmTasks( 'grunt-contrib-watch' );
 	grunt.loadNpmTasks( 'grunt-eslint' );
-	grunt.loadNpmTasks( 'grunt-jsonlint' );
 	grunt.loadNpmTasks( 'grunt-notify' );
 	grunt.loadNpmTasks( 'grunt-stylelint' );
 
@@ -13,11 +12,10 @@ module.exports = function ( grunt ) {
 		eslint: {
 			options: {
 				cache: true,
-				maxWarnings: 0,
-				reportUnusedDisableDirectives: true
+				maxWarnings: 0
 			},
 			all: [
-				'**/*.js',
+				'**/*.{js,json}',
 				'!docs/**',
 				'!libs/**',
 				'!node_modules/**',
@@ -25,12 +23,8 @@ module.exports = function ( grunt ) {
 			]
 		},
 		stylelint: {
-			options: {
-				syntax: 'less'
-			},
 			all: [
-				'**/*.css',
-				'**/*.less',
+				'**/*.{css,less}',
 				// TODO: Nested imports cause stylelint to crash
 				'!resources/skins.minerva.base.styles/print/styles.less',
 				'!docs/**',
@@ -39,16 +33,10 @@ module.exports = function ( grunt ) {
 				'!vendor/**'
 			]
 		},
-		jsonlint: {
-			all: [
-				'**/*.json',
-				'!docs/**',
-				'!libs/**',
-				'!node_modules/**',
-				'!vendor/**'
-			]
-		},
-		banana: conf.MessagesDirs,
+		// eslint-disable-next-line es/no-object-assign
+		banana: Object.assign( {
+			options: { requireLowerCase: false }
+		}, conf.MessagesDirs ),
 		watch: {
 			lint: {
 				files: [ '{resources,tests/qunit}/**/*.{js,less}' ],
@@ -67,7 +55,7 @@ module.exports = function ( grunt ) {
 		}
 	} );
 
-	grunt.registerTask( 'lint', [ 'eslint', 'stylelint', 'jsonlint', 'banana' ] );
+	grunt.registerTask( 'lint', [ 'eslint', 'stylelint', 'banana' ] );
 	grunt.registerTask( 'test', [ 'lint' ] );
 
 	grunt.registerTask( 'default', [ 'test' ] );
