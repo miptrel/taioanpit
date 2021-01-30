@@ -1,20 +1,25 @@
 <?php
 
+use MediaWiki\MediaWikiServices;
 use Wikimedia\TestingAccessWrapper;
 
 /**
  * @group Database
  */
-class ContribsPagerTest extends MediaWikiTestCase {
+class ContribsPagerTest extends MediaWikiIntegrationTestCase {
 	/** @var ContribsPager */
 	private $pager;
 
-	function setUp() {
+	/** @var LinkRenderer */
+	private $linkRenderer;
+
+	protected function setUp() : void {
+		$this->linkRenderer = MediaWikiServices::getInstance()->getLinkRenderer();
 		$context = new RequestContext();
 		$this->pager = new ContribsPager( $context, [
 			'start' => '2017-01-01',
 			'end' => '2017-02-02',
-		] );
+		], $this->linkRenderer );
 
 		parent::setUp();
 	}
@@ -26,7 +31,11 @@ class ContribsPagerTest extends MediaWikiTestCase {
 	 * @param array $expectedOpts Expected options
 	 */
 	public function testDateFilterOptionProcessing( array $inputOpts, array $expectedOpts ) {
-		$this->assertArraySubset( $expectedOpts, ContribsPager::processDateFilter( $inputOpts ) );
+		$this->assertArraySubmapSame(
+			$expectedOpts,
+			ContribsPager::processDateFilter( $inputOpts ),
+			"Matching date filter options"
+		);
 	}
 
 	public static function dateFilterOptionProcessingProvider() {
@@ -127,7 +136,7 @@ class ContribsPagerTest extends MediaWikiTestCase {
 		$pager = new ContribsPager( new RequestContext(), [
 			'start' => '',
 			'end' => '',
-		] );
+		], $this->linkRenderer );
 
 		/** @var ContribsPager $pager */
 		$pager = TestingAccessWrapper::newFromObject( $pager );
@@ -150,7 +159,7 @@ class ContribsPagerTest extends MediaWikiTestCase {
 			'target' => '116.17.184.5/32',
 			'start' => '',
 			'end' => '',
-		] );
+		], $this->linkRenderer );
 
 		/** @var ContribsPager $pager */
 		$pager = TestingAccessWrapper::newFromObject( $pager );
@@ -158,9 +167,53 @@ class ContribsPagerTest extends MediaWikiTestCase {
 
 		$this->assertContains( 'ip_changes', $queryInfo[0] );
 		$this->assertArrayHasKey( 'ip_changes', $queryInfo[5] );
-		$this->assertSame( 'ipc_rev_timestamp', $queryInfo[1]['rev_timestamp'] );
-		$this->assertSame( 'ipc_rev_id', $queryInfo[1]['rev_id'] );
-		$this->assertSame( [ 'rev_timestamp DESC', 'rev_id DESC' ], $queryInfo[4]['ORDER BY'] );
+		$this->assertSame( [ 'ipc_rev_timestamp DESC', 'ipc_rev_id DESC' ], $queryInfo[4]['ORDER BY'] );
 	}
 
+	/**
+	 * @covers \ContribsPager::tryToCreateValidRevision
+	 * @covers \ContribsPager::tryCreatingRevisionRecord
+	 */
+	public function testCreateRevision() {
+		$this->hideDeprecated( 'ContribsPager::tryToCreateValidRevision' );
+		$this->hideDeprecated( 'Revision::__construct' );
+
+		$pager = new ContribsPager( new RequestContext(), [
+			'target' => '116.17.184.5/32',
+			'start' => '',
+			'end' => '',
+		], $this->linkRenderer );
+
+		$invalidRow = (object)[
+			'foo' => 'bar'
+		];
+
+		$this->assertNull( $pager->tryToCreateValidRevision( $invalidRow ) );
+		$this->assertNull( $pager->tryCreatingRevisionRecord( $invalidRow ) );
+
+		$validRow = (object)[
+			'rev_id' => '2',
+			'rev_page' => '2',
+			'page_namespace' => '0',
+			'page_title' => __METHOD__,
+			'rev_text_id' => '47',
+			'rev_timestamp' => '20180528192356',
+			'rev_minor_edit' => '0',
+			'rev_deleted' => '0',
+			'rev_len' => '700',
+			'rev_parent_id' => '0',
+			'rev_sha1' => 'deadbeef',
+			'rev_comment_text' => 'whatever',
+			'rev_comment_data' => null,
+			'rev_comment_cid' => null,
+			'rev_user' => '0',
+			'rev_user_text' => 'Editor',
+			'rev_actor' => null,
+			'rev_content_format' => null,
+			'rev_content_model' => null,
+		];
+
+		$this->assertNotNull( $pager->tryToCreateValidRevision( $validRow ) );
+		$this->assertNotNull( $pager->tryCreatingRevisionRecord( $validRow ) );
+	}
 }

@@ -60,16 +60,17 @@ class EditCLI extends Maintenance {
 		$slot = $this->getOption( 'slot', SlotRecord::MAIN );
 
 		if ( $userName === false ) {
-			$wgUser = User::newSystemUser( 'Maintenance script', [ 'steal' => true ] );
+			$user = User::newSystemUser( 'Maintenance script', [ 'steal' => true ] );
 		} else {
-			$wgUser = User::newFromName( $userName );
+			$user = User::newFromName( $userName );
 		}
-		if ( !$wgUser ) {
+		if ( !$user ) {
 			$this->fatalError( "Invalid username" );
 		}
-		if ( $wgUser->isAnon() ) {
-			$wgUser->addToDatabase();
+		if ( $user->isAnon() ) {
+			$user->addToDatabase();
 		}
+		$wgUser = $user;
 
 		$title = Title::newFromText( $this->getArg( 0 ) );
 		if ( !$title ) {
@@ -98,7 +99,7 @@ class EditCLI extends Maintenance {
 
 		# Do the edit
 		$this->output( "Saving... " );
-		$updater = $page->newPageUpdater( $wgUser );
+		$updater = $page->newPageUpdater( $user );
 
 		$flags = ( $minor ? EDIT_MINOR : 0 ) |
 			( $bot ? EDIT_FORCE_BOT : 0 ) |
@@ -122,7 +123,7 @@ class EditCLI extends Maintenance {
 			$exit = 1;
 		}
 		if ( !$status->isGood() ) {
-			$this->output( $status->getWikiText( false, false, 'en' ) . "\n" );
+			$this->output( $status->getMessage( false, false, 'en' )->text() . "\n" );
 		}
 		exit( $exit );
 	}

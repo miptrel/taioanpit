@@ -5,7 +5,7 @@ use Wikimedia\TestingAccessWrapper;
 /**
  * @covers DeprecationHelper
  */
-class DeprecationHelperTest extends MediaWikiTestCase {
+class DeprecationHelperTest extends MediaWikiIntegrationTestCase {
 
 	/** @var TestDeprecatedClass */
 	private $testClass;
@@ -13,7 +13,7 @@ class DeprecationHelperTest extends MediaWikiTestCase {
 	/** @var TestDeprecatedSubclass */
 	private $testSubclass;
 
-	public function setUp() {
+	protected function setUp() : void {
 		parent::setUp();
 		$this->testClass = new TestDeprecatedClass();
 		$this->testSubclass = new TestDeprecatedSubclass();
@@ -37,10 +37,8 @@ class DeprecationHelperTest extends MediaWikiTestCase {
 
 	public function provideGet() {
 		return [
-			[ 'protectedDeprecated', null, null ],
 			[ 'protectedNonDeprecated', E_USER_ERROR,
 				'Cannot access non-public property TestDeprecatedClass::$protectedNonDeprecated' ],
-			[ 'privateDeprecated', null, null ],
 			[ 'privateNonDeprecated', E_USER_ERROR,
 			  'Cannot access non-public property TestDeprecatedClass::$privateNonDeprecated' ],
 			[ 'nonExistent', E_USER_NOTICE, 'Undefined property: TestDeprecatedClass::$nonExistent' ],
@@ -71,10 +69,8 @@ class DeprecationHelperTest extends MediaWikiTestCase {
 
 	public function provideSet() {
 		return [
-			[ 'protectedDeprecated', null, null ],
 			[ 'protectedNonDeprecated', E_USER_ERROR,
 			  'Cannot access non-public property TestDeprecatedClass::$protectedNonDeprecated' ],
-			[ 'privateDeprecated', null, null ],
 			[ 'privateNonDeprecated', E_USER_ERROR,
 			  'Cannot access non-public property TestDeprecatedClass::$privateNonDeprecated' ],
 			[ 'nonExistent', null, null ],
@@ -100,23 +96,24 @@ class DeprecationHelperTest extends MediaWikiTestCase {
 	}
 
 	public function testSubclassGetSet() {
-		$this->assertDeprecationWarningIssued( function () {
-			$this->assertSame( 1, $this->testSubclass->getDeprecatedPrivateParentProperty() );
-		} );
-		$this->assertDeprecationWarningIssued( function () {
-			$this->testSubclass->setDeprecatedPrivateParentProperty( 0 );
-		} );
-		$wrapper = TestingAccessWrapper::newFromObject( $this->testSubclass );
-		$this->assertSame( 0, $wrapper->privateDeprecated );
-
 		$fullName = 'TestDeprecatedClass::$privateNonDeprecated';
 		$this->assertErrorTriggered( function () {
-			$this->assertSame( null, $this->testSubclass->getNonDeprecatedPrivateParentProperty() );
+			$this->assertSame( null, $this->testSubclass->getNondeprecatedPrivateParentProperty() );
 		}, E_USER_ERROR, "Cannot access non-public property $fullName" );
 		$this->assertErrorTriggered( function () {
-			$this->testSubclass->setNonDeprecatedPrivateParentProperty( 0 );
+			$this->testSubclass->setNondeprecatedPrivateParentProperty( 0 );
 			$wrapper = TestingAccessWrapper::newFromObject( $this->testSubclass );
 			$this->assertSame( 1, $wrapper->privateNonDeprecated );
+		}, E_USER_ERROR, "Cannot access non-public property $fullName" );
+
+		$fullName = 'TestDeprecatedSubclass::$subclassPrivateNondeprecated';
+		$this->assertErrorTriggered( function () {
+			$this->assertSame( null, $this->testSubclass->subclassPrivateNondeprecated );
+		}, E_USER_ERROR, "Cannot access non-public property $fullName" );
+		$this->assertErrorTriggered( function () {
+			$this->testSubclass->subclassPrivateNondeprecated = 0;
+			$wrapper = TestingAccessWrapper::newFromObject( $this->testSubclass );
+			$this->assertSame( 1, $wrapper->subclassPrivateNondeprecated );
 		}, E_USER_ERROR, "Cannot access non-public property $fullName" );
 	}
 
@@ -155,4 +152,23 @@ class DeprecationHelperTest extends MediaWikiTestCase {
 		$this->assertNotEmpty( $wrapper->deprecationWarnings );
 	}
 
+	/**
+	 * Test bad MW version values to throw exceptions as expected
+	 *
+	 * @dataProvider provideBadMWVersion
+	 */
+	public function testBadMWVersion( $version, $expected ) {
+		$this->expectException( $expected );
+
+		wfDeprecated( __METHOD__, $version );
+	}
+
+	public function provideBadMWVersion() {
+		return [
+			[ 1, Exception::class ],
+			[ 1.33, Exception::class ],
+			[ true, Exception::class ],
+			[ null, Exception::class ]
+		];
+	}
 }

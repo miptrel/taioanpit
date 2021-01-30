@@ -82,9 +82,9 @@ class CacheHelper implements ICacheHelper {
 	 * Function that gets called when initialization is done.
 	 *
 	 * @since 1.20
-	 * @var callable
+	 * @var callable|null
 	 */
-	protected $onInitHandler = false;
+	protected $onInitHandler;
 
 	/**
 	 * Elements to build a cache key with.
@@ -114,12 +114,12 @@ class CacheHelper implements ICacheHelper {
 	 * @param bool|null $cacheEnabled Sets if the cache should be enabled or not.
 	 */
 	public function startCache( $cacheExpiry = null, $cacheEnabled = null ) {
-		if ( is_null( $this->hasCached ) ) {
-			if ( !is_null( $cacheExpiry ) ) {
+		if ( $this->hasCached === null ) {
+			if ( $cacheExpiry !== null ) {
 				$this->cacheExpiry = $cacheExpiry;
 			}
 
-			if ( !is_null( $cacheEnabled ) ) {
+			if ( $cacheEnabled !== null ) {
 				$this->setCacheEnabled( $cacheEnabled );
 			}
 
@@ -155,12 +155,8 @@ class CacheHelper implements ICacheHelper {
 			unset( $refreshArgs['title'] );
 			$refreshArgs['action'] = 'purge';
 
-			$subPage = $context->getTitle()->getFullText();
-			$subPage = explode( '/', $subPage, 2 );
-			$subPage = count( $subPage ) > 1 ? $subPage[1] : false;
-
 			$message .= ' ' . MediaWikiServices::getInstance()->getLinkRenderer()->makeLink(
-				$context->getTitle( $subPage ),
+				$context->getTitle(),
 				$context->msg( 'cachedspecial-refresh-now' )->text(),
 				[],
 				$refreshArgs
@@ -177,13 +173,13 @@ class CacheHelper implements ICacheHelper {
 	 * @since 1.20
 	 */
 	protected function initCaching() {
-		if ( $this->cacheEnabled && is_null( $this->hasCached ) ) {
+		if ( $this->cacheEnabled && $this->hasCached === null ) {
 			$cachedChunks = wfGetCache( CACHE_ANYTHING )->get( $this->getCacheKeyString() );
 
 			$this->hasCached = is_array( $cachedChunks );
 			$this->cachedChunks = $this->hasCached ? $cachedChunks : [];
 
-			if ( $this->onInitHandler !== false ) {
+			if ( $this->onInitHandler !== null ) {
 				call_user_func( $this->onInitHandler, $this->hasCached );
 			}
 		}
@@ -209,15 +205,15 @@ class CacheHelper implements ICacheHelper {
 		if ( $this->cacheEnabled && $this->hasCached ) {
 			$value = null;
 
-			if ( is_null( $key ) ) {
+			if ( $key === null ) {
 				reset( $this->cachedChunks );
 				$itemKey = key( $this->cachedChunks );
 
-				if ( !is_int( $itemKey ) ) {
+				if ( $itemKey === null ) {
+					wfWarn( "Attempted to get an item while the queue is empty in " . __METHOD__ );
+				} elseif ( !is_int( $itemKey ) ) {
 					wfWarn( "Attempted to get item with non-numeric key while " .
 						"the next item in the queue has a key ($itemKey) in " . __METHOD__ );
-				} elseif ( is_null( $itemKey ) ) {
-					wfWarn( "Attempted to get an item while the queue is empty in " . __METHOD__ );
 				} else {
 					$value = array_shift( $this->cachedChunks );
 				}
@@ -235,7 +231,7 @@ class CacheHelper implements ICacheHelper {
 			$value = $computeFunction( ...$args );
 
 			if ( $this->cacheEnabled ) {
-				if ( is_null( $key ) ) {
+				if ( $key === null ) {
 					$this->cachedChunks[] = $value;
 				} else {
 					$this->cachedChunks[$key] = $value;
@@ -288,7 +284,9 @@ class CacheHelper implements ICacheHelper {
 			throw new MWException( 'No cache key set, so cannot obtain or save the CacheHelper values.' );
 		}
 
-		return wfMemcKey( ...array_values( $this->cacheKey ) );
+		return ObjectCache::getLocalClusterInstance()->makeKey(
+			...array_values( $this->cacheKey )
+		);
 	}
 
 	/**

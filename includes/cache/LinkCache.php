@@ -21,10 +21,10 @@
  * @ingroup Cache
  */
 
-use Wikimedia\Rdbms\Database;
-use Wikimedia\Rdbms\IDatabase;
 use MediaWiki\Linker\LinkTarget;
 use MediaWiki\MediaWikiServices;
+use Wikimedia\Rdbms\Database;
+use Wikimedia\Rdbms\IDatabase;
 
 /**
  * Cache for article titles (prefixed DB keys) and ids linked from one source
@@ -45,17 +45,29 @@ class LinkCache {
 	/** @var TitleFormatter */
 	private $titleFormatter;
 
+	/** @var NamespaceInfo */
+	private $nsInfo;
+
 	/**
 	 * How many Titles to store. There are two caches, so the amount actually
 	 * stored in memory can be up to twice this.
 	 */
-	const MAX_SIZE = 10000;
+	private const MAX_SIZE = 10000;
 
-	public function __construct( TitleFormatter $titleFormatter, WANObjectCache $cache ) {
+	public function __construct(
+		TitleFormatter $titleFormatter,
+		WANObjectCache $cache,
+		NamespaceInfo $nsInfo = null
+	) {
+		if ( !$nsInfo ) {
+			wfDeprecated( __METHOD__ . ' with no NamespaceInfo argument', '1.34' );
+			$nsInfo = MediaWikiServices::getInstance()->getNamespaceInfo();
+		}
 		$this->goodLinks = new MapCacheLRU( self::MAX_SIZE );
 		$this->badLinks = new MapCacheLRU( self::MAX_SIZE );
 		$this->wanCache = $cache;
 		$this->titleFormatter = $titleFormatter;
+		$this->nsInfo = $nsInfo;
 	}
 
 	/**
@@ -77,6 +89,7 @@ class LinkCache {
 	 *
 	 * @param bool|null $update
 	 * @return bool
+	 * @deprecated Since 1.34
 	 */
 	public function forUpdate( $update = null ) {
 		return wfSetVar( $this->mForUpdate, $update );
@@ -204,18 +217,17 @@ class LinkCache {
 	 * @return array
 	 */
 	public static function getSelectFields() {
-		global $wgContentHandlerUseDB, $wgPageLanguageUseDB;
+		global $wgPageLanguageUseDB;
 
 		$fields = [
 			'page_id',
 			'page_len',
 			'page_is_redirect',
 			'page_latest',
-			'page_restrictions'
+			'page_restrictions',
+			'page_content_model',
 		];
-		if ( $wgContentHandlerUseDB ) {
-			$fields[] = 'page_content_model';
-		}
+
 		if ( $wgPageLanguageUseDB ) {
 			$fields[] = 'page_lang';
 		}
@@ -231,9 +243,7 @@ class LinkCache {
 	 */
 	public function addLinkObj( LinkTarget $nt ) {
 		$key = $this->titleFormatter->getPrefixedDBkey( $nt );
-		if ( $this->isBadLink( $key ) || $nt->isExternal()
-			|| $nt->inNamespace( NS_SPECIAL )
-		) {
+		if ( $this->isBadLink( $key ) || $nt->isExternal() || $nt->getNamespace() < 0 ) {
 			return 0;
 		}
 		$id = $this->getGoodLinkID( $key );
@@ -296,15 +306,15 @@ class LinkCache {
 
 	private function isCacheable( LinkTarget $title ) {
 		$ns = $title->getNamespace();
-		if ( in_array( $ns, [ NS_TEMPLATE, NS_FILE, NS_CATEGORY ] ) ) {
+		if ( in_array( $ns, [ NS_TEMPLATE, NS_FILE, NS_CATEGORY, NS_MEDIAWIKI ] ) ) {
 			return true;
 		}
 		// Focus on transcluded pages more than the main content
-		if ( MWNamespace::isContent( $ns ) ) {
+		if ( $this->nsInfo->isContent( $ns ) ) {
 			return false;
 		}
 		// Non-talk extension namespaces (e.g. NS_MODULE)
-		return ( $ns >= 100 && MWNamespace::isSubject( $ns ) );
+		return ( $ns >= 100 && $this->nsInfo->isSubject( $ns ) );
 	}
 
 	private function fetchPageRow( IDatabase $db, LinkTarget $nt ) {

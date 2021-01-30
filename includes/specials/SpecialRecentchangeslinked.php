@@ -30,7 +30,7 @@ class SpecialRecentChangesLinked extends SpecialRecentChanges {
 	/** @var bool|Title */
 	protected $rclTargetTitle;
 
-	function __construct() {
+	public function __construct() {
 		parent::__construct( 'Recentchangeslinked' );
 	}
 
@@ -89,17 +89,8 @@ class SpecialRecentChangesLinked extends SpecialRecentChanges {
 		$select = array_merge( $rcQuery['fields'], $select );
 		$join_conds = array_merge( $join_conds, $rcQuery['joins'] );
 
-		// left join with watchlist table to highlight watched rows
-		$uid = $this->getUser()->getId();
-		if ( $uid && $this->getUser()->isAllowed( 'viewmywatchlist' ) ) {
-			$tables[] = 'watchlist';
-			$select[] = 'wl_user';
-			$join_conds['watchlist'] = [ 'LEFT JOIN', [
-				'wl_user' => $uid,
-				'wl_title=rc_title',
-				'wl_namespace=rc_namespace'
-			] ];
-		}
+		// Join with watchlist and watchlist_expiry tables to highlight watched rows.
+		$this->addWatchlistJoins( $dbr, $tables, $select, $join_conds, $conds );
 
 		// JOIN on page, used for 'last revision' filter highlight
 		$tables[] = 'page';
@@ -122,8 +113,8 @@ class SpecialRecentChangesLinked extends SpecialRecentChanges {
 				// To prevent this from causing query performance problems, we need to add
 				// a GROUP BY, and add rc_id to the ORDER BY.
 				$order = [
-					'GROUP BY' => 'rc_timestamp, rc_id',
-					'ORDER BY' => 'rc_timestamp DESC, rc_id DESC'
+					'GROUP BY' => [ 'rc_timestamp', 'rc_id' ],
+					'ORDER BY' => [ 'rc_timestamp DESC', 'rc_id DESC' ]
 				];
 			} else {
 				$order = [ 'ORDER BY' => 'rc_timestamp DESC' ];
@@ -229,16 +220,10 @@ class SpecialRecentChangesLinked extends SpecialRecentChanges {
 			$sql = $dbr->limitResult( $sql, $limit, false );
 		}
 
-		$res = $dbr->query( $sql, __METHOD__ );
-
-		if ( $res->numRows() == 0 ) {
-			$this->mResultEmpty = true;
-		}
-
-		return $res;
+		return $dbr->query( $sql, __METHOD__ );
 	}
 
-	function setTopText( FormOptions $opts ) {
+	public function setTopText( FormOptions $opts ) {
 		$target = $this->getTargetTitle();
 		if ( $target ) {
 			$this->getOutput()->addBacklinkSubtitle( $target );
@@ -252,7 +237,7 @@ class SpecialRecentChangesLinked extends SpecialRecentChanges {
 	 * @param FormOptions $opts
 	 * @return array
 	 */
-	function getExtraOptions( $opts ) {
+	public function getExtraOptions( $opts ) {
 		$extraOpts = parent::getExtraOptions( $opts );
 
 		$opts->consumeValues( [ 'showlinkedto', 'target' ] );
@@ -269,7 +254,7 @@ class SpecialRecentChangesLinked extends SpecialRecentChanges {
 	/**
 	 * @return Title
 	 */
-	function getTargetTitle() {
+	private function getTargetTitle() {
 		if ( $this->rclTargetTitle === null ) {
 			$opts = $this->getOptions();
 			if ( isset( $opts['target'] ) && $opts['target'] !== '' ) {

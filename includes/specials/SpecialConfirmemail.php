@@ -21,6 +21,8 @@
  * @ingroup SpecialPage
  */
 
+use MediaWiki\MediaWikiServices;
+
 /**
  * Special page allows users to request email confirmation message, and handles
  * processing of the confirmation code when the link in the email is followed
@@ -29,7 +31,7 @@
  * @author Brion Vibber
  * @author Rob Church <robchur@gmail.com>
  */
-class EmailConfirmation extends UnlistedSpecialPage {
+class SpecialConfirmEmail extends UnlistedSpecialPage {
 	public function __construct() {
 		parent::__construct( 'Confirmemail', 'editmyprivateinfo' );
 	}
@@ -46,7 +48,7 @@ class EmailConfirmation extends UnlistedSpecialPage {
 	 * @throws ReadOnlyError
 	 * @throws UserNotLoggedIn
 	 */
-	function execute( $code ) {
+	public function execute( $code ) {
 		// Ignore things like master queries/connections on GET requests.
 		// It's very convenient to just allow formless link usage.
 		$trxProfiler = Profiler::instance()->getTransactionProfiler();
@@ -57,7 +59,10 @@ class EmailConfirmation extends UnlistedSpecialPage {
 
 		// This could also let someone check the current email address, so
 		// require both permissions.
-		if ( !$this->getUser()->isAllowed( 'viewmyprivateinfo' ) ) {
+		if ( !MediaWikiServices::getInstance()
+				->getPermissionManager()
+				->userHasRight( $this->getUser(), 'viewmyprivateinfo' )
+		) {
 			throw new PermissionsError( 'viewmyprivateinfo' );
 		}
 
@@ -78,7 +83,7 @@ class EmailConfirmation extends UnlistedSpecialPage {
 	/**
 	 * Show a nice form for the user to request a confirmation mail
 	 */
-	function showRequestForm() {
+	private function showRequestForm() {
 		$user = $this->getUser();
 		$out = $this->getOutput();
 
@@ -99,7 +104,6 @@ class EmailConfirmation extends UnlistedSpecialPage {
 			$out->addWikiMsg( 'confirmemail_text' );
 			$form = HTMLForm::factory( 'ooui', $descriptor, $this->getContext() );
 			$form
-				->setMethod( 'post' )
 				->setAction( $this->getPageTitle()->getLocalURL() )
 				->setSubmitTextMsg( 'confirmemail_send' )
 				->setSubmitCallback( [ $this, 'submitSend' ] );
@@ -136,7 +140,7 @@ class EmailConfirmation extends UnlistedSpecialPage {
 			return Status::newGood( $this->msg( 'confirmemail_sent' )->text() );
 		} else {
 			return Status::newFatal( new RawMessage(
-				$status->getWikiText( 'confirmemail_sendfailed' )
+				$status->getWikiText( 'confirmemail_sendfailed', false, $this->getLanguage() )
 			) );
 		}
 	}
@@ -151,6 +155,13 @@ class EmailConfirmation extends UnlistedSpecialPage {
 		$user = User::newFromConfirmationCode( $code, User::READ_EXCLUSIVE );
 		if ( !is_object( $user ) ) {
 			$this->getOutput()->addWikiMsg( 'confirmemail_invalid' );
+
+			return;
+		}
+
+		// rate limit email confirmations
+		if ( $user->pingLimiter( 'confirmemail' ) ) {
+			$this->getOutput()->addWikiMsg( 'actionthrottledtext' );
 
 			return;
 		}

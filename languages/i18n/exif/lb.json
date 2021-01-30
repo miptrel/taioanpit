@@ -1,9 +1,9 @@
 {
 	"@metadata": {
 		"authors": [
+			"Les Meloures",
 			"Robby",
-			"Soued031",
-			"Les Meloures"
+			"Soued031"
 		]
 	},
 	"exif-imagewidth": "Breet",
@@ -78,7 +78,7 @@
 	"exif-exposuremode": "Beliichtungsmodus",
 	"exif-whitebalance": "Wäissofgläich",
 	"exif-digitalzoomratio": "Digitalzoom",
-	"exif-focallengthin35mmfilm": "Brennwäit (Klengbildäquivalent)",
+	"exif-focallengthin35mmfilm": "Brennwäit (Klengbildequivalenz)",
 	"exif-scenecapturetype": "Aart vun der Opnam",
 	"exif-gaincontrol": "Verstäerkung",
 	"exif-contrast": "Kontrast",
@@ -167,8 +167,8 @@
 	"exif-originaldocumentid": "Identifikatiounsnummer vum Original-Dokument",
 	"exif-licenseurl": "URL vum Copyright (Lizenz)",
 	"exif-morepermissionsurl": "Alternativ Lizenzinformatiounen",
-	"exif-attributionurl": "Wann dëst Wierk weiderbenotzt gëtt, da linkt w.e.g. op",
-	"exif-preferredattributionname": "Wann dëst Wierk weiderbenotzt gëtt, da nennt w.e.g.",
+	"exif-attributionurl": "Wann dëst Wierk weiderbenotzt gëtt, da linkt wgl. op",
+	"exif-preferredattributionname": "Wann dëst Wierk weiderbenotzt gëtt, da nennt wgl.",
 	"exif-pngfilecomment": "Bemierkung zum PNG-Fichier",
 	"exif-disclaimer": "Limitatioun vun der Responsabilitéit",
 	"exif-contentwarning": "Warnung iwwer den Inhalt",
@@ -255,6 +255,10 @@
 	"exif-scenetype-1": "D'Bild gouf fotograféiert",
 	"exif-customrendered-0": "Standard",
 	"exif-customrendered-1": "Benotzerdefinéiert",
+	"exif-customrendered-2": "HDR (keen Original gespäichert)",
+	"exif-customrendered-4": "Original (fir HDR)",
+	"exif-customrendered-6": "Panorama",
+	"exif-customrendered-8": "Portrait",
 	"exif-exposuremode-0": "Automatesch Beliichtung",
 	"exif-exposuremode-1": "Manuell Beliichtung",
 	"exif-exposuremode-2": "Beliichtungsserie",

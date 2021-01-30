@@ -49,7 +49,7 @@ ve.ui.MWReferenceDialog.static.actions = [
 	},
 	{
 		label: OO.ui.deferMsg( 'visualeditor-dialog-action-cancel' ),
-		flags: [ 'safe', 'back' ],
+		flags: [ 'safe', 'close' ],
 		modes: [ 'readonly', 'insert', 'edit', 'insert-select' ]
 	}
 ];
@@ -86,7 +86,7 @@ ve.ui.MWReferenceDialog.static.excludeCommands = [
 	// References
 	'reference',
 	'reference/existing',
-	'citefromid',
+	'citoid',
 	'referencesList'
 ];
 
@@ -144,7 +144,7 @@ ve.ui.MWReferenceDialog.static.getImportRules = function () {
  */
 ve.ui.MWReferenceDialog.prototype.documentHasContent = function () {
 	// TODO: Check for other types of empty, e.g. only whitespace?
-	return this.referenceModel.getDocument().data.hasContent();
+	return this.referenceModel && this.referenceModel.getDocument().data.hasContent();
 };
 
 /*
@@ -168,6 +168,11 @@ ve.ui.MWReferenceDialog.prototype.onTargetChange = function () {
 		done: this.isModified(),
 		insert: hasContent
 	} );
+
+	if ( !this.trackedInputChange ) {
+		ve.track( 'activity.' + this.constructor.static.name, { action: 'input' } );
+		this.trackedInputChange = true;
+	}
 };
 
 /**
@@ -177,6 +182,11 @@ ve.ui.MWReferenceDialog.prototype.onReferenceGroupInputChange = function () {
 	this.actions.setAbilities( {
 		done: this.isModified()
 	} );
+
+	if ( !this.trackedInputChange ) {
+		ve.track( 'activity.' + this.constructor.static.name, { action: 'input' } );
+		this.trackedInputChange = true;
+	}
 };
 
 /**
@@ -193,6 +203,8 @@ ve.ui.MWReferenceDialog.prototype.onSearchResultsChoose = function ( item ) {
 	}
 	this.useReference( ref );
 	this.executeAction( 'insert' );
+
+	ve.track( 'activity.' + this.constructor.static.name, { action: 'reuse-choose' } );
 };
 
 /**
@@ -223,7 +235,6 @@ ve.ui.MWReferenceDialog.prototype.getBodyHeight = function () {
 	);
 };
 
-// eslint-disable-next-line valid-jsdoc
 /**
  * Work on a specific reference.
  *
@@ -250,7 +261,6 @@ ve.ui.MWReferenceDialog.prototype.useReference = function ( ref ) {
 	this.referenceGroupInput.setDisabled( true );
 	this.referenceGroupInput.setValue( this.originalGroup );
 	this.referenceGroupInput.setDisabled( false );
-	this.referenceTarget.initialize();
 
 	group = this.getFragment().getDocument().getInternalList()
 		.getNodeGroup( this.referenceModel.getListGroup() );
@@ -293,7 +303,6 @@ ve.ui.MWReferenceDialog.prototype.initialize = function () {
 
 	this.referenceTarget = ve.init.target.createTargetWidget(
 		{
-			tools: ve.copy( ve.init.target.constructor.static.toolbarGroups ),
 			includeCommands: this.constructor.static.includeCommands,
 			excludeCommands: this.constructor.static.excludeCommands.concat( citeCommands ),
 			importRules: this.constructor.static.getImportRules(),
@@ -405,6 +414,8 @@ ve.ui.MWReferenceDialog.prototype.getSetupProcess = function ( data ) {
 			} );
 
 			this.referenceGroupInput.populateMenu( this.getFragment().getDocument().getInternalList() );
+
+			this.trackedInputChange = false;
 		}, this );
 };
 

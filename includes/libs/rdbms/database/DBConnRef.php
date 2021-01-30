@@ -5,8 +5,23 @@ namespace Wikimedia\Rdbms;
 use InvalidArgumentException;
 
 /**
- * Helper class to handle automatically marking connections as reusable (via RAII pattern)
- * as well handling deferring the actual network connection until the handle is used
+ * Helper class used for automatically marking an IDatabase connection as reusable (once it no
+ * longer matters which DB domain is selected) and for deferring the actual network connection
+ *
+ * This uses an RAII-style pattern where calling code is expected to keep the returned reference
+ * handle as a function variable that falls out of scope when no longer needed. This avoids the
+ * need for matching reuseConnection() calls for every "return" statement as well as the tedious
+ * use of try/finally.
+ *
+ * @par Example:
+ * @code
+ *     function getRowData() {
+ *         $conn = $this->lb->getConnectedRef( DB_REPLICA );
+ *         $row = $conn->select( ... );
+ *         return $row ? (array)$row : false;
+ *         // $conn falls out of scope and $this->lb->reuseConnection() gets called
+ *     }
+ * @endcode
  *
  * @ingroup Database
  * @since 1.22
@@ -16,26 +31,26 @@ class DBConnRef implements IDatabase {
 	private $lb;
 	/** @var Database|null Live connection handle */
 	private $conn;
-	/** @var array|null N-tuple of (server index, group, DatabaseDomain|string) */
+	/** @var array N-tuple of (server index, group, DatabaseDomain|string) */
 	private $params;
 	/** @var int One of DB_MASTER/DB_REPLICA */
 	private $role;
 
-	const FLD_INDEX = 0;
-	const FLD_GROUP = 1;
-	const FLD_DOMAIN = 2;
-	const FLD_FLAGS = 3;
+	private const FLD_INDEX = 0;
+	private const FLD_GROUP = 1;
+	private const FLD_DOMAIN = 2;
+	private const FLD_FLAGS = 3;
 
 	/**
 	 * @param ILoadBalancer $lb Connection manager for $conn
-	 * @param Database|array $conn Database or (server index, query groups, domain, flags)
+	 * @param IDatabase|array $conn Database or (server index, query groups, domain, flags)
 	 * @param int $role The type of connection asked for; one of DB_MASTER/DB_REPLICA
 	 * @internal This method should not be called outside of LoadBalancer
 	 */
 	public function __construct( ILoadBalancer $lb, $conn, $role ) {
 		$this->lb = $lb;
 		$this->role = $role;
-		if ( $conn instanceof Database ) {
+		if ( $conn instanceof IDatabase && !( $conn instanceof DBConnRef ) ) {
 			$this->conn = $conn; // live handle
 		} elseif ( is_array( $conn ) && count( $conn ) >= 4 && $conn[self::FLD_DOMAIN] !== false ) {
 			$this->params = $conn;
@@ -44,10 +59,10 @@ class DBConnRef implements IDatabase {
 		}
 	}
 
-	function __call( $name, array $arguments ) {
+	public function __call( $name, array $arguments ) {
 		if ( $this->conn === null ) {
-			list( $db, $groups, $wiki, $flags ) = $this->params;
-			$this->conn = $this->lb->getConnection( $db, $groups, $wiki, $flags );
+			list( $index, $groups, $wiki, $flags ) = $this->params;
+			$this->conn = $this->lb->getConnection( $index, $groups, $wiki, $flags );
 		}
 
 		return $this->conn->$name( ...$arguments );
@@ -65,7 +80,11 @@ class DBConnRef implements IDatabase {
 		return $this->__call( __FUNCTION__, func_get_args() );
 	}
 
-	public function bufferResults( $buffer = null ) {
+	public function getTopologyRole() {
+		return $this->__call( __FUNCTION__, func_get_args() );
+	}
+
+	public function getTopologyRootMaster() {
 		return $this->__call( __FUNCTION__, func_get_args() );
 	}
 
@@ -95,7 +114,7 @@ class DBConnRef implements IDatabase {
 			return $this->__call( __FUNCTION__, func_get_args() );
 		}
 		// Disallow things that might confuse the LoadBalancer tracking
-		throw new DBUnexpectedError( $this, "Database selection is disallowed to enable reuse." );
+		throw $this->getDomainChangeException();
 	}
 
 	public function dbSchema( $schema = null ) {
@@ -108,25 +127,16 @@ class DBConnRef implements IDatabase {
 			return $this->__call( __FUNCTION__, func_get_args() );
 		}
 		// Disallow things that might confuse the LoadBalancer tracking
-		throw new DBUnexpectedError( $this, "Database selection is disallowed to enable reuse." );
+		throw $this->getDomainChangeException();
 	}
 
 	public function getLBInfo( $name = null ) {
 		return $this->__call( __FUNCTION__, func_get_args() );
 	}
 
-	public function setLBInfo( $name, $value = null ) {
+	public function setLBInfo( $nameOrArray, $value = null ) {
 		// Disallow things that might confuse the LoadBalancer tracking
-		throw new DBUnexpectedError( $this, "Changing LB info is disallowed to enable reuse." );
-	}
-
-	public function setLazyMasterHandle( IDatabase $conn ) {
-		// Disallow things that might confuse the LoadBalancer tracking
-		throw new DBUnexpectedError( $this, "Database injection is disallowed to enable reuse." );
-	}
-
-	public function implicitGroupby() {
-		return $this->__call( __FUNCTION__, func_get_args() );
+		throw $this->getDomainChangeException();
 	}
 
 	public function implicitOrderby() {
@@ -134,10 +144,6 @@ class DBConnRef implements IDatabase {
 	}
 
 	public function lastQuery() {
-		return $this->__call( __FUNCTION__, func_get_args() );
-	}
-
-	public function doneWrites() {
 		return $this->__call( __FUNCTION__, func_get_args() );
 	}
 
@@ -203,14 +209,20 @@ class DBConnRef implements IDatabase {
 		return $this->__call( __FUNCTION__, func_get_args() );
 	}
 
-	/**
-	 * @codeCoverageIgnore
-	 */
-	public function getWikiID() {
-		return $this->getDomainID();
-	}
-
 	public function getType() {
+		if ( $this->conn === null ) {
+			// Avoid triggering a database connection
+			if ( $this->params[self::FLD_INDEX] === ILoadBalancer::DB_MASTER ) {
+				$index = $this->lb->getWriterIndex();
+			} else {
+				$index = $this->params[self::FLD_INDEX];
+			}
+			if ( $index >= 0 ) {
+				// In theory, if $index is DB_REPLICA, the type could vary
+				return $this->lb->getServerType( $index );
+			}
+		}
+
 		return $this->__call( __FUNCTION__, func_get_args() );
 	}
 
@@ -262,7 +274,7 @@ class DBConnRef implements IDatabase {
 		return $this->__call( __FUNCTION__, func_get_args() );
 	}
 
-	public function close() {
+	public function close( $fname = __METHOD__, $owner = null ) {
 		throw new DBUnexpectedError( $this->conn, 'Cannot close shared connection.' );
 	}
 
@@ -275,6 +287,10 @@ class DBConnRef implements IDatabase {
 	}
 
 	public function freeResult( $res ) {
+		return $this->__call( __FUNCTION__, func_get_args() );
+	}
+
+	public function newSelectQueryBuilder() {
 		return $this->__call( __FUNCTION__, func_get_args() );
 	}
 
@@ -304,6 +320,10 @@ class DBConnRef implements IDatabase {
 		return $this->__call( __FUNCTION__, func_get_args() );
 	}
 
+	public function limitResult( $sql, $limit, $offset = false ) {
+		return $this->__call( __FUNCTION__, func_get_args() );
+	}
+
 	public function selectRow(
 		$table, $vars, $conds, $fname = __METHOD__,
 		$options = [], $join_conds = []
@@ -312,7 +332,7 @@ class DBConnRef implements IDatabase {
 	}
 
 	public function estimateRowCount(
-		$table, $vars = '*', $conds = '', $fname = __METHOD__, $options = [], $join_conds = []
+		$tables, $vars = '*', $conds = '', $fname = __METHOD__, $options = [], $join_conds = []
 	) {
 		return $this->__call( __FUNCTION__, func_get_args() );
 	}
@@ -343,19 +363,19 @@ class DBConnRef implements IDatabase {
 		return $this->__call( __FUNCTION__, func_get_args() );
 	}
 
-	public function insert( $table, $a, $fname = __METHOD__, $options = [] ) {
+	public function insert( $table, $rows, $fname = __METHOD__, $options = [] ) {
 		$this->assertRoleAllowsWrites();
 
 		return $this->__call( __FUNCTION__, func_get_args() );
 	}
 
-	public function update( $table, $values, $conds, $fname = __METHOD__, $options = [] ) {
+	public function update( $table, $set, $conds, $fname = __METHOD__, $options = [] ) {
 		$this->assertRoleAllowsWrites();
 
 		return $this->__call( __FUNCTION__, func_get_args() );
 	}
 
-	public function makeList( $a, $mode = self::LIST_COMMA ) {
+	public function makeList( array $a, $mode = self::LIST_COMMA ) {
 		return $this->__call( __FUNCTION__, func_get_args() );
 	}
 
@@ -389,6 +409,14 @@ class DBConnRef implements IDatabase {
 		return $this->__call( __FUNCTION__, func_get_args() );
 	}
 
+	public function buildGreatest( $fields, $values ) {
+		return $this->__call( __FUNCTION__, func_get_args() );
+	}
+
+	public function buildLeast( $fields, $values ) {
+		return $this->__call( __FUNCTION__, func_get_args() );
+	}
+
 	public function buildSubstring( $input, $startPosition, $length = null ) {
 		return $this->__call( __FUNCTION__, func_get_args() );
 	}
@@ -414,12 +442,12 @@ class DBConnRef implements IDatabase {
 
 	public function selectDB( $db ) {
 		// Disallow things that might confuse the LoadBalancer tracking
-		throw new DBUnexpectedError( $this, "Database selection is disallowed to enable reuse." );
+		throw $this->getDomainChangeException();
 	}
 
 	public function selectDomain( $domain ) {
 		// Disallow things that might confuse the LoadBalancer tracking
-		throw new DBUnexpectedError( $this, "Database selection is disallowed to enable reuse." );
+		throw $this->getDomainChangeException();
 	}
 
 	public function getDBname() {
@@ -444,7 +472,7 @@ class DBConnRef implements IDatabase {
 		return $this->__call( __FUNCTION__, func_get_args() );
 	}
 
-	public function buildLike() {
+	public function buildLike( $param, ...$params ) {
 		return $this->__call( __FUNCTION__, func_get_args() );
 	}
 
@@ -462,14 +490,14 @@ class DBConnRef implements IDatabase {
 		return $this->__call( __FUNCTION__, func_get_args() );
 	}
 
-	public function replace( $table, $uniqueIndexes, $rows, $fname = __METHOD__ ) {
+	public function replace( $table, $uniqueKeys, $rows, $fname = __METHOD__ ) {
 		$this->assertRoleAllowsWrites();
 
 		return $this->__call( __FUNCTION__, func_get_args() );
 	}
 
 	public function upsert(
-		$table, array $rows, $uniqueIndexes, array $set, $fname = __METHOD__
+		$table, array $rows, $uniqueKeys, array $set, $fname = __METHOD__
 	) {
 		$this->assertRoleAllowsWrites();
 
@@ -581,6 +609,10 @@ class DBConnRef implements IDatabase {
 		return $this->__call( __FUNCTION__, func_get_args() );
 	}
 
+	public function onAtomicSectionCancel( callable $callback, $fname = __METHOD__ ) {
+		return $this->__call( __FUNCTION__, func_get_args() );
+	}
+
 	public function setTransactionListener( $name, callable $callback = null ) {
 		return $this->__call( __FUNCTION__, func_get_args() );
 	}
@@ -613,15 +645,15 @@ class DBConnRef implements IDatabase {
 		return $this->__call( __FUNCTION__, func_get_args() );
 	}
 
-	public function commit( $fname = __METHOD__, $flush = '' ) {
+	public function commit( $fname = __METHOD__, $flush = self::FLUSHING_ONE ) {
 		return $this->__call( __FUNCTION__, func_get_args() );
 	}
 
-	public function rollback( $fname = __METHOD__, $flush = '' ) {
+	public function rollback( $fname = __METHOD__, $flush = self::FLUSHING_ONE ) {
 		return $this->__call( __FUNCTION__, func_get_args() );
 	}
 
-	public function flushSnapshot( $fname = __METHOD__ ) {
+	public function flushSnapshot( $fname = __METHOD__, $flush = self::FLUSHING_ONE ) {
 		return $this->__call( __FUNCTION__, func_get_args() );
 	}
 
@@ -723,6 +755,14 @@ class DBConnRef implements IDatabase {
 		return $this->__call( __FUNCTION__, func_get_args() );
 	}
 
+	public function __toString() {
+		if ( $this->conn === null ) {
+			return $this->getType() . ' object #' . spl_object_id( $this );
+		}
+
+		return $this->__call( __FUNCTION__, func_get_args() );
+	}
+
 	/**
 	 * Error out if the role is not DB_MASTER
 	 *
@@ -744,9 +784,21 @@ class DBConnRef implements IDatabase {
 	}
 
 	/**
+	 * @return DBUnexpectedError
+	 */
+	protected function getDomainChangeException() {
+		return new DBUnexpectedError(
+			$this,
+			"Cannot directly change the selected DB domain; any underlying connection handle " .
+			"is owned by a LoadBalancer instance and possibly shared with other callers. " .
+			"LoadBalancer automatically manages DB domain re-selection of unused handles."
+		);
+	}
+
+	/**
 	 * Clean up the connection when out of scope
 	 */
-	function __destruct() {
+	public function __destruct() {
 		if ( $this->conn ) {
 			$this->lb->reuseConnection( $this->conn );
 		}

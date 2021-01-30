@@ -21,6 +21,7 @@
  * @ingroup Maintenance
  */
 
+use MediaWiki\MediaWikiServices;
 use Wikimedia\Rdbms\IDatabase;
 
 require_once __DIR__ . '/Maintenance.php';
@@ -75,6 +76,7 @@ class MigrateComments extends LoggedUpdateMaintenance {
 		while ( true ) {
 			$where = [];
 			foreach ( $needComments as $need => $dummy ) {
+				$need = (string)$need; // T268887
 				$where[] = $dbw->makeList(
 					[
 						'comment_hash' => CommentStore::hash( $need, null ),
@@ -139,7 +141,8 @@ class MigrateComments extends LoggedUpdateMaintenance {
 		$primaryKey = (array)$primaryKey;
 		$pkFilter = array_flip( $primaryKey );
 		$this->output( "Beginning migration of $table.$oldField to $table.$newField\n" );
-		wfWaitForSlaves();
+		$lbFactory = MediaWikiServices::getInstance()->getDBLoadBalancerFactory();
+		$lbFactory->waitForReplication();
 
 		$next = '1=1';
 		$countUpdated = 0;
@@ -201,7 +204,7 @@ class MigrateComments extends LoggedUpdateMaintenance {
 			}
 			$prompt = implode( ' ', array_reverse( $prompt ) );
 			$this->output( "... $prompt\n" );
-			wfWaitForSlaves();
+			$lbFactory->waitForReplication();
 		}
 
 		$this->output(
@@ -233,7 +236,7 @@ class MigrateComments extends LoggedUpdateMaintenance {
 
 		$newTable = $table . '_comment_temp';
 		$this->output( "Beginning migration of $table.$oldField to $newTable.$newField\n" );
-		wfWaitForSlaves();
+		MediaWikiServices::getInstance()->getDBLoadBalancerFactory()->waitForReplication();
 
 		$dbw = $this->getDB( DB_MASTER );
 		$next = [];
@@ -244,6 +247,7 @@ class MigrateComments extends LoggedUpdateMaintenance {
 			$res = $dbw->select(
 				[ $table, $newTable ],
 				[ $primaryKey, $oldField ],
+				// @phan-suppress-next-line PhanSuspiciousBinaryAddLists
 				[ $newPrimaryKey => null ] + $next,
 				__METHOD__,
 				[

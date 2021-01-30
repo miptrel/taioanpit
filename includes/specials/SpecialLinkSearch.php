@@ -22,24 +22,30 @@
  * @author Brion Vibber
  */
 
-use Wikimedia\Rdbms\IResultWrapper;
 use Wikimedia\Rdbms\IDatabase;
+use Wikimedia\Rdbms\IResultWrapper;
 
 /**
  * Special:LinkSearch to search the external-links table.
  * @ingroup SpecialPage
  */
-class LinkSearchPage extends QueryPage {
+class SpecialLinkSearch extends QueryPage {
 	/** @var array|bool */
 	private $mungedQuery = false;
+	/** @var string|null */
+	private $mQuery;
+	/** @var int|null */
+	private $mNs;
+	/** @var string|null */
+	private $mProt;
 
-	function setParams( $params ) {
+	private function setParams( $params ) {
 		$this->mQuery = $params['query'];
 		$this->mNs = $params['namespace'];
 		$this->mProt = $params['protocol'];
 	}
 
-	function __construct( $name = 'LinkSearch' ) {
+	public function __construct( $name = 'LinkSearch' ) {
 		parent::__construct( $name );
 
 		// Since we don't control the constructor parameters, we can't inject services that way.
@@ -47,7 +53,7 @@ class LinkSearchPage extends QueryPage {
 		// using the setServices() method.
 	}
 
-	function isCacheable() {
+	public function isCacheable() {
 		return false;
 	}
 
@@ -142,11 +148,11 @@ class LinkSearchPage extends QueryPage {
 	 * Disable RSS/Atom feeds
 	 * @return bool
 	 */
-	function isSyndicated() {
+	public function isSyndicated() {
 		return false;
 	}
 
-	function linkParameters() {
+	protected function linkParameters() {
 		$params = [];
 		$params['target'] = $this->mProt . $this->mQuery;
 		if ( $this->mNs !== null && !$this->getConfig()->get( 'MiserMode' ) ) {
@@ -159,6 +165,7 @@ class LinkSearchPage extends QueryPage {
 	public function getQueryInfo() {
 		$dbr = wfGetDB( DB_REPLICA );
 
+		$orderBy = [];
 		if ( $this->mQuery === '*' && $this->mProt !== '' ) {
 			$this->mungedQuery = [
 				'el_index_60' . $dbr->buildLike( $this->mProt, $dbr->anyString() ),
@@ -169,16 +176,13 @@ class LinkSearchPage extends QueryPage {
 				'oneWildcard' => true,
 				'db' => $dbr
 			] );
-		}
-		if ( $this->mungedQuery === false ) {
-			// Invalid query; return no results
-			return [ 'tables' => 'page', 'fields' => 'page_id', 'conds' => '0=1' ];
-		}
-
-		$orderBy = [];
-		if ( !isset( $this->mungedQuery['el_index_60'] ) ) {
+			if ( $this->mungedQuery === false ) {
+				// Invalid query; return no results
+				return [ 'tables' => 'page', 'fields' => 'page_id', 'conds' => '0=1' ];
+			}
 			$orderBy[] = 'el_index_60';
 		}
+
 		$orderBy[] = 'el_id';
 
 		$retval = [
@@ -211,7 +215,7 @@ class LinkSearchPage extends QueryPage {
 	 * @param IDatabase $db
 	 * @param IResultWrapper $res
 	 */
-	function preprocessResults( $db, $res ) {
+	public function preprocessResults( $db, $res ) {
 		$this->executeLBFromResultWrapper( $res );
 	}
 
@@ -220,7 +224,7 @@ class LinkSearchPage extends QueryPage {
 	 * @param object $result Result row
 	 * @return string
 	 */
-	function formatResult( $skin, $result ) {
+	public function formatResult( $skin, $result ) {
 		$title = new TitleValue( (int)$result->namespace, $result->title );
 		$pageLink = $this->getLinkRenderer()->makeLink( $title );
 
@@ -235,12 +239,12 @@ class LinkSearchPage extends QueryPage {
 	 * Not much point in descending order here.
 	 * @return array
 	 */
-	function getOrderFields() {
+	protected function getOrderFields() {
 		return [];
 	}
 
 	protected function getGroupName() {
-		return 'redirects';
+		return 'pages';
 	}
 
 	/**

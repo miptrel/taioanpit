@@ -39,7 +39,7 @@ class ParserTestPrinter extends TestRecorder {
 	private $markWhitespace;
 	private $xmlError;
 
-	function __construct( $term, $options ) {
+	public function __construct( $term, $options ) {
 		$this->term = $term;
 		$options += [
 			'showDiffs' => true,
@@ -129,6 +129,8 @@ class ParserTestPrinter extends TestRecorder {
 
 			print $this->term->color( '31' ) . 'FAILED!' . $this->term->reset() . "\n";
 
+			print "{$testResult->test['file']}:{$testResult->test['line']}\n";
+
 			if ( $this->showOutput ) {
 				print "--- Expected ---\n{$testResult->expected}\n";
 				print "--- Actual ---\n{$testResult->actual}\n";
@@ -168,14 +170,10 @@ class ParserTestPrinter extends TestRecorder {
 			$output = strtr( $output, $pairs );
 		}
 
-		# Windows, or at least the fc utility, is retarded
-		$slash = wfIsWindows() ? '\\' : '/';
-		$prefix = wfTempDir() . "{$slash}mwParser-" . mt_rand();
-
-		$infile = "$prefix-$inFileTail";
+		$infile = tempnam( wfTempDir(), "mwParser-$inFileTail" );
 		$this->dumpToFile( $input, $infile );
 
-		$outfile = "$prefix-$outFileTail";
+		$outfile = tempnam( wfTempDir(), "mwParser-$outFileTail" );
 		$this->dumpToFile( $output, $outfile );
 
 		global $wgDiff3;

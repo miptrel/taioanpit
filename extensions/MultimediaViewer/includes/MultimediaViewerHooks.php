@@ -20,6 +20,7 @@
  * @author Mark Holmquist <mtraceur@member.fsf.org>
  * @copyright Copyright © 2013, Mark Holmquist
  */
+use MediaWiki\MediaWikiServices;
 
 class MultimediaViewerHooks {
 	/** Link to more information about this module */
@@ -34,14 +35,16 @@ class MultimediaViewerHooks {
 	protected static $helpLink =
 		'https://mediawiki.org/wiki/Special:MyLanguage/Help:Extension:Media_Viewer';
 
-	public static function onUserGetDefaultOptions( &$defaultOptions ) {
+	/**
+	 * @see https://www.mediawiki.org/wiki/Manual:Hooks/UserGetDefaultOptions
+	 * @param array &$defaultOptions
+	 */
+	public static function onUserGetDefaultOptions( array &$defaultOptions ) {
 		global $wgMediaViewerEnableByDefault;
 
 		if ( $wgMediaViewerEnableByDefault ) {
 			$defaultOptions['multimediaviewer-enable'] = 1;
 		}
-
-		return true;
 	}
 
 	/**
@@ -49,13 +52,9 @@ class MultimediaViewerHooks {
 	 * @param User $user
 	 * @return bool
 	 */
-	protected static function shouldHandleClicks( $user ) {
-		global $wgMediaViewerIsInBeta, $wgMediaViewerEnableByDefaultForAnonymous,
+	protected static function shouldHandleClicks( User $user ) {
+		global $wgMediaViewerEnableByDefaultForAnonymous,
 			$wgMediaViewerEnableByDefault;
-
-		if ( $wgMediaViewerIsInBeta && ExtensionRegistry::getInstance()->isLoaded( 'BetaFeatures' ) ) {
-			return BetaFeatures::isFeatureEnabled( $user, 'multimedia-viewer' );
-		}
 
 		if ( $wgMediaViewerEnableByDefaultForAnonymous === null ) {
 			$enableByDefaultForAnons = $wgMediaViewerEnableByDefault;
@@ -73,24 +72,28 @@ class MultimediaViewerHooks {
 	/**
 	 * Handler for all places where we add the modules
 	 * Could be on article pages or on Category pages
-	 * @param OutputPage &$out
-	 * @return bool
+	 * @param OutputPage $out
 	 */
-	protected static function getModules( &$out ) {
-		$out->addModules( [ 'mmv.head', 'mmv.bootstrap.autostart' ] );
-
-		return true;
+	protected static function getModules( OutputPage $out ) {
+		// The MobileFrontend extension provides its own implementation of MultimediaViewer.
+		// See https://phabricator.wikimedia.org/T65504 and subtasks for more details.
+		// To avoid loading MMV twice, we check the environment we are running in.
+		$isMobileFrontendView = ExtensionRegistry::getInstance()->isLoaded( 'MobileFrontend' ) &&
+			MediaWikiServices::getInstance()->getService( 'MobileFrontend.Context' )
+				->shouldDisplayMobileView();
+		if ( !$isMobileFrontendView ) {
+			$out->addModules( [ 'mmv.head', 'mmv.bootstrap.autostart' ] );
+		}
 	}
 
 	/**
-	 * Handler for BeforePageDisplay hook
+	 * @see https://www.mediawiki.org/wiki/Manual:Hooks/BeforePageDisplay
 	 * Add JavaScript to the page when an image is on it
-	 * and the user has enabled the feature if BetaFeatures is installed
-	 * @param OutputPage &$out
-	 * @param Skin &$skin
-	 * @return bool
+	 * and the user has enabled the feature
+	 * @param OutputPage $out
+	 * @param Skin $skin
 	 */
-	public static function getModulesForArticle( &$out, &$skin ) {
+	public static function onBeforePageDisplay( OutputPage $out, $skin ) {
 		$pageHasThumbnails = count( $out->getFileSearchOptions() ) > 0;
 		$pageIsFilePage = $out->getTitle()->inNamespace( NS_FILE );
 		// TODO: Have Flow work out if there are any images on the page
@@ -103,90 +106,51 @@ class MultimediaViewerHooks {
 			&& in_array( $out->getTitle()->getText(), $fileRelatedSpecialPages );
 
 		if ( $pageHasThumbnails || $pageIsFilePage || $pageIsFileRelatedSpecialPage || $pageIsFlowPage ) {
-			return self::getModules( $out );
+			self::getModules( $out );
 		}
-
-		return true;
 	}
 
 	/**
-	 * Handler for CategoryPageView hook
+	 * @see https://www.mediawiki.org/wiki/Manual:Hooks/CategoryPageView
 	 * Add JavaScript to the page if there are images in the category
-	 * @param CategoryPage &$catPage
-	 * @return bool
+	 * @param CategoryPage $catPage
 	 */
-	public static function getModulesForCategory( &$catPage ) {
+	public static function onCategoryPageView( CategoryPage $catPage ) {
 		$title = $catPage->getTitle();
 		$cat = Category::newFromTitle( $title );
 		if ( $cat->getFileCount() > 0 ) {
 			$out = $catPage->getContext()->getOutput();
-			return self::getModules( $out );
+			self::getModules( $out );
 		}
-
-		return true;
 	}
 
 	/**
-	 * Add a beta preference to gate the feature
+	 * @see https://www.mediawiki.org/wiki/Manual:Hooks/GetPreferences
+	 * Adds a default-enabled preference to gate the feature
 	 * @param User $user
 	 * @param array &$prefs
-	 * @return true
 	 */
-	public static function getBetaPreferences( $user, &$prefs ) {
-		global $wgExtensionAssetsPath, $wgMediaViewerIsInBeta;
-
-		if ( !$wgMediaViewerIsInBeta ) {
-			return true;
-		}
-
-		$prefs['multimedia-viewer'] = [
-			'label-message' => 'multimediaviewer-pref',
-			'desc-message' => 'multimediaviewer-pref-desc',
-			'info-link' => self::$infoLink,
-			'discussion-link' => self::$discussionLink,
-			'help-link' => self::$helpLink,
-			'screenshot' => [
-				'ltr' => "$wgExtensionAssetsPath/MultimediaViewer/viewer-ltr.svg",
-				'rtl' => "$wgExtensionAssetsPath/MultimediaViewer/viewer-rtl.svg",
-			],
+	public static function onGetPreferences( $user, &$prefs ) {
+		$prefs['multimediaviewer-enable'] = [
+			'type' => 'toggle',
+			'label-message' => 'multimediaviewer-optin-pref',
+			'section' => 'rendering/files',
 		];
-
-		return true;
 	}
 
 	/**
-	 * Adds a default-enabled preference to gate the feature on non-beta sites
-	 * @param User $user
-	 * @param array &$prefs
-	 * @return true
-	 */
-	public static function getPreferences( $user, &$prefs ) {
-		global $wgMediaViewerIsInBeta;
-
-		if ( !$wgMediaViewerIsInBeta ) {
-			$prefs['multimediaviewer-enable'] = [
-				'type' => 'toggle',
-				'label-message' => 'multimediaviewer-optin-pref',
-				'section' => 'rendering/files',
-			];
-		}
-
-		return true;
-	}
-
-	/**
+	 * @see https://www.mediawiki.org/wiki/Manual:Hooks/ResourceLoaderGetConfigVars
 	 * Export variables used in both PHP and JS to keep DRY
 	 * @param array &$vars
-	 * @return bool
 	 */
-	public static function resourceLoaderGetConfigVars( &$vars ) {
+	public static function onResourceLoaderGetConfigVars( array &$vars ) {
 		global $wgMediaViewerActionLoggingSamplingFactorMap,
 			$wgMediaViewerNetworkPerformanceSamplingFactor,
 			$wgMediaViewerDurationLoggingSamplingFactor,
 			$wgMediaViewerDurationLoggingLoggedinSamplingFactor,
 			$wgMediaViewerAttributionLoggingSamplingFactor,
 			$wgMediaViewerDimensionLoggingSamplingFactor,
-			$wgMediaViewerIsInBeta, $wgMediaViewerUseThumbnailGuessing, $wgMediaViewerExtensions,
+			$wgMediaViewerUseThumbnailGuessing, $wgMediaViewerExtensions,
 			$wgMediaViewerImageQueryParameter, $wgMediaViewerRecordVirtualViewBeaconURI;
 
 		$vars['wgMultimediaViewer'] = [
@@ -206,34 +170,34 @@ class MultimediaViewerHooks {
 			'extensions' => $wgMediaViewerExtensions,
 		];
 		$vars['wgMediaViewer'] = true;
-		$vars['wgMediaViewerIsInBeta'] = $wgMediaViewerIsInBeta;
-
-		return true;
 	}
 
 	/**
+	 * @see https://www.mediawiki.org/wiki/Manual:Hooks/MakeGlobalVariablesScript
 	 * Export variables which depend on the current user
 	 * @param array &$vars
 	 * @param OutputPage $out
 	 */
-	public static function makeGlobalVariablesScript( &$vars, OutputPage $out ) {
+	public static function onMakeGlobalVariablesScript( array &$vars, OutputPage $out ) {
 		$defaultUserOptions = User::getDefaultOptions();
 
 		$user = $out->getUser();
 		$vars['wgMediaViewerOnClick'] = self::shouldHandleClicks( $user );
-		// needed because of bug 69942; could be different for anon and logged-in
+		// needed because of T71942; could be different for anon and logged-in
 		$vars['wgMediaViewerEnabledByDefault'] =
 			!empty( $defaultUserOptions['multimediaviewer-enable'] );
 	}
 
 	/**
+	 * @see https://www.mediawiki.org/wiki/Manual:Hooks/ThumbnailBeforeProduceHTML
 	 * Modify thumbnail DOM
 	 * @param ThumbnailImage $thumbnail
 	 * @param array &$attribs Attributes of the <img> element
 	 * @param array|bool &$linkAttribs Attributes of the wrapping <a> element
-	 * @return true
 	 */
-	public static function thumbnailBeforeProduceHTML( ThumbnailImage $thumbnail, array &$attribs,
+	public static function onThumbnailBeforeProduceHTML(
+		ThumbnailImage $thumbnail,
+		array &$attribs,
 		&$linkAttribs
 	) {
 		$file = $thumbnail->getFile();
@@ -251,7 +215,5 @@ class MultimediaViewerHooks {
 				$attribs['data-file-height'] = $file->getHeight();
 			}
 		}
-
-		return true;
 	}
 }

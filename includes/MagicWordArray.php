@@ -1,7 +1,7 @@
 <?php
 
 /**
- * See docs/magicword.txt.
+ * See docs/magicword.md.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -30,7 +30,7 @@ use MediaWiki\MediaWikiServices;
  * @ingroup Parser
  */
 class MagicWordArray {
-	/** @var array */
+	/** @var string[] */
 	public $names = [];
 
 	/** @var MagicWordFactory */
@@ -39,20 +39,18 @@ class MagicWordArray {
 	/** @var array */
 	private $hash;
 
+	/** @var string[]|null */
 	private $baseRegex;
 
 	private $regex;
 
 	/**
-	 * @param array $names
+	 * @param string[] $names
 	 * @param MagicWordFactory|null $factory
 	 */
 	public function __construct( $names = [], MagicWordFactory $factory = null ) {
 		$this->names = $names;
-		$this->factory = $factory;
-		if ( !$factory ) {
-			$this->factory = MediaWikiServices::getInstance()->getMagicWordFactory();
-		}
+		$this->factory = $factory ?: MediaWikiServices::getInstance()->getMagicWordFactory();
 	}
 
 	/**
@@ -68,7 +66,7 @@ class MagicWordArray {
 	/**
 	 * Add a number of magic words by name
 	 *
-	 * @param array $names
+	 * @param string[] $names
 	 */
 	public function addArray( $names ) {
 		$this->names = array_merge( $this->names, array_values( $names ) );
@@ -80,7 +78,7 @@ class MagicWordArray {
 	 * @return array
 	 */
 	public function getHash() {
-		if ( is_null( $this->hash ) ) {
+		if ( $this->hash === null ) {
 			$this->hash = [ 0 => [], 1 => [] ];
 			foreach ( $this->names as $name ) {
 				$magic = $this->factory->get( $name );
@@ -98,10 +96,10 @@ class MagicWordArray {
 
 	/**
 	 * Get the base regex
-	 * @return array
+	 * @return string[]
 	 */
-	public function getBaseRegex() {
-		if ( is_null( $this->baseRegex ) ) {
+	public function getBaseRegex() : array {
+		if ( $this->baseRegex === null ) {
 			$this->baseRegex = [ 0 => '', 1 => '' ];
 			$allGroups = [];
 			foreach ( $this->names as $name ) {
@@ -132,10 +130,11 @@ class MagicWordArray {
 
 	/**
 	 * Get an unanchored regex that does not match parameters
-	 * @return array
+	 * @return string[]
+	 * @suppress PhanTypeArraySuspiciousNullable False positive
 	 */
 	public function getRegex() {
-		if ( is_null( $this->regex ) ) {
+		if ( $this->regex === null ) {
 			$base = $this->getBaseRegex();
 			$this->regex = [ '', '' ];
 			if ( $this->baseRegex[0] !== '' ) {
@@ -151,7 +150,7 @@ class MagicWordArray {
 	/**
 	 * Get a regex for matching variables with parameters
 	 *
-	 * @return string
+	 * @return string[]
 	 */
 	public function getVariableRegex() {
 		return str_replace( "\\$1", "(.*?)", $this->getRegex() );
@@ -160,7 +159,7 @@ class MagicWordArray {
 	/**
 	 * Get a regex anchored to the start of the string that does not match parameters
 	 *
-	 * @return array
+	 * @return string[]
 	 */
 	public function getRegexStart() {
 		$base = $this->getBaseRegex();
@@ -177,7 +176,7 @@ class MagicWordArray {
 	/**
 	 * Get an anchored regex for matching variables with parameters
 	 *
-	 * @return array
+	 * @return string[]
 	 */
 	public function getVariableStartToEndRegex() {
 		$base = $this->getBaseRegex();
@@ -193,7 +192,7 @@ class MagicWordArray {
 
 	/**
 	 * @since 1.20
-	 * @return array
+	 * @return string[]
 	 */
 	public function getNames() {
 		return $this->names;

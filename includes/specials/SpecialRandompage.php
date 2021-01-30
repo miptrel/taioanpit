@@ -35,7 +35,8 @@ class RandomPage extends SpecialPage {
 	protected $extra = []; // Extra SQL statements
 
 	public function __construct( $name = 'Randompage' ) {
-		$this->namespaces = MWNamespace::getContentNamespaces();
+		$this->namespaces = MediaWikiServices::getInstance()->getNamespaceInfo()->
+			getContentNamespaces();
 		parent::__construct( $name );
 	}
 
@@ -65,7 +66,7 @@ class RandomPage extends SpecialPage {
 
 		$title = $this->getRandomTitle();
 
-		if ( is_null( $title ) ) {
+		if ( $title === null ) {
 			$this->setHeaders();
 			// Message: randompage-nopages, randomredirect-nopages
 			$this->getOutput()->addWikiMsg( strtolower( $this->getName() ) . '-nopages',
@@ -107,14 +108,14 @@ class RandomPage extends SpecialPage {
 		$randstr = wfRandom();
 		$title = null;
 
-		if ( !Hooks::run(
-			'SpecialRandomGetRandomTitle',
-			[ &$randstr, &$this->isRedir, &$this->namespaces, &$this->extra, &$title ]
-		) ) {
+		if ( !$this->getHookRunner()->onSpecialRandomGetRandomTitle(
+			$randstr, $this->isRedir, $this->namespaces,
+			$this->extra, $title )
+		) {
 			return $title;
 		}
 
-		$row = $this->selectRandomPageFromDB( $randstr );
+		$row = $this->selectRandomPageFromDB( $randstr, __METHOD__ );
 
 		/* If we picked a value that was higher than any in
 		 * the DB, wrap around and select the page with the
@@ -124,7 +125,7 @@ class RandomPage extends SpecialPage {
 		 * causes anyway.  Trust me, I'm a mathematician. :)
 		 */
 		if ( !$row ) {
-			$row = $this->selectRandomPageFromDB( "0" );
+			$row = $this->selectRandomPageFromDB( "0", __METHOD__ );
 		}
 
 		if ( $row ) {
@@ -145,7 +146,7 @@ class RandomPage extends SpecialPage {
 		$joinConds = [];
 
 		// Allow extensions to modify the query
-		Hooks::run( 'RandomPageQuery', [ &$tables, &$conds, &$joinConds ] );
+		$this->getHookRunner()->onRandomPageQuery( $tables, $conds, $joinConds );
 
 		return [
 			'tables' => $tables,

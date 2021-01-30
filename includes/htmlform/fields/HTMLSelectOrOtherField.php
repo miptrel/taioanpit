@@ -5,8 +5,14 @@
  *
  * HTMLComboboxField implements the same functionality using a single form field
  * and should be used instead.
+ *
+ * @stable to extend
  */
 class HTMLSelectOrOtherField extends HTMLTextField {
+
+	/*
+	 * @stable to call
+	 */
 	public function __construct( $params ) {
 		parent::__construct( $params );
 		$this->getOptions();
@@ -135,6 +141,7 @@ class HTMLSelectOrOtherField extends HTMLTextField {
 			'disabled' => $disabled,
 			'textinput' => $textAttribs,
 			'dropdowninput' => $dropdownAttribs,
+			'required' => $this->mParams[ 'required' ] ?? false,
 			'or' => true,
 		] );
 	}

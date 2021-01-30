@@ -4,7 +4,6 @@
  * Exposed globally as `mw`, with `mediaWiki` as alias.
  *
  * @class mw
- * @alternateClassName mediaWiki
  * @singleton
  */
 /* global $VARS, $CODE */
@@ -13,7 +12,8 @@
 	'use strict';
 
 	var mw, StringSet, log,
-		hasOwn = Object.prototype.hasOwnProperty;
+		hasOwn = Object.hasOwnProperty,
+		console = window.console;
 
 	/**
 	 * FNV132 hash function
@@ -37,8 +37,8 @@
 			hash ^= str.charCodeAt( i );
 		}
 
-		hash = ( hash >>> 0 ).toString( 36 );
-		while ( hash.length < 7 ) {
+		hash = ( hash >>> 0 ).toString( 36 ).slice( 0, 5 );
+		while ( hash.length < 5 ) {
 			hash = '0' + hash;
 		}
 		/* eslint-enable no-bitwise */
@@ -50,7 +50,7 @@
 		// <https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Set>
 		/**
 		 * @private
-		 * @class
+		 * @class StringSet
 		 */
 		StringSet = window.Set || function () {
 			var set = Object.create( null );
@@ -102,8 +102,7 @@
 	 */
 	function logError( topic, data ) {
 		var msg,
-			e = data.exception,
-			console = window.console;
+			e = data.exception;
 
 		if ( console && console.log ) {
 			msg = ( e ? 'Exception' : 'Error' ) +
@@ -230,143 +229,122 @@
 		},
 
 		/**
-		 * Check if one or more keys exist.
+		 * Check if a given key exists in the map.
 		 *
-		 * @param {Mixed} selection Key or array of keys to check
-		 * @return {boolean} True if the key(s) exist
+		 * @param {string} selection Key to check
+		 * @return {boolean} True if the key exists
 		 */
 		exists: function ( selection ) {
-			var i;
-			if ( Array.isArray( selection ) ) {
-				for ( i = 0; i < selection.length; i++ ) {
-					if ( typeof selection[ i ] !== 'string' || !( selection[ i ] in this.values ) ) {
-						return false;
-					}
-				}
-				return true;
-			}
 			return typeof selection === 'string' && selection in this.values;
 		}
 	};
 
 	defineFallbacks();
 
-	log = ( function () {
-		/**
-		 * Write a verbose message to the browser's console in debug mode.
-		 *
-		 * This method is mainly intended for verbose logging. It is a no-op in production mode.
-		 * In ResourceLoader debug mode, it will use the browser's console if available, with
-		 * fallback to creating a console interface in the DOM and logging messages there.
-		 *
-		 * See {@link mw.log} for other logging methods.
-		 *
-		 * @member mw
-		 * @param {...string} msg Messages to output to console.
-		 */
-		var log = function () {},
-			console = window.console;
+	/**
+	 * Write a verbose message to the browser's console in debug mode.
+	 *
+	 * This method is mainly intended for verbose logging. It is a no-op in production mode.
+	 * In ResourceLoader debug mode, it will use the browser's console if available.
+	 *
+	 * See {@link mw.log} for other logging methods.
+	 *
+	 * @member mw
+	 * @param {...string} msg Messages to output to console.
+	 */
+	log = function () {};
 
-		// Note: Keep list of methods in sync with restoration in mediawiki.log.js
-		// when adding or removing mw.log methods below!
+	// Note: Keep list of log methods in sync with restoration in mediawiki.log.js!
 
-		/**
-		 * Collection of methods to help log messages to the console.
-		 *
-		 * @class mw.log
-		 * @singleton
-		 */
+	/**
+	 * Collection of methods to help log messages to the console.
+	 *
+	 * @class mw.log
+	 * @singleton
+	 */
 
-		/**
-		 * Write a message to the browser console's warning channel.
-		 *
-		 * This method is a no-op in browsers that don't implement the Console API.
-		 *
-		 * @param {...string} msg Messages to output to console
-		 */
-		log.warn = console && console.warn ?
-			Function.prototype.bind.call( console.warn, console ) :
-			function () {};
+	/**
+	 * Write a message to the browser console's warning channel.
+	 *
+	 * This method is a no-op in browsers that don't implement the Console API.
+	 *
+	 * @param {...string} msg Messages to output to console
+	 */
+	log.warn = console && console.warn ?
+		Function.prototype.bind.call( console.warn, console ) :
+		function () {};
 
-		/**
-		 * Write a message to the browser console's error channel.
-		 *
-		 * Most browsers also print a stacktrace when calling this method if the
-		 * argument is an Error object.
-		 *
-		 * This method is a no-op in browsers that don't implement the Console API.
-		 *
-		 * @since 1.26
-		 * @param {...Mixed} msg Messages to output to console
-		 */
-		log.error = console && console.error ?
-			Function.prototype.bind.call( console.error, console ) :
-			function () {};
+	/**
+	 * Write a message to the browser console's error channel.
+	 *
+	 * Most browsers also print a stacktrace when calling this method if the
+	 * argument is an Error object.
+	 *
+	 * This method is a no-op in browsers that don't implement the Console API.
+	 *
+	 * @since 1.26
+	 * @param {...Mixed} msg Messages to output to console
+	 */
+	log.error = console && console.error ?
+		Function.prototype.bind.call( console.error, console ) :
+		function () {};
 
-		/**
-		 * Create a property on a host object that, when accessed, will produce
-		 * a deprecation warning in the console.
-		 *
-		 * @param {Object} obj Host object of deprecated property
-		 * @param {string} key Name of property to create in `obj`
-		 * @param {Mixed} val The value this property should return when accessed
-		 * @param {string} [msg] Optional text to include in the deprecation message
-		 * @param {string} [logName] Name for the feature for logging and tracking
-		 *  purposes. Except for properties of the window object, tracking is only
-		 *  enabled if logName is set.
-		 */
-		log.deprecate = function ( obj, key, val, msg, logName ) {
-			var stacks;
-			function maybeLog() {
-				var name = logName || key,
-					trace = new Error().stack;
-				if ( !stacks ) {
-					stacks = new StringSet();
-				}
-				if ( !stacks.has( trace ) ) {
-					stacks.add( trace );
-					if ( logName || obj === window ) {
-						mw.track( 'mw.deprecate', name );
-					}
-					mw.log.warn(
-						'Use of "' + name + '" is deprecated.' + ( msg ? ' ' + msg : '' )
-					);
-				}
+	/**
+	 * Create a property on a host object that, when accessed, will produce
+	 * a deprecation warning in the console.
+	 *
+	 * @param {Object} obj Host object of deprecated property
+	 * @param {string} key Name of property to create in `obj`
+	 * @param {Mixed} val The value this property should return when accessed
+	 * @param {string} [msg] Optional text to include in the deprecation message
+	 * @param {string} [logName] Name for the feature for logging and tracking
+	 *  purposes. Except for properties of the window object, tracking is only
+	 *  enabled if logName is set.
+	 */
+	log.deprecate = function ( obj, key, val, msg, logName ) {
+		var stacks;
+		function maybeLog() {
+			var name = logName || key,
+				trace = new Error().stack;
+			if ( !stacks ) {
+				stacks = new StringSet();
 			}
-			// Support: Safari 5.0
-			// Throws "not supported on DOM Objects" for Node or Element objects (incl. document)
-			// Safari 4.0 doesn't have this method, and it was fixed in Safari 5.1.
-			try {
-				Object.defineProperty( obj, key, {
-					configurable: true,
-					enumerable: true,
-					get: function () {
-						maybeLog();
-						return val;
-					},
-					set: function ( newVal ) {
-						maybeLog();
-						val = newVal;
-					}
-				} );
-			} catch ( err ) {
-				obj[ key ] = val;
+			if ( !stacks.has( trace ) ) {
+				stacks.add( trace );
+				if ( logName || obj === window ) {
+					mw.track( 'mw.deprecate', name );
+				}
+				mw.log.warn(
+					'Use of "' + name + '" is deprecated.' + ( msg ? ' ' + msg : '' )
+				);
 			}
-		};
-
-		return log;
-	}() );
+		}
+		// Support: Safari 5.0
+		// Throws "not supported on DOM Objects" for Node or Element objects (incl. document)
+		// Safari 4.0 doesn't have this method, and it was fixed in Safari 5.1.
+		try {
+			Object.defineProperty( obj, key, {
+				configurable: true,
+				enumerable: true,
+				get: function () {
+					maybeLog();
+					return val;
+				},
+				set: function ( newVal ) {
+					maybeLog();
+					val = newVal;
+				}
+			} );
+		} catch ( err ) {
+			obj[ key ] = val;
+		}
+	};
 
 	/**
 	 * @class mw
 	 */
 	mw = {
-		redefineFallbacksForTest: function () {
-			if ( !window.QUnit ) {
-				throw new Error( 'Not allowed' );
-			}
-			defineFallbacks();
-		},
+		redefineFallbacksForTest: window.QUnit && defineFallbacks,
 
 		/**
 		 * Get the current time, measured in milliseconds since January 1, 1970 (UTC).
@@ -402,7 +380,7 @@
 		trackQueue: [],
 
 		track: function ( topic, data ) {
-			mw.trackQueue.push( { topic: topic, timeStamp: mw.now(), data: data } );
+			mw.trackQueue.push( { topic: topic, data: data } );
 			// This method is extended by mediawiki.base to also fire events.
 		},
 
@@ -432,30 +410,7 @@
 		 *
 		 * @property {mw.Map} config
 		 */
-		// Dummy placeholder later assigned in ResourceLoaderStartUpModule
-		config: null,
-
-		/**
-		 * Empty object for third-party libraries, for cases where you don't
-		 * want to add a new global, or the global is bad and needs containment
-		 * or wrapping.
-		 *
-		 * @property
-		 */
-		libs: {},
-
-		/**
-		 * Access container for deprecated functionality that can be moved from
-		 * from their legacy location and attached to this object (e.g. a global
-		 * function that is deprecated and as stop-gap can be exposed through here).
-		 *
-		 * This was reserved for future use but never ended up being used.
-		 *
-		 * @deprecated since 1.22 Let deprecated identifiers keep their original name
-		 *  and use mw.log#deprecate to create an access container for tracking.
-		 * @property
-		 */
-		legacy: {},
+		config: new Map( $VARS.wgLegacyJavaScriptGlobals ),
 
 		/**
 		 * Store for messages.
@@ -527,14 +482,14 @@
 			 *
 			 * See #implement and #execute for exact details on support for script, style and messages.
 			 *
-			 * Format:
+			 *     @example Format:
 			 *
 			 *     {
 			 *         'moduleName': {
 			 *             // From mw.loader.register()
 			 *             'version': '########' (hash)
 			 *             'dependencies': ['required.foo', 'bar.also', ...]
-			 *             'group': 'somegroup', (or) null
+			 *             'group': string, integer, (or) null
 			 *             'source': 'local', (or) 'anotherwiki'
 			 *             'skip': 'return !!window.Example', (or) null, (or) boolean result of skip
 			 *             'module': export Object
@@ -573,7 +528,7 @@
 			 *    The module was registered client-side and requested, but the server denied knowledge
 			 *    of the module's existence.
 			 *
-			 * @property
+			 * @property {Object}
 			 * @private
 			 */
 			var registry = Object.create( null ),
@@ -601,7 +556,7 @@
 				 * Typically when a job is created for a module, the job's dependencies contain
 				 * both the required module and all its recursive dependencies.
 				 *
-				 * Format:
+				 *     @example Format:
 				 *
 				 *     {
 				 *         'dependencies': [ module names ],
@@ -633,7 +588,7 @@
 				marker = document.querySelector( 'meta[name="ResourceLoaderDynamicStyles"]' ),
 
 				// For #addEmbeddedCSS()
-				nextCssBuffer,
+				lastCssBuffer,
 				rAF = window.requestAnimationFrame || setTimeout;
 
 			/**
@@ -662,9 +617,17 @@
 			 */
 			function flushCssBuffer( cssBuffer ) {
 				var i;
-				// Mark this object as inactive now so that further calls to addEmbeddedCSS() from
-				// the callbacks go to a new buffer instead of this one (T105973)
-				cssBuffer.active = false;
+				// Make sure the next call to addEmbeddedCSS() starts a new buffer.
+				// This must be done before we run the callbacks, as those may end up
+				// queueing new chunks which would be lost otherwise (T105973).
+				//
+				// There can be more than one buffer in-flight (given "@import", and
+				// generally due to race conditions). Only tell addEmbeddedCSS() to
+				// start a new buffer if we're currently flushing the last one that it
+				// started. If we're flushing an older buffer, keep the last one open.
+				if ( cssBuffer === lastCssBuffer ) {
+					lastCssBuffer = null;
+				}
 				newStyleTag( cssBuffer.cssText, marker );
 				for ( i = 0; i < cssBuffer.callbacks.length; i++ ) {
 					cssBuffer.callbacks[ i ]();
@@ -686,32 +649,24 @@
 			 *
 			 * @private
 			 * @param {string} cssText CSS text to be added in a `<style>` tag.
-			 * @param {Function} callback Called after the insertion has occurred
+			 * @param {Function} callback Called after the insertion has occurred.
 			 */
 			function addEmbeddedCSS( cssText, callback ) {
-				// Create a buffer if:
-				// - We don't have one yet.
-				// - The previous one is closed.
+				// Start a new buffer if one of the following is true:
+				// - We've never started a buffer before, this will be our first.
+				// - The last buffer we created was flushed meanwhile, so start a new one.
 				// - The next CSS chunk syntactically needs to be at the start of a stylesheet (T37562).
-				if ( !nextCssBuffer || nextCssBuffer.active === false || cssText.slice( 0, '@import'.length ) === '@import' ) {
-					nextCssBuffer = {
+				if ( !lastCssBuffer || cssText.slice( 0, '@import'.length ) === '@import' ) {
+					lastCssBuffer = {
 						cssText: '',
-						callbacks: [],
-						active: null
+						callbacks: []
 					};
+					rAF( flushCssBuffer.bind( null, lastCssBuffer ) );
 				}
 
 				// Linebreak for somewhat distinguishable sections
-				nextCssBuffer.cssText += '\n' + cssText;
-				nextCssBuffer.callbacks.push( callback );
-
-				if ( nextCssBuffer.active === null ) {
-					nextCssBuffer.active = true;
-					// The flushCssBuffer callback has its parameter bound by reference, which means
-					// 1) We can still extend the buffer from our object reference after this point.
-					// 2) We can safely re-assign the variable (not the object) to start a new buffer.
-					rAF( flushCssBuffer.bind( null, nextCssBuffer ) );
-				}
+				lastCssBuffer.cssText += '\n' + cssText;
+				lastCssBuffer.callbacks.push( callback );
 			}
 
 			/**
@@ -997,13 +952,20 @@
 					try {
 						sortDependencies( modules[ i ], resolved );
 					} catch ( err ) {
-						// This module is unknown or has unknown dependencies.
-						// Undo any incomplete resolutions made and keep going.
+						// This module is not currently known, or has invalid dependencies.
+						// Most likely due to a cached reference after the module was
+						// removed, otherwise made redundant, or omitted from the registry
+						// by the ResourceLoader "target" system.
 						resolved = saved;
-						mw.trackError( 'resourceloader.exception', {
-							exception: err,
-							source: 'resolve'
-						} );
+						mw.log.warn( 'Skipped unresolvable module ' + modules[ i ] );
+						if ( modules[ i ] in registry ) {
+							// If the module was known but had unknown or circular dependencies,
+							// also track it as an error.
+							mw.trackError( 'resourceloader.exception', {
+								exception: err,
+								source: 'resolve'
+							} );
+						}
 					}
 				}
 				return resolved;
@@ -1015,6 +977,7 @@
 			 * For example, resolveRelativePath( '../foo.js', 'resources/src/bar/bar.js' )
 			 * returns 'resources/src/foo.js'.
 			 *
+			 * @private
 			 * @param {string} relativePath Relative file path, starting with ./ or ../
 			 * @param {string} basePath Path of the file (not directory) relativePath is relative to
 			 * @return {string|null} Resolved path, or null if relativePath does not start with ./ or ../
@@ -1050,6 +1013,7 @@
 
 			/**
 			 * Make a require() function scoped to a package file
+			 *
 			 * @private
 			 * @param {Object} moduleObj Module object from the registry
 			 * @param {string} basePath Path of the file this is scoped to. Used for relative paths.
@@ -1066,7 +1030,7 @@
 					}
 
 					if ( !hasOwn.call( scriptFiles, fileName ) ) {
-						throw new Error( 'Cannot require() undefined file ' + fileName );
+						throw new Error( 'Cannot require undefined file ' + fileName );
 					}
 					if ( hasOwn.call( moduleObj.packageExports, fileName ) ) {
 						// File has already been executed, return the cached result
@@ -1156,22 +1120,23 @@
 			 * Utility function for execute()
 			 *
 			 * @ignore
-			 * @param {string} [media] Media attribute
 			 * @param {string} url URL
+			 * @param {string} [media] Media attribute
+			 * @param {Node|null} [nextNode]
 			 */
-			function addLink( media, url ) {
+			function addLink( url, media, nextNode ) {
 				var el = document.createElement( 'link' );
 
 				el.rel = 'stylesheet';
-				if ( media && media !== 'all' ) {
+				if ( media ) {
 					el.media = media;
 				}
 				// If you end up here from an IE exception "SCRIPT: Invalid property value.",
 				// see #addEmbeddedCSS, T33676, T43331, and T49277 for details.
 				el.href = url;
 
-				if ( marker && marker.parentNode ) {
-					marker.parentNode.insertBefore( el, marker );
+				if ( nextNode && nextNode.parentNode ) {
+					nextNode.parentNode.insertBefore( el, nextNode );
 				} else {
 					document.head.appendChild( el );
 				}
@@ -1238,15 +1203,9 @@
 
 				dependencies.forEach( function ( module ) {
 					// Only queue modules that are still in the initial 'registered' state
-					// (not ones already loading, ready or error).
+					// (e.g. not ones already loading or loaded etc.).
 					if ( registry[ module ].state === 'registered' && queue.indexOf( module ) === -1 ) {
-						// Private modules must be embedded in the page. Don't bother queuing
-						// these as the server will deny them anyway (T101806).
-						if ( registry[ module ].group === 'private' ) {
-							setAndPropagate( module, 'error' );
-						} else {
-							queue.push( module );
-						}
+						queue.push( module );
 					}
 				} );
 
@@ -1264,7 +1223,7 @@
 					cssPending = 0;
 
 				if ( registry[ module ].state !== 'loaded' ) {
-					throw new Error( 'Module in state "' + registry[ module ].state + '" may not be executed: ' + module );
+					throw new Error( 'Module in state "' + registry[ module ].state + '" may not execute: ' + module );
 				}
 
 				registry[ module ].state = 'executing';
@@ -1320,8 +1279,7 @@
 							} else {
 								mainScript = script.files[ script.main ];
 								if ( typeof mainScript !== 'function' ) {
-									throw new Error( 'Main file ' + script.main + ' in module ' + module +
-										' must be of type function, found ' + typeof mainScript );
+									throw new Error( 'Main file in module ' + module + ' must be a function' );
 								}
 								// jQuery parameters are not passed for multi-file modules
 								mainScript(
@@ -1425,7 +1383,7 @@
 							for ( i = 0; i < value.length; i++ ) {
 								if ( key === 'bc-url' ) {
 									// back-compat: { <media>: [url, ..] }
-									addLink( media, value[ i ] );
+									addLink( value[ i ], media, marker );
 								} else if ( key === 'css' ) {
 									// { "css": [css, ..] }
 									addEmbeddedCSS( value[ i ], cssHandle() );
@@ -1438,7 +1396,7 @@
 							for ( media in value ) {
 								urls = value[ media ];
 								for ( i = 0; i < urls.length; i++ ) {
-									addLink( media, urls[ i ] );
+									addLink( urls[ i ], media, marker );
 								}
 							}
 						}
@@ -1605,11 +1563,7 @@
 				batch.sort();
 
 				// Query parameters common to all requests
-				reqBase = {
-					skin: mw.config.get( 'skin' ),
-					lang: mw.config.get( 'wgUserLanguage' ),
-					debug: mw.config.get( 'debug' )
-				};
+				reqBase = $VARS.reqBase;
 
 				// Split module list by source and by group.
 				splits = Object.create( null );
@@ -1638,15 +1592,15 @@
 						// Optimisation: Inherit (Object.create), not copy ($.extend)
 						currReqBase = Object.create( reqBase );
 						// User modules require a user name in the query string.
-						if ( group === 'user' && mw.config.get( 'wgUserName' ) !== null ) {
+						if ( group === $VARS.groupUser && mw.config.get( 'wgUserName' ) !== null ) {
 							currReqBase.user = mw.config.get( 'wgUserName' );
 						}
 
 						// In addition to currReqBase, doRequest() will also add 'modules' and 'version'.
 						// > '&modules='.length === 9
-						// > '&version=1234567'.length === 16
-						// > 9 + 16 = 25
-						currReqBaseLength = makeQueryString( currReqBase ).length + 25;
+						// > '&version=12345'.length === 14
+						// > 9 + 14 = 23
+						currReqBaseLength = makeQueryString( currReqBase ).length + 23;
 
 						// We may need to split up the request to honor the query string length limit,
 						// so build it piece by piece.
@@ -1764,7 +1718,7 @@
 					packageExports: {},
 					version: String( version || '' ),
 					dependencies: dependencies || [],
-					group: typeof group === 'string' ? group : null,
+					group: typeof group === 'undefined' ? null : group,
 					source: typeof source === 'string' ? source : 'local',
 					state: 'registered',
 					skip: typeof skip === 'string' ? skip : null
@@ -1778,7 +1732,7 @@
 				 * state; it is not a public interface for modifying the registry.
 				 *
 				 * @see #registry
-				 * @property
+				 * @property {Object}
 				 * @private
 				 */
 				moduleRegistry: registry,
@@ -1787,7 +1741,7 @@
 				 * Exposed for testing and debugging only.
 				 *
 				 * @see #batchRequest
-				 * @property
+				 * @property {number}
 				 * @private
 				 */
 				maxQueryLength: $VARS.maxQueryLength,
@@ -1808,19 +1762,38 @@
 				 * @private
 				 */
 				work: function () {
-					var implementations, sourceModules,
-						batch = [],
-						q = 0;
+					var q, module, implementation,
+						storedImplementations = [],
+						storedNames = [],
+						requestNames = [],
+						batch = new StringSet();
 
-					// Appends a list of modules from the queue to the batch
-					for ( ; q < queue.length; q++ ) {
-						// Only load modules which are registered
-						if ( queue[ q ] in registry && registry[ queue[ q ] ].state === 'registered' ) {
-							// Prevent duplicate entries
-							if ( batch.indexOf( queue[ q ] ) === -1 ) {
-								batch.push( queue[ q ] );
-								// Mark registered modules as loading
-								registry[ queue[ q ] ].state = 'loading';
+					mw.loader.store.init();
+
+					// Iterate the list of requested modules, and do one of three things:
+					// - 1) Nothing (if already loaded or being loaded).
+					// - 2) Eval the cached implementation from the module store.
+					// - 3) Request from network.
+					q = queue.length;
+					while ( q-- ) {
+						module = queue[ q ];
+						// Only consider modules which are the initial 'registered' state
+						if ( module in registry && registry[ module ].state === 'registered' ) {
+							// Ignore duplicates
+							if ( !batch.has( module ) ) {
+								// Progress the state machine
+								registry[ module ].state = 'loading';
+								batch.add( module );
+
+								implementation = mw.loader.store.get( module );
+								if ( implementation ) {
+									// Module store enabled and contains this module/version
+									storedImplementations.push( implementation );
+									storedNames.push( module );
+								} else {
+									// Module store disabled or doesn't have this module/version
+									requestNames.push( module );
+								}
 							}
 						}
 					}
@@ -1832,50 +1805,32 @@
 					// which are already loaded.
 					queue = [];
 
-					if ( !batch.length ) {
-						return;
-					}
+					asyncEval( storedImplementations, function ( err ) {
+						var failed;
+						// Not good, the cached mw.loader.implement calls failed! This should
+						// never happen, barring ResourceLoader bugs, browser bugs and PEBKACs.
+						// Depending on how corrupt the string is, it is likely that some
+						// modules' implement() succeeded while the ones after the error will
+						// never run and leave their modules in the 'loading' state forever.
+						mw.loader.store.stats.failed++;
 
-					mw.loader.store.init();
-					if ( mw.loader.store.enabled ) {
-						implementations = [];
-						sourceModules = [];
-						batch = batch.filter( function ( module ) {
-							var implementation = mw.loader.store.get( module );
-							if ( implementation ) {
-								implementations.push( implementation );
-								sourceModules.push( module );
-								return false;
-							}
-							return true;
+						// Since this is an error not caused by an individual module but by
+						// something that infected the implement call itself, don't take any
+						// risks and clear everything in this cache.
+						mw.loader.store.clear();
+
+						mw.trackError( 'resourceloader.exception', {
+							exception: err,
+							source: 'store-eval'
 						} );
-						asyncEval( implementations, function ( err ) {
-							var failed;
-							// Not good, the cached mw.loader.implement calls failed! This should
-							// never happen, barring ResourceLoader bugs, browser bugs and PEBKACs.
-							// Depending on how corrupt the string is, it is likely that some
-							// modules' implement() succeeded while the ones after the error will
-							// never run and leave their modules in the 'loading' state forever.
-							mw.loader.store.stats.failed++;
-
-							// Since this is an error not caused by an individual module but by
-							// something that infected the implement call itself, don't take any
-							// risks and clear everything in this cache.
-							mw.loader.store.clear();
-
-							mw.trackError( 'resourceloader.exception', {
-								exception: err,
-								source: 'store-eval'
-							} );
-							// Re-add the failed ones that are still pending back to the batch
-							failed = sourceModules.filter( function ( module ) {
-								return registry[ module ].state === 'loading';
-							} );
-							batchRequest( failed );
+						// For any failed ones, fallback to requesting from network
+						failed = storedNames.filter( function ( module ) {
+							return registry[ module ].state === 'loading';
 						} );
-					}
+						batchRequest( failed );
+					} );
 
-					batchRequest( batch );
+					batchRequest( requestNames );
 				},
 
 				/**
@@ -1883,6 +1838,7 @@
 				 *
 				 * The #work() method will use this information to split up requests by source.
 				 *
+				 *     @example
 				 *     mw.loader.addSource( { mediawikiwiki: 'https://www.mediawiki.org/w/load.php' } );
 				 *
 				 * @private
@@ -2018,42 +1974,31 @@
 				 * @param {string} [type='text/javascript'] MIME type to use if calling with a URL of an
 				 *  external script or style; acceptable values are "text/css" and
 				 *  "text/javascript"; if no type is provided, text/javascript is assumed.
+				 * @throws {Error} If type is invalid
 				 */
 				load: function ( modules, type ) {
-					var filtered, l;
-
-					// Allow calling with a url or single dependency as a string
-					if ( typeof modules === 'string' ) {
-						// "https://example.org/x.js", "http://example.org/x.js", "//example.org/x.js", "/x.js"
-						if ( /^(https?:)?\/?\//.test( modules ) ) {
-							if ( type === 'text/css' ) {
-								l = document.createElement( 'link' );
-								l.rel = 'stylesheet';
-								l.href = modules;
-								document.head.appendChild( l );
-								return;
-							}
-							if ( type === 'text/javascript' || type === undefined ) {
-								addScript( modules );
-								return;
-							}
+					if ( typeof modules === 'string' && /^(https?:)?\/?\//.test( modules ) ) {
+						// Called with a url like so:
+						// - "https://example.org/x.js"
+						// - "http://example.org/x.js"
+						// - "//example.org/x.js"
+						// - "/x.js"
+						if ( type === 'text/css' ) {
+							addLink( modules );
+						} else if ( type === 'text/javascript' || type === undefined ) {
+							addScript( modules );
+						} else {
 							// Unknown type
-							throw new Error( 'type must be text/css or text/javascript, found ' + type );
+							throw new Error( 'Invalid type ' + type );
 						}
-						// Called with single module
-						modules = [ modules ];
+					} else {
+						// One or more modules
+						modules = typeof modules === 'string' ? [ modules ] : modules;
+						// Resolve modules into flat list for internal queuing.
+						// This also filters out unknown modules and modules with
+						// unknown dependencies, allowing the rest to continue. (T36853)
+						enqueue( resolveStubbornly( modules ), undefined, undefined );
 					}
-
-					// Filter out top-level modules that are unknown or failed to load before.
-					filtered = modules.filter( function ( module ) {
-						var state = mw.loader.getState( module );
-						return state !== 'error' && state !== 'missing';
-					} );
-					// Resolve remaining list using the known dependency tree.
-					// This also filters out modules with unknown dependencies. (T36853)
-					filtered = resolveStubbornly( filtered );
-					// Some modules are not yet ready, add to module load queue.
-					enqueue( filtered, undefined, undefined );
 				},
 
 				/**
@@ -2070,17 +2015,6 @@
 						}
 						setAndPropagate( module, state );
 					}
-				},
-
-				/**
-				 * Get the version of a module.
-				 *
-				 * @param {string} module Name of module
-				 * @return {string|null} The version, or null if the module (or its version) is not
-				 *  in the registry.
-				 */
-				getVersion: function ( module ) {
-					return module in registry ? registry[ module ].version : null;
 				},
 
 				/**
@@ -2145,9 +2079,8 @@
 					// Whether the store is in use on this page.
 					enabled: null,
 
-					// Modules whose string representation exceeds 100 kB are
-					// ineligible for storage. See bug T66721.
-					MODULE_SIZE_MAX: 100 * 1000,
+					// Modules whose serialised form exceeds 100 kB won't be stored (T66721).
+					MODULE_SIZE_MAX: 1e5,
 
 					// The contents of the store, mapping '[name]@[version]' keys
 					// to module implementations.
@@ -2166,29 +2099,29 @@
 					 * @return {Object} Module store contents.
 					 */
 					toJSON: function () {
-						return { items: mw.loader.store.items, vary: mw.loader.store.getVary() };
+						return {
+							items: mw.loader.store.items,
+							vary: mw.loader.store.vary,
+							// Store with 1e7 ms accuracy (1e4 seconds, or ~ 2.7 hours),
+							// which is enough for the purpose of expiring after ~ 30 days.
+							asOf: Math.ceil( Date.now() / 1e7 )
+						};
 					},
 
 					/**
-					 * Get the localStorage key for the entire module store. The key references
+					 * The localStorage key for the entire module store. The key references
 					 * $wgDBname to prevent clashes between wikis which share a common host.
 					 *
-					 * @return {string} localStorage item key
+					 * @property {string}
 					 */
-					getStoreKey: function () {
-						return 'MediaWikiModuleStore:' + mw.config.get( 'wgDBname' );
-					},
+					key: $VARS.storeKey,
 
 					/**
-					 * Get a key on which to vary the module cache.
+					 * A string containing various factors on which to the module cache should vary.
 					 *
-					 * @return {string} String of concatenated vary conditions.
+					 * @property {string}
 					 */
-					getVary: function () {
-						return mw.config.get( 'skin' ) + ':' +
-							mw.config.get( 'wgResourceLoaderStorageVersion' ) + ':' +
-							mw.config.get( 'wgUserLanguage' );
-					},
+					vary: $VARS.storeVary,
 
 					/**
 					 * Initialize the store.
@@ -2210,33 +2143,34 @@
 						}
 
 						if (
+							!$VARS.storeEnabled ||
+
 							// Disabled because localStorage quotas are tight and (in Firefox's case)
 							// shared by multiple origins.
 							// See T66721, and <https://bugzilla.mozilla.org/show_bug.cgi?id=1064466>.
-							/Firefox/.test( navigator.userAgent ) ||
-
-							// Disabled by configuration.
-							!mw.config.get( 'wgResourceLoaderStorageEnabled' )
+							/Firefox/.test( navigator.userAgent )
 						) {
 							// Clear any previous store to free up space. (T66721)
 							this.clear();
 							this.enabled = false;
 							return;
 						}
-						if ( mw.config.get( 'debug' ) ) {
-							// Disable module store in debug mode
-							this.enabled = false;
-							return;
-						}
 
 						try {
 							// This a string we stored, or `null` if the key does not (yet) exist.
-							raw = localStorage.getItem( this.getStoreKey() );
+							raw = localStorage.getItem( this.key );
 							// If we get here, localStorage is available; mark enabled
 							this.enabled = true;
 							// If null, JSON.parse() will cast to string and re-parse, still null.
 							data = JSON.parse( raw );
-							if ( data && typeof data.items === 'object' && data.vary === this.getVary() ) {
+							if ( data &&
+								typeof data.items === 'object' &&
+								data.vary === this.vary &&
+								// Only use if it's been less than 30 days since the data was written
+								// 30 days = 2,592,000 s = 2,592,000,000 ms = ± 259e7 ms
+								Date.now() < ( data.asOf * 1e7 ) + 259e7
+							) {
+								// The data is not corrupt, matches our vary context, and has not expired.
 								this.items = data.items;
 								return;
 							}
@@ -2252,7 +2186,7 @@
 						//    The store was enabled, and `items` starts fresh.
 						//
 						// 2. localStorage contained parseable data under our store key,
-						//    but it's not applicable to our current context (see getVary).
+						//    but it's not applicable to our current context (see #vary).
 						//    The store was enabled, and `items` starts fresh.
 						//
 						// 3. JSON.parse threw (localStorage contained corrupt data).
@@ -2277,17 +2211,16 @@
 					get: function ( module ) {
 						var key;
 
-						if ( !this.enabled ) {
-							return false;
+						if ( this.enabled ) {
+							key = getModuleKey( module );
+							if ( key in this.items ) {
+								this.stats.hits++;
+								return this.items[ key ];
+							}
+
+							this.stats.misses++;
 						}
 
-						key = getModuleKey( module );
-						if ( key in this.items ) {
-							this.stats.hits++;
-							return this.items[ key ];
-						}
-
-						this.stats.misses++;
 						return false;
 					},
 
@@ -2298,11 +2231,10 @@
 					 * @param {string} module Module name
 					 */
 					add: function ( module ) {
-						if ( !this.enabled ) {
-							return;
+						if ( this.enabled ) {
+							this.queue.push( module );
+							this.requestUpdate();
 						}
-						this.queue.push( module );
-						this.requestUpdate();
 					},
 
 					/**
@@ -2332,8 +2264,8 @@
 							descriptor.state !== 'ready' ||
 							// Unversioned, private, or site-/user-specific
 							!descriptor.version ||
-							descriptor.group === 'private' ||
-							descriptor.group === 'user' ||
+							descriptor.group === $VARS.groupPrivate ||
+							descriptor.group === $VARS.groupUser ||
 							// Partial descriptor
 							// (e.g. skipped module, or style module with state=ready)
 							[ descriptor.script, descriptor.style, descriptor.messages,
@@ -2414,7 +2346,7 @@
 					clear: function () {
 						this.items = {};
 						try {
-							localStorage.removeItem( this.getStoreKey() );
+							localStorage.removeItem( this.key );
 						} catch ( e ) {}
 					},
 
@@ -2463,7 +2395,7 @@
 								mw.loader.store.set( mw.loader.store.queue.shift() );
 							}
 
-							key = mw.loader.store.getStoreKey();
+							key = mw.loader.store.key;
 							try {
 								// Replacing the content of the module store might fail if the new
 								// contents would exceed the browser's localStorage size limit. To
@@ -2502,27 +2434,7 @@
 					}() )
 				}
 			};
-		}() ),
-
-		// Skeleton user object, extended by the 'mediawiki.user' module.
-		/**
-		 * @class mw.user
-		 * @singleton
-		 */
-		user: {
-			/**
-			 * @property {mw.Map}
-			 */
-			options: new Map(),
-			/**
-			 * @property {mw.Map}
-			 */
-			tokens: new Map()
-		},
-
-		// OOUI widgets specific to MediaWiki
-		widgets: {}
-
+		}() )
 	};
 
 	// Attach to window and globally alias

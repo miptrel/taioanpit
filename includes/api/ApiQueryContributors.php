@@ -37,7 +37,7 @@ class ApiQueryContributors extends ApiQueryBase {
 	 * database pages too heavily), so only do the first MAX_PAGES input pages
 	 * in each API call (leaving the rest for continuation).
 	 */
-	const MAX_PAGES = 100;
+	private const MAX_PAGES = 100;
 
 	public function __construct( ApiQuery $query, $moduleName ) {
 		// "pc" is short for "page contributors", "co" was already taken by the
@@ -46,8 +46,6 @@ class ApiQueryContributors extends ApiQueryBase {
 	}
 
 	public function execute() {
-		global $wgActorTableSchemaMigrationStage;
-
 		$db = $this->getDB();
 		$params = $this->extractRequestParams();
 		$this->requireMaxOneParameter( $params, 'group', 'excludegroup', 'rights', 'excluderights' );
@@ -80,14 +78,10 @@ class ApiQueryContributors extends ApiQueryBase {
 		$result = $this->getResult();
 		$revQuery = MediaWikiServices::getInstance()->getRevisionStore()->getQueryInfo();
 
-		// For SCHEMA_COMPAT_READ_NEW, target indexes on the
-		// revision_actor_temp table, otherwise on the revision table.
-		$pageField = ( $wgActorTableSchemaMigrationStage & SCHEMA_COMPAT_READ_NEW )
-			? 'revactor_page' : 'rev_page';
-		$idField = ( $wgActorTableSchemaMigrationStage & SCHEMA_COMPAT_READ_NEW )
-			? 'revactor_actor' : $revQuery['fields']['rev_user'];
-		$countField = ( $wgActorTableSchemaMigrationStage & SCHEMA_COMPAT_READ_NEW )
-			? 'revactor_actor' : $revQuery['fields']['rev_user_text'];
+		// Target indexes on the revision_actor_temp table.
+		$pageField = 'revactor_page';
+		$idField = 'revactor_actor';
+		$countField = 'revactor_actor';
 
 		// First, count anons
 		$this->addTables( $revQuery['tables'] );
@@ -152,7 +146,8 @@ class ApiQueryContributors extends ApiQueryBase {
 		} elseif ( $params['rights'] ) {
 			$excludeGroups = false;
 			foreach ( $params['rights'] as $r ) {
-				$limitGroups = array_merge( $limitGroups, User::getGroupsWithPermission( $r ) );
+				$limitGroups = array_merge( $limitGroups, $this->getPermissionManager()
+					->getGroupsWithPermission( $r ) );
 			}
 
 			// If no group has the rights requested, no need to query
@@ -168,7 +163,8 @@ class ApiQueryContributors extends ApiQueryBase {
 		} elseif ( $params['excluderights'] ) {
 			$excludeGroups = true;
 			foreach ( $params['excluderights'] as $r ) {
-				$limitGroups = array_merge( $limitGroups, User::getGroupsWithPermission( $r ) );
+				$limitGroups = array_merge( $limitGroups, $this->getPermissionManager()
+					->getGroupsWithPermission( $r ) );
 			}
 		}
 
@@ -227,9 +223,13 @@ class ApiQueryContributors extends ApiQueryBase {
 		return 'public';
 	}
 
-	public function getAllowedParams() {
+	public function getAllowedParams( $flags = 0 ) {
 		$userGroups = User::getAllGroups();
-		$userRights = User::getAllRights();
+		$userRights = $this->getPermissionManager()->getAllPermissions();
+
+		if ( $flags & ApiBase::GET_VALUES_FOR_HELP ) {
+			sort( $userGroups );
+		}
 
 		return [
 			'group' => [

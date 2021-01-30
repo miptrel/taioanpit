@@ -48,19 +48,19 @@ class CategoryTreeHooks {
 		global $wgCategoryTreeOmitNamespace;
 
 		if ( !isset( $wgCategoryTreeDefaultOptions['mode'] )
-			|| is_null( $wgCategoryTreeDefaultOptions['mode'] )
+			|| $wgCategoryTreeDefaultOptions['mode'] === null
 		) {
 			$wgCategoryTreeDefaultOptions['mode'] = $wgCategoryTreeDefaultMode;
 		}
 
 		if ( !isset( $wgCategoryTreeDefaultOptions['hideprefix'] )
-			|| is_null( $wgCategoryTreeDefaultOptions['hideprefix'] )
+			|| $wgCategoryTreeDefaultOptions['hideprefix'] === null
 		) {
 			$wgCategoryTreeDefaultOptions['hideprefix'] = $wgCategoryTreeOmitNamespace;
 		}
 
 		if ( !isset( $wgCategoryTreeCategoryPageOptions['mode'] )
-			|| is_null( $wgCategoryTreeCategoryPageOptions['mode'] )
+			|| $wgCategoryTreeCategoryPageOptions['mode'] === null
 		) {
 			$mode = $wgRequest->getVal( 'mode' );
 			$wgCategoryTreeCategoryPageOptions['mode'] = ( $mode )
@@ -142,6 +142,7 @@ class CategoryTreeHooks {
 	 * @param string $cat
 	 * @param array $argv
 	 * @param Parser|null $parser
+	 * @param PPFrame|null $frame
 	 * @param bool $allowMissing
 	 * @return bool|string
 	 */
@@ -149,6 +150,7 @@ class CategoryTreeHooks {
 		$cat,
 		array $argv,
 		Parser $parser = null,
+		PPFrame $frame = null,
 		$allowMissing = false
 	) {
 		if ( $parser ) {
@@ -237,7 +239,7 @@ class CategoryTreeHooks {
 		}
 
 		foreach ( $categories as $category => $type ) {
-			$links[$type][] = self::parserHook( $category, $wgCategoryTreePageCategoryOptions, null, true );
+			$links[$type][] = self::parserHook( $category, $wgCategoryTreePageCategoryOptions, null, null, true );
 			CategoryTree::setHeaders( $out );
 		}
 
@@ -266,6 +268,7 @@ class CategoryTreeHooks {
 	 * @suppress PhanUndeclaredProperty SpecialPage->categoryTreeCategories
 	 * @param SpecialPage $specialPage SpecialTrackingCategories object
 	 * @param array $trackingCategories [ 'msg' => Title, 'cats' => Title[] ]
+	 * @phan-param array<string,array{msg:Title,cats:Title[]}> $trackingCategories
 	 */
 	public static function onSpecialTrackingCategoriesPreprocess(
 		SpecialPage $specialPage, array $trackingCategories

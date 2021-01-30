@@ -23,6 +23,8 @@
  * @file
  */
 
+use MediaWiki\MediaWikiServices;
+
 /**
  * @ingroup Pager
  */
@@ -51,6 +53,12 @@ class LogPager extends ReverseChronologicalPager {
 	/** @var bool */
 	private $actionRestrictionsEnforced = false;
 
+	/** @var array */
+	private $mConds;
+
+	/** @var string */
+	private $mTagFilter;
+
 	/** @var LogEventsList */
 	public $mLogEventsList;
 
@@ -78,12 +86,13 @@ class LogPager extends ReverseChronologicalPager {
 		$this->mLogEventsList = $list;
 
 		$this->limitType( $types ); // also excludes hidden types
+		$this->limitLogId( $logId );
+		$this->limitFilterTypes();
 		$this->limitPerformer( $performer );
 		$this->limitTitle( $title, $pattern );
 		$this->limitAction( $action );
 		$this->getDateCond( $year, $month, $day );
 		$this->mTagFilter = $tagFilter;
-		$this->limitLogId( $logId );
 
 		$this->mDb = wfGetDB( DB_REPLICA, 'logpager' );
 	}
@@ -99,29 +108,36 @@ class LogPager extends ReverseChronologicalPager {
 		return $query;
 	}
 
-	// Call ONLY after calling $this->limitType() already!
+	private function limitFilterTypes() {
+		if ( $this->hasEqualsClause( 'log_id' ) ) { // T220834
+			return;
+		}
+		$filterTypes = $this->getFilterParams();
+		foreach ( $filterTypes as $type => $hide ) {
+			if ( $hide ) {
+				$this->mConds[] = 'log_type != ' . $this->mDb->addQuotes( $type );
+			}
+		}
+	}
+
 	public function getFilterParams() {
-		global $wgFilterLogTypes;
 		$filters = [];
 		if ( count( $this->types ) ) {
 			return $filters;
 		}
 
 		$wpfilters = $this->getRequest()->getArray( "wpfilters" );
-		$request_filters = $wpfilters === null ? [] : $wpfilters;
+		$filterLogTypes = $this->getConfig()->get( 'FilterLogTypes' );
 
-		foreach ( $wgFilterLogTypes as $type => $default ) {
-			$hide = !in_array( $type, $request_filters );
-
+		foreach ( $filterLogTypes as $type => $default ) {
 			// Back-compat: Check old URL params if the new param wasn't passed
 			if ( $wpfilters === null ) {
 				$hide = $this->getRequest()->getBool( "hide_{$type}_log", $default );
+			} else {
+				$hide = !in_array( $type, $wpfilters );
 			}
 
 			$filters[$type] = $hide;
-			if ( $hide ) {
-				$this->mConds[] = 'log_type != ' . $this->mDb->addQuotes( $type );
-			}
 		}
 
 		return $filters;
@@ -135,16 +151,17 @@ class LogPager extends ReverseChronologicalPager {
 	 *   empty string means no restriction
 	 */
 	private function limitType( $types ) {
-		global $wgLogRestrictions;
-
 		$user = $this->getUser();
+		$restrictions = $this->getConfig()->get( 'LogRestrictions' );
 		// If $types is not an array, make it an array
 		$types = ( $types === '' ) ? [] : (array)$types;
 		// Don't even show header for private logs; don't recognize it...
 		$needReindex = false;
 		foreach ( $types as $type ) {
-			if ( isset( $wgLogRestrictions[$type] )
-				&& !$user->isAllowed( $wgLogRestrictions[$type] )
+			if ( isset( $restrictions[$type] )
+				&& !MediaWikiServices::getInstance()
+					->getPermissionManager()
+					->userHasRight( $user, $restrictions[$type] )
 			) {
 				$needReindex = true;
 				$types = array_diff( $types, [ $type ] );
@@ -183,7 +200,7 @@ class LogPager extends ReverseChronologicalPager {
 			return;
 		}
 		$usertitle = Title::makeTitleSafe( NS_USER, $name );
-		if ( is_null( $usertitle ) ) {
+		if ( $usertitle === null ) {
 			return;
 		}
 		// Normalize username first so that non-existent users used
@@ -209,8 +226,6 @@ class LogPager extends ReverseChronologicalPager {
 	 * @return void
 	 */
 	private function limitTitle( $page, $pattern ) {
-		global $wgMiserMode, $wgUserrightsInterwikiDelimiter;
-
 		if ( $page instanceof Title ) {
 			$title = $page;
 		} else {
@@ -224,9 +239,11 @@ class LogPager extends ReverseChronologicalPager {
 		$ns = $title->getNamespace();
 		$db = $this->mDb;
 
+		$interwikiDelimiter = $this->getConfig()->get( 'UserrightsInterwikiDelimiter' );
+
 		$doUserRightsLogLike = false;
 		if ( $this->types == [ 'rights' ] ) {
-			$parts = explode( $wgUserrightsInterwikiDelimiter, $title->getDBkey() );
+			$parts = explode( $interwikiDelimiter, $title->getDBkey() );
 			if ( count( $parts ) == 2 ) {
 				list( $name, $database ) = array_map( 'trim', $parts );
 				if ( strstr( $database, '*' ) ) { // Search for wildcard in database name
@@ -250,14 +267,14 @@ class LogPager extends ReverseChronologicalPager {
 		 */
 		$this->mConds['log_namespace'] = $ns;
 		if ( $doUserRightsLogLike ) {
-			$params = [ $name . $wgUserrightsInterwikiDelimiter ];
+			$params = [ $name . $interwikiDelimiter ];
 			foreach ( explode( '*', $database ) as $databasepart ) {
 				$params[] = $databasepart;
 				$params[] = $db->anyString();
 			}
 			array_pop( $params ); // Get rid of the last % we added.
-			$this->mConds[] = 'log_title' . $db->buildLike( $params );
-		} elseif ( $pattern && !$wgMiserMode ) {
+			$this->mConds[] = 'log_title' . $db->buildLike( ...$params );
+		} elseif ( $pattern && !$this->getConfig()->get( 'MiserMode' ) ) {
 			$this->mConds[] = 'log_title' . $db->buildLike( $title->getDBkey(), $db->anyString() );
 			$this->pattern = $pattern;
 		} else {
@@ -272,14 +289,13 @@ class LogPager extends ReverseChronologicalPager {
 	 * @param string $action
 	 */
 	private function limitAction( $action ) {
-		global $wgActionFilteredLogs;
 		// Allow to filter the log by actions
 		$type = $this->typeCGI;
 		if ( $type === '' ) {
 			// nothing to do
 			return;
 		}
-		$actions = $wgActionFilteredLogs;
+		$actions = $this->getConfig()->get( 'ActionFilteredLogs' );
 		if ( isset( $actions[$type] ) ) {
 			// log type can be filtered by actions
 			$this->mLogEventsList->setAllowedActions( array_keys( $actions[$type] ) );
@@ -335,6 +351,19 @@ class LogPager extends ReverseChronologicalPager {
 		# Don't show duplicate rows when using log_search
 		$joins['log_search'] = [ 'JOIN', 'ls_log_id=log_id' ];
 
+		// T221458: MySQL/MariaDB (10.1.37) can sometimes irrationally decide that querying `actor` before
+		// `logging` and filesorting is somehow better than querying $limit+1 rows from `logging`.
+		// Tell it not to reorder the query. But not when tag filtering or log_search was used, as it
+		// seems as likely to be harmed as helped in that case.
+		if ( !$this->mTagFilter && !array_key_exists( 'ls_field', $this->mConds ) ) {
+			$options[] = 'STRAIGHT_JOIN';
+		}
+		if ( $this->performer !== '' || $this->types !== [] ) {
+			// T223151, T237026: MariaDB's optimizer, at least 10.1, likes to choose a wildly bad plan for
+			// some reason for these code paths. Tell it not to use the wrong index it wants to pick.
+			$options['IGNORE INDEX'] = [ 'logging' => [ 'times' ] ];
+		}
+
 		$info = [
 			'tables' => $tables,
 			'fields' => $fields,
@@ -361,7 +390,7 @@ class LogPager extends ReverseChronologicalPager {
 		);
 	}
 
-	function getIndexField() {
+	public function getIndexField() {
 		return 'log_timestamp';
 	}
 
@@ -452,9 +481,10 @@ class LogPager extends ReverseChronologicalPager {
 		}
 		$this->actionRestrictionsEnforced = true;
 		$user = $this->getUser();
-		if ( !$user->isAllowed( 'deletedhistory' ) ) {
+		$permissionManager = MediaWikiServices::getInstance()->getPermissionManager();
+		if ( !$permissionManager->userHasRight( $user, 'deletedhistory' ) ) {
 			$this->mConds[] = $this->mDb->bitAnd( 'log_deleted', LogPage::DELETED_ACTION ) . ' = 0';
-		} elseif ( !$user->isAllowedAny( 'suppressrevision', 'viewsuppressed' ) ) {
+		} elseif ( !$permissionManager->userHasAnyRight( $user, 'suppressrevision', 'viewsuppressed' ) ) {
 			$this->mConds[] = $this->mDb->bitAnd( 'log_deleted', LogPage::SUPPRESSED_ACTION ) .
 				' != ' . LogPage::SUPPRESSED_USER;
 		}
@@ -470,9 +500,10 @@ class LogPager extends ReverseChronologicalPager {
 		}
 		$this->performerRestrictionsEnforced = true;
 		$user = $this->getUser();
-		if ( !$user->isAllowed( 'deletedhistory' ) ) {
+		$permissionManager = MediaWikiServices::getInstance()->getPermissionManager();
+		if ( !$permissionManager->userHasRight( $user, 'deletedhistory' ) ) {
 			$this->mConds[] = $this->mDb->bitAnd( 'log_deleted', LogPage::DELETED_USER ) . ' = 0';
-		} elseif ( !$user->isAllowedAny( 'suppressrevision', 'viewsuppressed' ) ) {
+		} elseif ( !$permissionManager->userHasAnyRight( $user, 'suppressrevision', 'viewsuppressed' ) ) {
 			$this->mConds[] = $this->mDb->bitAnd( 'log_deleted', LogPage::SUPPRESSED_USER ) .
 				' != ' . LogPage::SUPPRESSED_ACTION;
 		}

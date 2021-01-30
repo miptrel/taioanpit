@@ -1,17 +1,20 @@
 <?php
 
+use MediaWiki\Permissions\PermissionManager;
+use MediaWiki\Revision\RevisionRecord;
+use MediaWiki\User\UserIdentityValue;
+use PHPUnit\Framework\MockObject\MockObject;
+use Wikimedia\Rdbms\IDatabase;
 use Wikimedia\Rdbms\LoadBalancer;
 use Wikimedia\TestingAccessWrapper;
 
 /**
  * @covers WatchedItemQueryService
  */
-class WatchedItemQueryServiceUnitTest extends MediaWikiTestCase {
-
-	use MediaWikiCoversValidator;
+class WatchedItemQueryServiceUnitTest extends MediaWikiIntegrationTestCase {
 
 	/**
-	 * @return PHPUnit_Framework_MockObject_MockObject|CommentStore
+	 * @return MockObject|CommentStore
 	 */
 	private function getMockCommentStore() {
 		$mockStore = $this->getMockBuilder( CommentStore::class )
@@ -31,7 +34,7 @@ class WatchedItemQueryServiceUnitTest extends MediaWikiTestCase {
 	}
 
 	/**
-	 * @return PHPUnit_Framework_MockObject_MockObject|ActorMigration
+	 * @return MockObject|ActorMigration
 	 */
 	private function getMockActorMigration() {
 		$mockStore = $this->getMockBuilder( ActorMigration::class )
@@ -65,25 +68,27 @@ class WatchedItemQueryServiceUnitTest extends MediaWikiTestCase {
 	}
 
 	/**
-	 * @param PHPUnit_Framework_MockObject_MockObject|Database $mockDb
+	 * @param MockObject|Database $mockDb
+	 * @param MockObject|PermissionManager $mockPM
 	 * @return WatchedItemQueryService
 	 */
-	private function newService( $mockDb ) {
+	private function newService( $mockDb, $mockPM = null ) {
 		return new WatchedItemQueryService(
 			$this->getMockLoadBalancer( $mockDb ),
 			$this->getMockCommentStore(),
 			$this->getMockActorMigration(),
-			$this->getMockWatchedItemStore()
+			$this->getMockWatchedItemStore(),
+			$mockPM ?: $this->getMockPermissionManager(),
+			$this->createHookContainer(),
+			false
 		);
 	}
 
 	/**
-	 * @return PHPUnit_Framework_MockObject_MockObject|Database
+	 * @return MockObject|IDatabase
 	 */
 	private function getMockDb() {
-		$mock = $this->getMockBuilder( Database::class )
-			->disableOriginalConstructor()
-			->getMock();
+		$mock = $this->createMock( IDatabase::class );
 
 		$mock->expects( $this->any() )
 			->method( 'makeList' )
@@ -126,8 +131,8 @@ class WatchedItemQueryServiceUnitTest extends MediaWikiTestCase {
 	}
 
 	/**
-	 * @param PHPUnit_Framework_MockObject_MockObject|Database $mockDb
-	 * @return PHPUnit_Framework_MockObject_MockObject|LoadBalancer
+	 * @param MockObject|IDatabase $mockDb
+	 * @return MockObject|LoadBalancer
 	 */
 	private function getMockLoadBalancer( $mockDb ) {
 		$mock = $this->getMockBuilder( LoadBalancer::class )
@@ -141,8 +146,7 @@ class WatchedItemQueryServiceUnitTest extends MediaWikiTestCase {
 	}
 
 	/**
-	 * @param PHPUnit_Framework_MockObject_MockObject|Database $mockDb
-	 * @return PHPUnit_Framework_MockObject_MockObject|WatchedItemStore
+	 * @return MockObject|WatchedItemStore
 	 */
 	private function getMockWatchedItemStore() {
 		$mock = $this->getMockBuilder( WatchedItemStore::class )
@@ -157,75 +161,73 @@ class WatchedItemQueryServiceUnitTest extends MediaWikiTestCase {
 	}
 
 	/**
-	 * @param int $id
-	 * @return PHPUnit_Framework_MockObject_MockObject|User
-	 */
-	private function getMockNonAnonUserWithId( $id ) {
-		$mock = $this->getMockBuilder( User::class )->getMock();
-		$mock->expects( $this->any() )
-			->method( 'isAnon' )
-			->will( $this->returnValue( false ) );
-		$mock->expects( $this->any() )
-			->method( 'getId' )
-			->will( $this->returnValue( $id ) );
-		return $mock;
-	}
-
-	/**
-	 * @param int $id
-	 * @return PHPUnit_Framework_MockObject_MockObject|User
-	 */
-	private function getMockUnrestrictedNonAnonUserWithId( $id ) {
-		$mock = $this->getMockNonAnonUserWithId( $id );
-		$mock->expects( $this->any() )
-			->method( 'isAllowed' )
-			->will( $this->returnValue( true ) );
-		$mock->expects( $this->any() )
-			->method( 'isAllowedAny' )
-			->will( $this->returnValue( true ) );
-		$mock->expects( $this->any() )
-			->method( 'useRCPatrol' )
-			->will( $this->returnValue( true ) );
-		return $mock;
-	}
-
-	/**
-	 * @param int $id
 	 * @param string $notAllowedAction
-	 * @return PHPUnit_Framework_MockObject_MockObject|User
+	 * @return MockObject|PermissionManager
 	 */
-	private function getMockNonAnonUserWithIdAndRestrictedPermissions( $id, $notAllowedAction ) {
-		$mock = $this->getMockNonAnonUserWithId( $id );
-
-		$mock->expects( $this->any() )
-			->method( 'isAllowed' )
-			->will( $this->returnCallback( function ( $action ) use ( $notAllowedAction ) {
+	private function getMockPermissionManager( $notAllowedAction = null ) {
+		$mock = $this->getMockBuilder( PermissionManager::class )
+			->disableOriginalConstructor()
+			->getMock();
+		$mock->method( 'userHasRight' )
+			->will( $this->returnCallback( function ( $user, $action ) use ( $notAllowedAction ) {
 				return $action !== $notAllowedAction;
 			} ) );
-		$mock->expects( $this->any() )
-			->method( 'isAllowedAny' )
-			->will( $this->returnCallback( function () use ( $notAllowedAction ) {
-				$actions = func_get_args();
+		$mock->method( 'userHasAnyRight' )
+			->will( $this->returnCallback( function ( $user, ...$actions ) use ( $notAllowedAction ) {
 				return !in_array( $notAllowedAction, $actions );
 			} ) );
+		return $mock;
+	}
+
+	/**
+	 * @param int $id
+	 * @param string[] $extraMethods Extra methods that are expected might be called
+	 * @return MockObject|User
+	 */
+	private function getMockNonAnonUserWithId( $id, array $extraMethods = [] ) {
+		$mock = $this->getMockBuilder( User::class )->getMock();
+		$mock->method( 'isRegistered' )->willReturn( true );
+		$mock->method( 'getId' )->willReturn( $id );
+		$methods = array_merge( [
+			'isRegistered',
+			'getId',
+		], $extraMethods );
+		$mock->expects( $this->never() )->method( $this->anythingBut( ...$methods ) );
+		return $mock;
+	}
+
+	/**
+	 * @param int $id
+	 * @param string[] $extraMethods Extra methods that are expected might be called
+	 * @return MockObject|User
+	 */
+	private function getMockUnrestrictedNonAnonUserWithId( $id, array $extraMethods = [] ) {
+		$mock = $this->getMockNonAnonUserWithId( $id,
+			array_merge( [ 'useRCPatrol' ], $extraMethods ) );
+		$mock->method( 'useRCPatrol' )->willReturn( true );
+		return $mock;
+	}
+
+	/**
+	 * @param int $id
+	 * @return MockObject|User
+	 */
+	private function getMockNonAnonUserWithIdAndRestrictedPermissions( $id ) {
+		$mock = $this->getMockNonAnonUserWithId( $id,
+			[ 'useRCPatrol', 'useNPPatrol' ] );
+		$mock->method( 'useRCPatrol' )->willReturn( false );
+		$mock->method( 'useNPPatrol' )->willReturn( false );
 
 		return $mock;
 	}
 
 	/**
 	 * @param int $id
-	 * @return PHPUnit_Framework_MockObject_MockObject|User
+	 * @return MockObject|User
 	 */
 	private function getMockNonAnonUserWithIdAndNoPatrolRights( $id ) {
-		$mock = $this->getMockNonAnonUserWithId( $id );
-
-		$mock->expects( $this->any() )
-			->method( 'isAllowed' )
-			->will( $this->returnValue( true ) );
-		$mock->expects( $this->any() )
-			->method( 'isAllowedAny' )
-			->will( $this->returnValue( true ) );
-
+		$mock = $this->getMockNonAnonUserWithId( $id,
+			[ 'useRCPatrol', 'useNPPatrol' ] );
 		$mock->expects( $this->any() )
 			->method( 'useRCPatrol' )
 			->will( $this->returnValue( false ) );
@@ -236,16 +238,8 @@ class WatchedItemQueryServiceUnitTest extends MediaWikiTestCase {
 		return $mock;
 	}
 
-	private function getMockAnonUser() {
-		$mock = $this->getMockBuilder( User::class )->getMock();
-		$mock->expects( $this->any() )
-			->method( 'isAnon' )
-			->will( $this->returnValue( true ) );
-		return $mock;
-	}
-
 	private function getFakeRow( array $rowValues ) {
-		$fakeRow = new stdClass();
+		$fakeRow = (object)[];
 		foreach ( $rowValues as $valueName => $value ) {
 			$fakeRow->$valueName = $value;
 		}
@@ -330,12 +324,12 @@ class WatchedItemQueryServiceUnitTest extends MediaWikiTestCase {
 			$user, [ 'limit' => 2 ], $startFrom
 		);
 
-		$this->assertInternalType( 'array', $items );
+		$this->assertIsArray( $items );
 		$this->assertCount( 2, $items );
 
 		foreach ( $items as list( $watchedItem, $recentChangeInfo ) ) {
 			$this->assertInstanceOf( WatchedItem::class, $watchedItem );
-			$this->assertInternalType( 'array', $recentChangeInfo );
+			$this->assertIsArray( $recentChangeInfo );
 		}
 
 		$this->assertEquals(
@@ -490,12 +484,12 @@ class WatchedItemQueryServiceUnitTest extends MediaWikiTestCase {
 			$user, [], $startFrom
 		);
 
-		$this->assertInternalType( 'array', $items );
+		$this->assertIsArray( $items );
 		$this->assertCount( 2, $items );
 
 		foreach ( $items as list( $watchedItem, $recentChangeInfo ) ) {
 			$this->assertInstanceOf( WatchedItem::class, $watchedItem );
-			$this->assertInternalType( 'array', $recentChangeInfo );
+			$this->assertIsArray( $recentChangeInfo );
 		}
 
 		$this->assertEquals(
@@ -937,7 +931,7 @@ class WatchedItemQueryServiceUnitTest extends MediaWikiTestCase {
 
 		$items = $queryService->getWatchedItemsWithRecentChangeInfo( $user, $options, $startFrom );
 
-		$this->assertEmpty( $items );
+		$this->assertSame( [], $items );
 		$this->assertNull( $startFrom );
 	}
 
@@ -975,7 +969,7 @@ class WatchedItemQueryServiceUnitTest extends MediaWikiTestCase {
 			[ 'filters' => [ $filtersOption ] ]
 		);
 
-		$this->assertEmpty( $items );
+		$this->assertSame( [], $items );
 	}
 
 	public function mysqlIndexOptimizationProvider() {
@@ -1035,7 +1029,7 @@ class WatchedItemQueryServiceUnitTest extends MediaWikiTestCase {
 
 		$items = $queryService->getWatchedItemsWithRecentChangeInfo( $user, $options );
 
-		$this->assertEmpty( $items );
+		$this->assertSame( [], $items );
 	}
 
 	public function userPermissionRelatedExtraChecksProvider() {
@@ -1078,7 +1072,7 @@ class WatchedItemQueryServiceUnitTest extends MediaWikiTestCase {
 				[ 'actormigration' => 'table' ],
 				[
 					'actormigration_conds',
-					'(rc_deleted & ' . Revision::DELETED_USER . ') != ' . Revision::DELETED_USER,
+					'(rc_deleted & ' . RevisionRecord::DELETED_USER . ') != ' . RevisionRecord::DELETED_USER,
 					'(rc_type != ' . RC_LOG . ') OR ((rc_deleted & ' . LogPage::DELETED_ACTION . ') != ' .
 						LogPage::DELETED_ACTION . ')'
 				],
@@ -1090,8 +1084,8 @@ class WatchedItemQueryServiceUnitTest extends MediaWikiTestCase {
 				[ 'actormigration' => 'table' ],
 				[
 					'actormigration_conds',
-					'(rc_deleted & ' . ( Revision::DELETED_USER | Revision::DELETED_RESTRICTED ) . ') != ' .
-						( Revision::DELETED_USER | Revision::DELETED_RESTRICTED ),
+					'(rc_deleted & ' . ( RevisionRecord::DELETED_USER | RevisionRecord::DELETED_RESTRICTED ) . ') != ' .
+						( RevisionRecord::DELETED_USER | RevisionRecord::DELETED_RESTRICTED ),
 					'(rc_type != ' . RC_LOG . ') OR (' .
 						'(rc_deleted & ' . ( LogPage::DELETED_ACTION | LogPage::DELETED_RESTRICTED ) . ') != ' .
 						( LogPage::DELETED_ACTION | LogPage::DELETED_RESTRICTED ) . ')'
@@ -1104,8 +1098,8 @@ class WatchedItemQueryServiceUnitTest extends MediaWikiTestCase {
 				[ 'actormigration' => 'table' ],
 				[
 					'actormigration_conds',
-					'(rc_deleted & ' . ( Revision::DELETED_USER | Revision::DELETED_RESTRICTED ) . ') != ' .
-						( Revision::DELETED_USER | Revision::DELETED_RESTRICTED ),
+					'(rc_deleted & ' . ( RevisionRecord::DELETED_USER | RevisionRecord::DELETED_RESTRICTED ) . ') != ' .
+						( RevisionRecord::DELETED_USER | RevisionRecord::DELETED_RESTRICTED ),
 					'(rc_type != ' . RC_LOG . ') OR (' .
 						'(rc_deleted & ' . ( LogPage::DELETED_ACTION | LogPage::DELETED_RESTRICTED ) . ') != ' .
 						( LogPage::DELETED_ACTION | LogPage::DELETED_RESTRICTED ) . ')'
@@ -1144,12 +1138,13 @@ class WatchedItemQueryServiceUnitTest extends MediaWikiTestCase {
 			)
 			->will( $this->returnValue( [] ) );
 
-		$user = $this->getMockNonAnonUserWithIdAndRestrictedPermissions( 1, $notAllowedAction );
+		$permissionManager = $this->getMockPermissionManager( $notAllowedAction );
+		$user = $this->getMockNonAnonUserWithIdAndRestrictedPermissions( 1 );
 
-		$queryService = $this->newService( $mockDb );
+		$queryService = $this->newService( $mockDb, $permissionManager );
 		$items = $queryService->getWatchedItemsWithRecentChangeInfo( $user, $options );
 
-		$this->assertEmpty( $items );
+		$this->assertSame( [], $items );
 	}
 
 	public function testGetWatchedItemsWithRecentChangeInfo_allRevisionsOptionAndEmptyResult() {
@@ -1191,7 +1186,7 @@ class WatchedItemQueryServiceUnitTest extends MediaWikiTestCase {
 
 		$items = $queryService->getWatchedItemsWithRecentChangeInfo( $user, [ 'allRevisions' => true ] );
 
-		$this->assertEmpty( $items );
+		$this->assertSame( [], $items );
 	}
 
 	public function getWatchedItemsWithRecentChangeInfoInvalidOptionsProvider() {
@@ -1274,7 +1269,8 @@ class WatchedItemQueryServiceUnitTest extends MediaWikiTestCase {
 		$queryService = $this->newService( $mockDb );
 		$user = $this->getMockUnrestrictedNonAnonUserWithId( 1 );
 
-		$this->setExpectedException( InvalidArgumentException::class, $expectedInExceptionMessage );
+		$this->expectException( InvalidArgumentException::class );
+		$this->expectExceptionMessage( $expectedInExceptionMessage );
 		$queryService->getWatchedItemsWithRecentChangeInfo( $user, $options, $startFrom );
 	}
 
@@ -1321,7 +1317,7 @@ class WatchedItemQueryServiceUnitTest extends MediaWikiTestCase {
 			[ 'usedInGenerator' => true ]
 		);
 
-		$this->assertEmpty( $items );
+		$this->assertSame( [], $items );
 	}
 
 	public function testGetWatchedItemsWithRecentChangeInfo_usedInGeneratorAllRevisionsOptions() {
@@ -1363,7 +1359,7 @@ class WatchedItemQueryServiceUnitTest extends MediaWikiTestCase {
 			[ 'usedInGenerator' => true, 'allRevisions' => true, ]
 		);
 
-		$this->assertEmpty( $items );
+		$this->assertSame( [], $items );
 	}
 
 	public function testGetWatchedItemsWithRecentChangeInfo_watchlistOwnerOptionAndEmptyResult() {
@@ -1385,7 +1381,7 @@ class WatchedItemQueryServiceUnitTest extends MediaWikiTestCase {
 
 		$queryService = $this->newService( $mockDb );
 		$user = $this->getMockUnrestrictedNonAnonUserWithId( 1 );
-		$otherUser = $this->getMockUnrestrictedNonAnonUserWithId( 2 );
+		$otherUser = $this->getMockUnrestrictedNonAnonUserWithId( 2, [ 'getOption' ] );
 		$otherUser->expects( $this->once() )
 			->method( 'getOption' )
 			->with( 'watchlisttoken' )
@@ -1396,7 +1392,7 @@ class WatchedItemQueryServiceUnitTest extends MediaWikiTestCase {
 			[ 'watchlistOwner' => $otherUser, 'watchlistOwnerToken' => '0123456789abcdef' ]
 		);
 
-		$this->assertEmpty( $items );
+		$this->assertSame( [], $items );
 	}
 
 	public function invalidWatchlistTokenProvider() {
@@ -1416,13 +1412,14 @@ class WatchedItemQueryServiceUnitTest extends MediaWikiTestCase {
 
 		$queryService = $this->newService( $mockDb );
 		$user = $this->getMockUnrestrictedNonAnonUserWithId( 1 );
-		$otherUser = $this->getMockUnrestrictedNonAnonUserWithId( 2 );
+		$otherUser = $this->getMockUnrestrictedNonAnonUserWithId( 2, [ 'getOption' ] );
 		$otherUser->expects( $this->once() )
 			->method( 'getOption' )
 			->with( 'watchlisttoken' )
 			->willReturn( '0123456789abcdef' );
 
-		$this->setExpectedException( ApiUsageException::class, 'Incorrect watchlist token provided' );
+		$this->expectException( ApiUsageException::class );
+		$this->expectExceptionMessage( 'Incorrect watchlist token provided' );
 		$queryService->getWatchedItemsWithRecentChangeInfo(
 			$user,
 			[ 'watchlistOwner' => $otherUser, 'watchlistOwnerToken' => $token ]
@@ -1456,7 +1453,7 @@ class WatchedItemQueryServiceUnitTest extends MediaWikiTestCase {
 
 		$items = $queryService->getWatchedItemsForUser( $user );
 
-		$this->assertInternalType( 'array', $items );
+		$this->assertIsArray( $items );
 		$this->assertCount( 2, $items );
 		$this->assertContainsOnlyInstancesOf( WatchedItem::class, $items );
 		$this->assertEquals(
@@ -1554,7 +1551,7 @@ class WatchedItemQueryServiceUnitTest extends MediaWikiTestCase {
 		$queryService = $this->newService( $mockDb );
 
 		$items = $queryService->getWatchedItemsForUser( $user, $options );
-		$this->assertEmpty( $items );
+		$this->assertSame( [], $items );
 	}
 
 	public function provideGetWatchedItemsForUser_fromUntilStartFromOptions() {
@@ -1667,7 +1664,7 @@ class WatchedItemQueryServiceUnitTest extends MediaWikiTestCase {
 		$queryService = $this->newService( $mockDb );
 
 		$items = $queryService->getWatchedItemsForUser( $user, $options );
-		$this->assertEmpty( $items );
+		$this->assertSame( [], $items );
 	}
 
 	public function getWatchedItemsForUserInvalidOptionsProvider() {
@@ -1704,7 +1701,8 @@ class WatchedItemQueryServiceUnitTest extends MediaWikiTestCase {
 	) {
 		$queryService = $this->newService( $this->getMockDb() );
 
-		$this->setExpectedException( InvalidArgumentException::class, $expectedInExceptionMessage );
+		$this->expectException( InvalidArgumentException::class );
+		$this->expectExceptionMessage( $expectedInExceptionMessage );
 		$queryService->getWatchedItemsForUser( $this->getMockNonAnonUserWithId( 1 ), $options );
 	}
 
@@ -1716,8 +1714,9 @@ class WatchedItemQueryServiceUnitTest extends MediaWikiTestCase {
 
 		$queryService = $this->newService( $mockDb );
 
-		$items = $queryService->getWatchedItemsForUser( $this->getMockAnonUser() );
-		$this->assertEmpty( $items );
+		$items = $queryService->getWatchedItemsForUser(
+			new UserIdentityValue( 0, 'AnonUser', 0 ) );
+		$this->assertSame( [], $items );
 	}
 
 }

@@ -5,15 +5,6 @@ use MediaWiki\MediaWikiServices;
 /**
  * @covers Preprocessor
  *
- * @covers Preprocessor_DOM
- * @covers PPDStack
- * @covers PPDStackElement
- * @covers PPDPart
- * @covers PPFrame_DOM
- * @covers PPTemplateFrame_DOM
- * @covers PPCustomFrame_DOM
- * @covers PPNode_DOM
- *
  * @covers Preprocessor_Hash
  * @covers PPDStack_Hash
  * @covers PPDStackElement_Hash
@@ -26,7 +17,7 @@ use MediaWiki\MediaWikiServices;
  * @covers PPNode_Hash_Array
  * @covers PPNode_Hash_Attr
  */
-class PreprocessorTest extends MediaWikiTestCase {
+class PreprocessorTest extends MediaWikiIntegrationTestCase {
 	protected $mTitle = 'Page title';
 	protected $mPPNodeCount = 0;
 	/**
@@ -39,11 +30,10 @@ class PreprocessorTest extends MediaWikiTestCase {
 	protected $mPreprocessors;
 
 	protected static $classNames = [
-		Preprocessor_DOM::class,
 		Preprocessor_Hash::class
 	];
 
-	protected function setUp() {
+	protected function setUp() : void {
 		parent::setUp();
 		$this->mOptions = ParserOptions::newFromUserAndLang( new User,
 			MediaWikiServices::getInstance()->getContentLanguage() );
@@ -54,7 +44,7 @@ class PreprocessorTest extends MediaWikiTestCase {
 		}
 	}
 
-	function getStripList() {
+	public function getStripList() {
 		return [ 'gallery', 'display map' /* Used by Maps, see r80025 CR */, '/foo' ];
 	}
 

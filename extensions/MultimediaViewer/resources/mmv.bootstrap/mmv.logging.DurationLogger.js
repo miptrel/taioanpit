@@ -26,8 +26,8 @@
 	 * @constructor
 	 */
 	function DurationLogger() {
-		this.starts = {};
-		this.stops = {};
+		this.starts = Object.create( null );
+		this.stops = Object.create( null );
 	}
 
 	OO.inheritClass( DurationLogger, mw.mmv.logging.Logger );
@@ -51,7 +51,6 @@
 	 */
 	L.schema = 'MultimediaViewerDuration';
 
-	// eslint-disable-next-line valid-jsdoc
 	/**
 	 * Saves the start of a duration
 	 *
@@ -72,7 +71,7 @@
 
 		for ( i = 0; i < typeOrTypes.length; i++ ) {
 			// Don't overwrite an existing value
-			if ( !this.starts.hasOwnProperty( typeOrTypes[ i ] ) ) {
+			if ( !( typeOrTypes[ i ] in this.starts ) ) {
 				this.starts[ typeOrTypes[ i ] ] = start;
 			}
 		}
@@ -80,7 +79,6 @@
 		return this;
 	};
 
-	// eslint-disable-next-line valid-jsdoc
 	/**
 	 * Saves the stop of a duration
 	 *
@@ -96,19 +94,18 @@
 		}
 
 		// Don't overwrite an existing value
-		if ( !this.stops.hasOwnProperty( type ) ) {
+		if ( !( type in this.stops ) ) {
 			this.stops[ type ] = stop;
 		}
 
 		// Don't overwrite an existing value
-		if ( start !== undefined && !this.starts.hasOwnProperty( type ) ) {
+		if ( start !== undefined && !( type in this.starts ) ) {
 			this.starts[ type ] = start;
 		}
 
 		return this;
 	};
 
-	// eslint-disable-next-line valid-jsdoc
 	/**
 	 * Records the duration log event
 	 *
@@ -123,11 +120,11 @@
 			throw new Error( 'Must specify type' );
 		}
 
-		if ( !this.starts.hasOwnProperty( type ) || this.starts[ type ] === undefined ) {
+		if ( !( type in this.starts ) || this.starts[ type ] === undefined ) {
 			return;
 		}
 
-		if ( !this.stops.hasOwnProperty( type ) || this.stops[ type ] === undefined ) {
+		if ( !( type in this.stops ) || this.stops[ type ] === undefined ) {
 			return;
 		}
 
@@ -141,6 +138,7 @@
 		};
 
 		if ( extraData ) {
+			// eslint-disable-next-line no-jquery/no-each-util
 			$.each( extraData, function ( key, value ) {
 				e[ key ] = value;
 			} );

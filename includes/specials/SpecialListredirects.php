@@ -24,15 +24,15 @@
  * @author Rob Church <robchur@gmail.com>
  */
 
-use Wikimedia\Rdbms\IResultWrapper;
 use Wikimedia\Rdbms\IDatabase;
+use Wikimedia\Rdbms\IResultWrapper;
 
 /**
  * Special:Listredirects - Lists all the redirects on the wiki.
  * @ingroup SpecialPage
  */
-class ListredirectsPage extends QueryPage {
-	function __construct( $name = 'Listredirects' ) {
+class SpecialListRedirects extends QueryPage {
+	public function __construct( $name = 'Listredirects' ) {
 		parent::__construct( $name );
 	}
 
@@ -40,11 +40,11 @@ class ListredirectsPage extends QueryPage {
 		return true;
 	}
 
-	function isSyndicated() {
+	public function isSyndicated() {
 		return false;
 	}
 
-	function sortDescending() {
+	protected function sortDescending() {
 		return false;
 	}
 
@@ -53,7 +53,6 @@ class ListredirectsPage extends QueryPage {
 			'tables' => [ 'p1' => 'page', 'redirect', 'p2' => 'page' ],
 			'fields' => [ 'namespace' => 'p1.page_namespace',
 				'title' => 'p1.page_title',
-				'value' => 'p1.page_title',
 				'rd_namespace',
 				'rd_title',
 				'rd_fragment',
@@ -68,7 +67,7 @@ class ListredirectsPage extends QueryPage {
 		];
 	}
 
-	function getOrderFields() {
+	protected function getOrderFields() {
 		return [ 'p1.page_namespace', 'p1.page_title' ];
 	}
 
@@ -78,7 +77,7 @@ class ListredirectsPage extends QueryPage {
 	 * @param IDatabase $db
 	 * @param IResultWrapper $res
 	 */
-	function preprocessResults( $db, $res ) {
+	public function preprocessResults( $db, $res ) {
 		if ( !$res->numRows() ) {
 			return;
 		}
@@ -120,7 +119,7 @@ class ListredirectsPage extends QueryPage {
 	 * @param object $result Result row
 	 * @return string
 	 */
-	function formatResult( $skin, $result ) {
+	public function formatResult( $skin, $result ) {
 		$linkRenderer = $this->getLinkRenderer();
 		# Make a link to the redirect itself
 		$rd_title = Title::makeTitle( $result->namespace, $result->title );
@@ -143,6 +142,11 @@ class ListredirectsPage extends QueryPage {
 		} else {
 			return "<del>$rd_link</del>";
 		}
+	}
+
+	public function execute( $par ) {
+		$this->addHelpLink( 'Help:Redirects' );
+		parent::execute( $par );
 	}
 
 	protected function getGroupName() {

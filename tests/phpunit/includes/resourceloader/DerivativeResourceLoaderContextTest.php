@@ -16,7 +16,10 @@ class DerivativeResourceLoaderContextTest extends PHPUnit\Framework\TestCase {
 				'skin' => 'fallback',
 				'target' => 'test',
 		] );
-		return new ResourceLoaderContext( new ResourceLoader(), $request );
+		return new ResourceLoaderContext(
+			new ResourceLoader( ResourceLoaderTestCase::getMinimalConfig() ),
+			$request
+		);
 	}
 
 	public function testChangeModules() {
@@ -30,6 +33,7 @@ class DerivativeResourceLoaderContextTest extends PHPUnit\Framework\TestCase {
 	public function testChangeLanguageAndDirection() {
 		$derived = new DerivativeResourceLoaderContext( self::makeContext() );
 		$this->assertSame( $derived->getLanguage(), 'qqx', 'inherit from parent' );
+		$this->assertSame( $derived->getDirection(), 'ltr', 'inherit from parent' );
 
 		$derived->setLanguage( 'nl' );
 		$this->assertSame( $derived->getLanguage(), 'nl' );
@@ -60,6 +64,21 @@ class DerivativeResourceLoaderContextTest extends PHPUnit\Framework\TestCase {
 
 		$derived->setUser( 'MyUser' );
 		$this->assertSame( $derived->getUser(), 'MyUser' );
+	}
+
+	public function testChangeUserObj() {
+		$user = $this->createMock( User::class );
+		$parent = $this->createMock( ResourceLoaderContext::class );
+		$parent
+			->expects( $this->once() )
+			->method( 'getUserObj' )
+			->willReturn( $user );
+
+		$derived = new DerivativeResourceLoaderContext( $parent );
+		$this->assertSame( $derived->getUserObj(), $user, 'inherit from parent' );
+
+		$derived->setUser( null );
+		$this->assertNotSame( $derived->getUserObj(), $user, 'different' );
 	}
 
 	public function testChangeDebug() {

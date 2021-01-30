@@ -1,5 +1,7 @@
 <?php
 
+use PHPUnit\Framework\MockObject\MockObject;
+
 /**
  * @group API
  * @group Database
@@ -9,7 +11,7 @@
  */
 class ApiOptionsTest extends MediaWikiLangTestCase {
 
-	/** @var PHPUnit_Framework_MockObject_MockObject */
+	/** @var MockObject */
 	private $mUserMock;
 	/** @var ApiOptions */
 	private $mTested;
@@ -19,7 +21,7 @@ class ApiOptionsTest extends MediaWikiLangTestCase {
 
 	private static $Success = [ 'options' => 'success' ];
 
-	protected function setUp() {
+	protected function setUp() : void {
 		parent::setUp();
 
 		$this->mUserMock = $this->getMockBuilder( User::class )
@@ -29,8 +31,6 @@ class ApiOptionsTest extends MediaWikiLangTestCase {
 		// Set up groups and rights
 		$this->mUserMock->expects( $this->any() )
 			->method( 'getEffectiveGroups' )->will( $this->returnValue( [ '*', 'user' ] ) );
-		$this->mUserMock->expects( $this->any() )
-			->method( 'isAllowedAny' )->will( $this->returnValue( true ) );
 
 		// Set up callback for User::getOptionKinds
 		$this->mUserMock->expects( $this->any() )
@@ -44,11 +44,22 @@ class ApiOptionsTest extends MediaWikiLangTestCase {
 		$this->mUserMock->method( 'getOptions' )
 			->willReturn( [] );
 
+		// DefaultPreferencesFactory calls a ton of user methods, but we still want to list all of
+		// them in case bugs are caused by unexpected things returning null that shouldn't.
+		$this->mUserMock->expects( $this->never() )->method( $this->anythingBut(
+			'getEffectiveGroups', 'getOptionKinds', 'getInstanceForUpdate', 'getOptions', 'getId',
+			'isAnon', 'getRequest', 'isLoggedIn', 'getName', 'getGroupMemberships', 'getEditCount',
+			'getRegistration', 'isAllowed', 'getRealName', 'getOption', 'getStubThreshold',
+			'getBoolOption', 'getEmail', 'getDatePreference', 'useRCPatrol', 'useNPPatrol',
+			'setOption', 'saveSettings', 'resetOptions', 'isRegistered'
+		) );
+
 		// Create a new context
 		$this->mContext = new DerivativeContext( new RequestContext() );
 		$this->mContext->getContext()->setTitle( Title::newFromText( 'Test' ) );
 		$this->mContext->setUser( $this->mUserMock );
 
+		$this->overrideUserPermissions( $this->mUserMock, [ 'editmyoptions' ] );
 		$main = new ApiMain( $this->mContext );
 
 		// Empty session
@@ -65,7 +76,7 @@ class ApiOptionsTest extends MediaWikiLangTestCase {
 			'testradio' => 'option1',
 		] );
 		// Workaround for static caching in User::getDefaultOptions()
-		$this->setContentLang( Language::factory( 'qqq' ) );
+		$this->setContentLang( 'qqq' );
 	}
 
 	public function hookGetPreferences( $user, &$preferences ) {
@@ -154,17 +165,17 @@ class ApiOptionsTest extends MediaWikiLangTestCase {
 
 	private function executeQuery( $request ) {
 		$this->mContext->setRequest( new FauxRequest( $request, true, $this->mSession ) );
+		$this->mUserMock->method( 'getRequest' )->willReturn( $this->mContext->getRequest() );
+
 		$this->mTested->execute();
 
 		return $this->mTested->getResult()->getResultData( null, [ 'Strip' => 'all' ] );
 	}
 
-	/**
-	 * @expectedException ApiUsageException
-	 */
 	public function testNoToken() {
 		$request = $this->getSampleRequest( [ 'token' => null ] );
 
+		$this->expectException( ApiUsageException::class );
 		$this->executeQuery( $request );
 	}
 

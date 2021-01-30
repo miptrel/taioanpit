@@ -45,6 +45,7 @@ class SpecialListGroupRights extends SpecialPage {
 
 		$out = $this->getOutput();
 		$out->addModuleStyles( 'mediawiki.special' );
+		$this->addHelpLink( 'Help:User_rights_and_groups' );
 
 		$out->wrapWikiMsg( "<div class=\"mw-listgrouprights-key\">\n$1\n</div>", 'listgrouprights-key' );
 
@@ -84,7 +85,8 @@ class SpecialListGroupRights extends SpecialPage {
 			$groupnameLocalized = UserGroupMembership::getGroupName( $groupname );
 
 			$grouppageLocalizedTitle = UserGroupMembership::getGroupPage( $groupname )
-				?: Title::newFromText( MWNamespace::getCanonicalName( NS_PROJECT ) . ':' . $groupname );
+				?: Title::newFromText( MediaWikiServices::getInstance()->getNamespaceInfo()->
+				getCanonicalName( NS_PROJECT ) . ':' . $groupname );
 
 			if ( $group == '*' || !$grouppageLocalizedTitle ) {
 				// Do not make a link for the generic * group or group with invalid group page
@@ -162,7 +164,8 @@ class SpecialListGroupRights extends SpecialPage {
 		);
 		$linkRenderer = $this->getLinkRenderer();
 		ksort( $namespaceProtection );
-		$validNamespaces = MWNamespace::getValidNamespaces();
+		$validNamespaces =
+			MediaWikiServices::getInstance()->getNamespaceInfo()->getValidNamespaces();
 		$contLang = MediaWikiServices::getInstance()->getContentLanguage();
 		foreach ( $namespaceProtection as $namespace => $rights ) {
 			if ( !in_array( $namespace, $validNamespaces ) ) {
@@ -261,6 +264,7 @@ class SpecialListGroupRights extends SpecialPage {
 		];
 
 		foreach ( $changeGroups as $messageKey => $changeGroup ) {
+			// @phan-suppress-next-line PhanTypeComparisonFromArray
 			if ( $changeGroup === true ) {
 				// For grep: listgrouprights-addgroup-all, listgrouprights-removegroup-all,
 				// listgrouprights-addgroup-self-all, listgrouprights-removegroup-self-all
@@ -280,6 +284,7 @@ class SpecialListGroupRights extends SpecialPage {
 			}
 		}
 
+		// @phan-suppress-next-line PhanImpossibleCondition
 		if ( empty( $r ) ) {
 			return '';
 		} else {

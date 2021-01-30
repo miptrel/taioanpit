@@ -66,9 +66,10 @@ class SpecialBotPasswords extends FormSpecialPage {
 	 * Main execution point
 	 * @param string|null $par
 	 */
-	function execute( $par ) {
+	public function execute( $par ) {
 		$this->getOutput()->disallowUserJs();
 		$this->requireLogin();
+		$this->addHelpLink( 'Manual:Bot_passwords' );
 
 		$par = trim( $par );
 		if ( strlen( $par ) === 0 ) {
@@ -315,9 +316,16 @@ class SpecialBotPasswords extends FormSpecialPage {
 			'restrictions' => $data['restrictions'],
 			'grants' => array_merge(
 				MWGrants::getHiddenGrants(),
+				// @phan-suppress-next-next-line PhanTypeMismatchArgumentInternal See phan issue #3163,
+				// it's probably failing to infer the type of $data['grants']
 				preg_replace( '/^grant-/', '', $data['grants'] )
 			)
 		] );
+
+		if ( $bp === null ) {
+			// Messages: botpasswords-insert-failed, botpasswords-update-failed
+			return Status::newFatal( "botpasswords-{$this->operation}-failed", $this->par );
+		}
 
 		if ( $this->operation === 'insert' || !empty( $data['resetPassword'] ) ) {
 			$this->password = BotPassword::generatePassword( $this->getConfig() );
@@ -327,24 +335,25 @@ class SpecialBotPasswords extends FormSpecialPage {
 			$password = null;
 		}
 
-		if ( $bp->save( $this->operation, $password ) ) {
-			$this->logger->info(
-				"Bot password {op} for {user}@{app_id}",
-				[
-					'op' => $this->operation,
-					'user' => $this->getUser()->getName(),
-					'app_id' => $this->par,
-					'centralId' => $this->userId,
-					'restrictions' => $data['restrictions'],
-					'grants' => $bp->getGrants(),
-					'client_ip' => $this->getRequest()->getIP()
-				]
-			);
-			return Status::newGood();
-		} else {
-			// Messages: botpasswords-insert-failed, botpasswords-update-failed
-			return Status::newFatal( "botpasswords-{$this->operation}-failed", $this->par );
-		}
+		$res = $bp->save( $this->operation, $password );
+
+		$success = $res->isGood();
+
+		$this->logger->info(
+			'Bot password {op} for {user}@{app_id} ' . ( $success ? 'succeeded' : 'failed' ),
+			[
+				'op' => $this->operation,
+				'user' => $this->getUser()->getName(),
+				'app_id' => $this->par,
+				'centralId' => $this->userId,
+				'restrictions' => $data['restrictions'],
+				'grants' => $bp->getGrants(),
+				'client_ip' => $this->getRequest()->getIP(),
+				'success' => $success,
+			]
+		);
+
+		return $res;
 	}
 
 	public function onSuccess() {

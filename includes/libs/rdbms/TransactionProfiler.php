@@ -1,6 +1,5 @@
 <?php
 /**
- * Transaction profiling for contention
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,22 +17,23 @@
  * http://www.gnu.org/copyleft/gpl.html
  *
  * @file
- * @ingroup Profiler
  */
 
 namespace Wikimedia\Rdbms;
 
-use Psr\Log\LoggerInterface;
 use Psr\Log\LoggerAwareInterface;
+use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 use RuntimeException;
 
 /**
- * Helper class that detects high-contention DB queries via profiling calls
+ * Detect high-contention DB queries via profiling calls.
  *
- * This class is meant to work with an IDatabase object, which manages queries
+ * This class is meant to work with an IDatabase object, which manages queries.
  *
  * @since 1.24
+ * @ingroup Profiler
+ * @ingroup Database
  */
 class TransactionProfiler implements LoggerAwareInterface {
 	/** @var float Seconds */
@@ -45,7 +45,10 @@ class TransactionProfiler implements LoggerAwareInterface {
 
 	/** @var array transaction ID => (write start time, list of DBs involved) */
 	protected $dbTrxHoldingLocks = [];
-	/** @var array transaction ID => list of (query name, start time, end time) */
+	/**
+	 * @var array[][] transaction ID => list of (query name, start time, end time)
+	 * @phan-var array<string,array<int,array{0:string,1:int,2:int}>>
+	 */
 	protected $dbTrxMethodTimes = [];
 
 	/** @var array */
@@ -218,7 +221,7 @@ class TransactionProfiler implements LoggerAwareInterface {
 	 *
 	 * This assumes that all queries are synchronous (non-overlapping)
 	 *
-	 * @param string $query Function name or generalized SQL
+	 * @param string|GeneralizedSql $query Function name or generalized SQL
 	 * @param float $sTime Starting UNIX wall time
 	 * @param bool $isWrite Whether this is a write query
 	 * @param int $n Number of affected/read rows
@@ -229,11 +232,11 @@ class TransactionProfiler implements LoggerAwareInterface {
 
 		if ( $isWrite && $n > $this->expect['maxAffected'] ) {
 			$this->logger->warning(
-				"Query affected $n row(s):\n" . $query . "\n" .
+				"Query affected $n row(s):\n" . self::queryString( $query ) . "\n" .
 				( new RuntimeException() )->getTraceAsString() );
 		} elseif ( !$isWrite && $n > $this->expect['readQueryRows'] ) {
 			$this->logger->warning(
-				"Query returned $n row(s):\n" . $query . "\n" .
+				"Query returned $n row(s):\n" . self::queryString( $query ) . "\n" .
 				( new RuntimeException() )->getTraceAsString() );
 		}
 
@@ -341,7 +344,8 @@ class TransactionProfiler implements LoggerAwareInterface {
 			$trace = '';
 			foreach ( $this->dbTrxMethodTimes[$name] as $i => $info ) {
 				list( $query, $sTime, $end ) = $info;
-				$trace .= sprintf( "%d\t%.6f\t%s\n", $i, ( $end - $sTime ), $query );
+				$trace .= sprintf(
+					"%d\t%.6f\t%s\n", $i, ( $end - $sTime ), self::queryString( $query ) );
 			}
 			$this->logger->warning( "Sub-optimal transaction on DB(s) [{dbs}]: \n{trace}", [
 				'dbs' => implode( ', ', array_keys( $this->dbTrxHoldingLocks[$name]['conns'] ) ),
@@ -354,7 +358,7 @@ class TransactionProfiler implements LoggerAwareInterface {
 
 	/**
 	 * @param string $expect
-	 * @param string $query
+	 * @param string|GeneralizedSql $query
 	 * @param string|float|int $actual
 	 */
 	protected function reportExpectationViolated( $expect, $query, $actual ) {
@@ -370,8 +374,16 @@ class TransactionProfiler implements LoggerAwareInterface {
 				'max' => $this->expect[$expect],
 				'by' => $this->expectBy[$expect],
 				'actual' => $actual,
-				'query' => $query
+				'query' => self::queryString( $query )
 			]
 		);
+	}
+
+	/**
+	 * @param GeneralizedSql|string $query
+	 * @return string
+	 */
+	private static function queryString( $query ) {
+		return $query instanceof GeneralizedSql ? $query->stringify() : $query;
 	}
 }

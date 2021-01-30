@@ -21,11 +21,12 @@
 
 use MediaWiki\MediaWikiServices;
 use MediaWiki\Revision\SlotRecord;
+use MediaWiki\Storage\BlobStore;
 use MediaWiki\Storage\NameTableStore;
 use MediaWiki\Storage\SqlBlobStore;
 use Wikimedia\Assert\Assert;
 use Wikimedia\Rdbms\IDatabase;
-use Wikimedia\Rdbms\ResultWrapper;
+use Wikimedia\Rdbms\IResultWrapper;
 
 require_once __DIR__ . '/Maintenance.php';
 
@@ -40,6 +41,12 @@ class PopulateContentTables extends Maintenance {
 
 	/** @var NameTableStore */
 	private $contentModelStore;
+
+	/** @var NameTableStore */
+	private $slotRoleStore;
+
+	/** @var BlobStore */
+	private $blobStore;
 
 	/** @var int */
 	private $mainRoleId;
@@ -67,22 +74,18 @@ class PopulateContentTables extends Maintenance {
 	private function initServices() {
 		$this->dbw = $this->getDB( DB_MASTER );
 		$this->contentModelStore = MediaWikiServices::getInstance()->getContentModelStore();
-		$this->mainRoleId = MediaWikiServices::getInstance()->getSlotRoleStore()
-			->acquireId( SlotRecord::MAIN );
+		$this->slotRoleStore = MediaWikiServices::getInstance()->getSlotRoleStore();
+		$this->blobStore = MediaWikiServices::getInstance()->getBlobStore();
+
+		// Don't trust the cache for the NameTableStores, in case something went
+		// wrong during a previous run (see T224949#5325895).
+		$this->contentModelStore->reloadMap();
+		$this->slotRoleStore->reloadMap();
+		$this->mainRoleId = $this->slotRoleStore->acquireId( SlotRecord::MAIN );
 	}
 
 	public function execute() {
-		global $wgMultiContentRevisionSchemaMigrationStage;
-
 		$t0 = microtime( true );
-
-		if ( ( $wgMultiContentRevisionSchemaMigrationStage & SCHEMA_COMPAT_WRITE_NEW ) === 0 ) {
-			$this->writeln(
-				'...cannot update while \$wgMultiContentRevisionSchemaMigrationStage '
-				. 'does not have the SCHEMA_COMPAT_WRITE_NEW bit set.'
-			);
-			return false;
-		}
 
 		$this->initServices();
 
@@ -239,12 +242,12 @@ class PopulateContentTables extends Maintenance {
 	}
 
 	/**
-	 * @param ResultWrapper $rows
+	 * @param IResultWrapper $rows
 	 * @param int $startId
 	 * @param string $table
 	 * @return int|null
 	 */
-	private function populateContentTablesForRowBatch( ResultWrapper $rows, $startId, $table ) {
+	private function populateContentTablesForRowBatch( IResultWrapper $rows, $startId, $table ) {
 		$this->beginTransaction( $this->dbw, __METHOD__ );
 
 		if ( $this->contentRowMap === null ) {
@@ -262,13 +265,16 @@ class PopulateContentTables extends Maintenance {
 
 				Assert::invariant( $revisionId !== null, 'rev_id must not be null' );
 
-				$modelId = $this->contentModelStore->acquireId( $this->getContentModel( $row ) );
+				$model = $this->getContentModel( $row );
+				$modelId = $this->contentModelStore->acquireId( $model );
 				$address = SqlBlobStore::makeAddressFromTextId( $row->text_id );
 
 				$key = "{$modelId}:{$address}";
 				$contentKeys[$revisionId] = $key;
 
 				if ( !isset( $map[$key] ) ) {
+					$this->fillMissingFields( $row, $model, $address );
+
 					$map[$key] = false;
 					$contentRows[] = [
 						'content_size' => (int)$row->len,
@@ -345,7 +351,38 @@ class PopulateContentTables extends Maintenance {
 	private function writeln( $msg ) {
 		$this->output( "$msg\n" );
 	}
+
+	/**
+	 * Compute any missing fields in $row.
+	 * The way the missing values are computed must correspond to the way this is done in SlotRecord.
+	 *
+	 * @param object $row to be modified
+	 * @param string $model
+	 * @param string $address
+	 */
+	private function fillMissingFields( $row, $model, $address ) {
+		if ( !isset( $row->content_model ) ) {
+			// just for completeness
+			$row->content_model = $model;
+		}
+
+		if ( isset( $row->len ) && isset( $row->sha1 ) && $row->sha1 !== '' ) {
+			// No need to load the content, quite now.
+			return;
+		}
+
+		$blob = $this->blobStore->getBlob( $address );
+
+		if ( !isset( $row->len ) ) {
+			// NOTE: The nominal size of the content may not be the length of the raw blob.
+			$row->len = ContentHandler::makeContent( $blob, null, $model )->getSize();
+		}
+
+		if ( !isset( $row->sha1 ) || $row->sha1 === '' ) {
+			$row->sha1 = SlotRecord::base36Sha1( $blob );
+		}
+	}
 }
 
-$maintClass = 'PopulateContentTables';
+$maintClass = PopulateContentTables::class;
 require_once RUN_MAINTENANCE_IF_MAIN;

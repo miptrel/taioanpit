@@ -1,9 +1,6 @@
 <?php
 
-/**
- * @coversNothing
- */
-class AutoLoaderStructureTest extends MediaWikiTestCase {
+class AutoLoaderStructureTest extends MediaWikiIntegrationTestCase {
 	/**
 	 * Assert that there were no classes loaded that are not registered with the AutoLoader.
 	 *
@@ -17,61 +14,6 @@ class AutoLoaderStructureTest extends MediaWikiTestCase {
 			$results['expected'],
 			$results['actual']
 		);
-	}
-
-	public function providePSR4Completeness() {
-		foreach ( AutoLoader::$psr4Namespaces as $prefix => $dir ) {
-			foreach ( $this->recurseFiles( $dir ) as $file ) {
-				yield [ $prefix, $dir, $file ];
-			}
-		}
-	}
-
-	private function recurseFiles( $dir ) {
-		return ( new File_Iterator_Facade() )->getFilesAsArray( $dir, [ '.php' ] );
-	}
-
-	/**
-	 * @dataProvider providePSR4Completeness
-	 */
-	public function testPSR4Completeness( $prefix, $dir, $file ) {
-		global $wgAutoloadLocalClasses, $wgAutoloadClasses;
-		$contents = file_get_contents( $file );
-		list( $classesInFile, $aliasesInFile ) = self::parseFile( $contents );
-		$classes = array_keys( $classesInFile );
-		if ( $classes ) {
-			$this->assertCount(
-				1,
-				$classes,
-				"Only one class per file in PSR-4 autoloaded classes ($file)"
-			);
-
-			// Check that the expected class name (based on the filename) is the
-			// same as the one we found.
-			// Strip directory prefix from front of filename, and .php extension
-			$abbrFileName = substr( substr( $file, strlen( $dir ) ), 0, -4 );
-			$expectedClassName = $prefix . str_replace( '/', '\\', $abbrFileName );
-
-			$this->assertSame(
-				$expectedClassName,
-				$classes[0],
-				"Class not autoloaded properly"
-			);
-
-		} else {
-			// Dummy assertion so this test isn't marked in risky
-			// if the file has no classes nor aliases in it
-			$this->assertCount( 0, $classes );
-		}
-
-		if ( $aliasesInFile ) {
-			$otherClasses = $wgAutoloadLocalClasses + $wgAutoloadClasses;
-			foreach ( $aliasesInFile as $alias => $class ) {
-				$this->assertArrayHasKey( $alias, $otherClasses,
-					'Alias must be in the classmap autoloader'
-				);
-			}
-		}
 	}
 
 	private static function parseFile( $contents ) {
@@ -114,14 +56,19 @@ class AutoLoaderStructureTest extends MediaWikiTestCase {
 				$classesInFile[$class] = true;
 			} elseif ( !empty( $match['original'] ) ) {
 				// 'class_alias( "Foo", "Bar" );'
-				$aliasesInFile[$match['alias']] = $match['original'];
+				$aliasesInFile[self::removeSlashes( $match['alias'] )] = $match['original'];
 			} else {
 				// 'class_alias( Foo::class, "Bar" );'
-				$aliasesInFile[$match['aliasString']] = $fileNamespace . $match['originalStatic'];
+				$aliasesInFile[self::removeSlashes( $match['aliasString'] )] =
+					$fileNamespace . $match['originalStatic'];
 			}
 		}
 
 		return [ $classesInFile, $aliasesInFile ];
+	}
+
+	private static function removeSlashes( $str ) {
+		return str_replace( '\\\\', '\\', $str );
 	}
 
 	protected static function checkAutoLoadConf() {
@@ -199,7 +146,7 @@ class AutoLoaderStructureTest extends MediaWikiTestCase {
 	}
 
 	public function testAutoloadOrder() {
-		$path = realpath( __DIR__ . '/../../..' );
+		$path = __DIR__ . '/../../..';
 		$oldAutoload = file_get_contents( $path . '/autoload.php' );
 		$generator = new AutoloadGenerator( $path, 'local' );
 		$generator->setPsr4Namespaces( AutoLoader::getAutoloadNamespaces() );

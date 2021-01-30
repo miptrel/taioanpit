@@ -21,8 +21,9 @@
  * @author Daniel Kinzler
  */
 use MediaWiki\Interwiki\InterwikiLookup;
-use MediaWiki\MediaWikiServices;
 use MediaWiki\Linker\LinkTarget;
+use MediaWiki\MediaWikiServices;
+use Wikimedia\IPUtils;
 
 /**
  * A codec for MediaWiki page titles.
@@ -57,19 +58,35 @@ class MediaWikiTitleCodec implements TitleFormatter, TitleParser {
 	protected $interwikiLookup;
 
 	/**
-	 * @param Language $language The language object to use for localizing namespace names.
+	 * @var NamespaceInfo
+	 */
+	protected $nsInfo;
+
+	/**
+	 * @param Language $language The language object to use for localizing namespace names,
+	 *   capitalization, etc.
 	 * @param GenderCache $genderCache The gender cache for generating gendered namespace names
 	 * @param string[]|string $localInterwikis
 	 * @param InterwikiLookup|null $interwikiLookup
+	 * @param NamespaceInfo|null $nsInfo
 	 */
 	public function __construct( Language $language, GenderCache $genderCache,
-		$localInterwikis = [], $interwikiLookup = null
+		$localInterwikis = [], InterwikiLookup $interwikiLookup = null,
+		NamespaceInfo $nsInfo = null
 	) {
+		if ( !$interwikiLookup ) {
+			wfDeprecated( __METHOD__ . ' with no InterwikiLookup argument', '1.34' );
+			$interwikiLookup = MediaWikiServices::getInstance()->getInterwikiLookup();
+		}
+		if ( !$nsInfo ) {
+			wfDeprecated( __METHOD__ . ' with no NamespaceInfo argument', '1.34' );
+			$nsInfo = MediaWikiServices::getInstance()->getNamespaceInfo();
+		}
 		$this->language = $language;
 		$this->genderCache = $genderCache;
 		$this->localInterwikis = (array)$localInterwikis;
-		$this->interwikiLookup = $interwikiLookup ?:
-			MediaWikiServices::getInstance()->getInterwikiLookup();
+		$this->interwikiLookup = $interwikiLookup;
+		$this->nsInfo = $nsInfo;
 	}
 
 	/**
@@ -83,7 +100,7 @@ class MediaWikiTitleCodec implements TitleFormatter, TitleParser {
 	 */
 	public function getNamespaceName( $namespace, $text ) {
 		if ( $this->language->needsGenderDistinction() &&
-			MWNamespace::hasGenderDistinction( $namespace )
+			$this->nsInfo->hasGenderDistinction( $namespace )
 		) {
 			// NOTE: we are assuming here that the title text is a user name!
 			$gender = $this->genderCache->getGenderOf( $text, __METHOD__ );
@@ -139,8 +156,7 @@ class MediaWikiTitleCodec implements TitleFormatter, TitleParser {
 	}
 
 	/**
-	 * Parses the given text and constructs a TitleValue. Normalization
-	 * is applied according to the rules appropriate for the form specified by $form.
+	 * Parses the given text and constructs a TitleValue.
 	 *
 	 * @param string $text The text to parse
 	 * @param int $defaultNamespace Namespace to assume per default (usually NS_MAIN)
@@ -149,15 +165,13 @@ class MediaWikiTitleCodec implements TitleFormatter, TitleParser {
 	 * @return TitleValue
 	 */
 	public function parseTitle( $text, $defaultNamespace = NS_MAIN ) {
-		// NOTE: this is an ugly cludge that allows this class to share the
+		// Convert things like &eacute; &#257; or &#x3017; into normalized (T16952) text
+		$filteredText = Sanitizer::decodeCharReferencesAndNormalize( $text );
+
+		// NOTE: this is an ugly kludge that allows this class to share the
 		// code for parsing with the old Title class. The parser code should
 		// be refactored to avoid this.
-		$parts = $this->splitTitleString( $text, $defaultNamespace );
-
-		// Relative fragment links are not supported by TitleValue
-		if ( $parts['dbkey'] === '' ) {
-			throw new MalformedTitleException( 'title-invalid-empty', $text );
-		}
+		$parts = $this->splitTitleString( $filteredText, $defaultNamespace );
 
 		return new TitleValue(
 			$parts['namespace'],
@@ -165,6 +179,40 @@ class MediaWikiTitleCodec implements TitleFormatter, TitleParser {
 			$parts['fragment'],
 			$parts['interwiki']
 		);
+	}
+
+	/**
+	 * Given a namespace and title, return a TitleValue if valid, or null if invalid.
+	 *
+	 * @param int $namespace
+	 * @param string $text
+	 * @param string $fragment
+	 * @param string $interwiki
+	 *
+	 * @return TitleValue|null
+	 */
+	public function makeTitleValueSafe( $namespace, $text, $fragment = '', $interwiki = '' ) {
+		if ( !$this->nsInfo->exists( $namespace ) ) {
+			return null;
+		}
+
+		$canonicalNs = $this->nsInfo->getCanonicalName( $namespace );
+		$fullText = $canonicalNs == '' ? $text : "$canonicalNs:$text";
+		if ( strval( $interwiki ) != '' ) {
+			$fullText = "$interwiki:$fullText";
+		}
+		if ( strval( $fragment ) != '' ) {
+			$fullText .= '#' . $fragment;
+		}
+
+		try {
+			$parts = $this->splitTitleString( $fullText );
+		} catch ( MalformedTitleException $e ) {
+			return null;
+		}
+
+		return new TitleValue(
+			$parts['namespace'], $parts['dbkey'], $parts['fragment'], $parts['interwiki'] );
 	}
 
 	/**
@@ -184,6 +232,7 @@ class MediaWikiTitleCodec implements TitleFormatter, TitleParser {
 	 * @param LinkTarget $title
 	 *
 	 * @return string
+	 * @suppress PhanUndeclaredProperty
 	 */
 	public function getPrefixedText( LinkTarget $title ) {
 		if ( !isset( $title->prefixedText ) ) {
@@ -230,7 +279,8 @@ class MediaWikiTitleCodec implements TitleFormatter, TitleParser {
 	}
 
 	/**
-	 * Normalizes and splits a title string.
+	 * Validates, normalizes and splits a title string.
+	 * This is the "source of truth" for title validity.
 	 *
 	 * This function removes illegal characters, splits off the interwiki and
 	 * namespace prefixes, sets the other forms, and canonicalizes
@@ -245,9 +295,9 @@ class MediaWikiTitleCodec implements TitleFormatter, TitleParser {
 	 * @param string $text
 	 * @param int $defaultNamespace
 	 *
+	 * @internal
 	 * @throws MalformedTitleException If $text is not a valid title string.
-	 * @return array A map with the fields 'interwiki', 'fragment', 'namespace',
-	 *         'user_case_dbkey', and 'dbkey'.
+	 * @return array A map with the fields 'interwiki', 'fragment', 'namespace', and 'dbkey'.
 	 */
 	public function splitTitleString( $text, $defaultNamespace = NS_MAIN ) {
 		$dbkey = str_replace( ' ', '_', $text );
@@ -259,13 +309,12 @@ class MediaWikiTitleCodec implements TitleFormatter, TitleParser {
 			'fragment' => '',
 			'namespace' => $defaultNamespace,
 			'dbkey' => $dbkey,
-			'user_case_dbkey' => $dbkey,
 		];
 
 		# Strip Unicode bidi override characters.
 		# Sometimes they slip into cut-n-pasted page titles, where the
 		# override chars get included in list displays.
-		$dbkey = preg_replace( '/\xE2\x80[\x8E\x8F\xAA-\xAE]/S', '', $dbkey );
+		$dbkey = preg_replace( '/[\x{200E}\x{200F}\x{202A}-\x{202E}]+/u', '', $dbkey );
 
 		# Clean up whitespace
 		# Note: use of the /u option on preg_replace here will cause
@@ -336,7 +385,6 @@ class MediaWikiTitleCodec implements TitleFormatter, TitleParser {
 									'fragment' => $mainPage->getFragment(),
 									'namespace' => $mainPage->getNamespace(),
 									'dbkey' => $mainPage->getDBkey(),
-									'user_case_dbkey' => $mainPage->getUserCaseDBKey()
 								];
 							}
 							$parts['interwiki'] = '';
@@ -414,9 +462,8 @@ class MediaWikiTitleCodec implements TitleFormatter, TitleParser {
 		# Normally, all wiki links are forced to have an initial capital letter so [[foo]]
 		# and [[Foo]] point to the same place.  Don't force it for interwikis, since the
 		# other site might be case-sensitive.
-		$parts['user_case_dbkey'] = $dbkey;
-		if ( $parts['interwiki'] === '' ) {
-			$dbkey = Title::capitalize( $dbkey, $parts['namespace'] );
+		if ( $parts['interwiki'] === '' && $this->nsInfo->isCapitalized( $parts['namespace'] ) ) {
+			$dbkey = $this->language->ucfirst( $dbkey );
 		}
 
 		# Can't make a link to a namespace alone... "empty" local links can only be
@@ -432,7 +479,7 @@ class MediaWikiTitleCodec implements TitleFormatter, TitleParser {
 		// them all is silly and having some show the edits and others not is
 		// inconsistent. Same for talk/userpages. Keep them normalized instead.
 		if ( $parts['namespace'] == NS_USER || $parts['namespace'] == NS_USER_TALK ) {
-			$dbkey = IP::sanitizeIP( $dbkey );
+			$dbkey = IPUtils::sanitizeIP( $dbkey );
 		}
 
 		// Any remaining initial :s are illegal.
@@ -440,8 +487,21 @@ class MediaWikiTitleCodec implements TitleFormatter, TitleParser {
 			throw new MalformedTitleException( 'title-invalid-leading-colon', $text );
 		}
 
-		# Fill fields
+		// Fill fields
 		$parts['dbkey'] = $dbkey;
+
+		// Sanity check to ensure that the return value can be used to construct a TitleValue.
+		// All issues should in theory be caught above, this is here to enforce consistency.
+		try {
+			TitleValue::assertValidSpec(
+				$parts['namespace'],
+				$parts['dbkey'],
+				$parts['fragment'],
+				$parts['interwiki']
+			);
+		} catch ( InvalidArgumentException $ex ) {
+			throw new MalformedTitleException( 'title-invalid', $text, [ $ex->getMessage() ] );
+		}
 
 		return $parts;
 	}

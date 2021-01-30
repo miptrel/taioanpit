@@ -21,6 +21,7 @@
  * @ingroup SpecialPage
  */
 
+use MediaWiki\MediaWikiServices;
 use Wikimedia\Timestamp\TimestampException;
 
 /**
@@ -34,8 +35,6 @@ class SpecialLog extends SpecialPage {
 	}
 
 	public function execute( $par ) {
-		global $wgActorTableSchemaMigrationStage;
-
 		$this->setHeaders();
 		$this->outputHeader();
 		$out = $this->getOutput();
@@ -95,7 +94,9 @@ class SpecialLog extends SpecialPage {
 		if ( !LogPage::isLogType( $type ) ) {
 			$opts->setValue( 'type', '' );
 		} elseif ( isset( $logRestrictions[$type] )
-			&& !$this->getUser()->isAllowed( $logRestrictions[$type] )
+			&& !MediaWikiServices::getInstance()
+				->getPermissionManager()
+				->userHasRight( $this->getUser(), $logRestrictions[$type] )
 		) {
 			throw new PermissionsError( $logRestrictions[$type] );
 		}
@@ -106,20 +107,12 @@ class SpecialLog extends SpecialPage {
 			$offenderName = $opts->getValue( 'offender' );
 			$offender = empty( $offenderName ) ? null : User::newFromName( $offenderName, false );
 			if ( $offender ) {
-				if ( $wgActorTableSchemaMigrationStage & SCHEMA_COMPAT_READ_NEW ) {
-					$qc = [ 'ls_field' => 'target_author_actor', 'ls_value' => $offender->getActorId() ];
-				} elseif ( $offender->getId() > 0 ) {
-					$qc = [ 'ls_field' => 'target_author_id', 'ls_value' => $offender->getId() ];
-				} else {
-					$qc = [ 'ls_field' => 'target_author_ip', 'ls_value' => $offender->getName() ];
-				}
+				$qc = [ 'ls_field' => 'target_author_actor', 'ls_value' => (string)$offender->getActorId() ];
 			}
 		} else {
 			// Allow extensions to add relations to their search types
-			Hooks::run(
-				'SpecialLogAddLogSearchRelations',
-				[ $opts->getValue( 'type' ), $this->getRequest(), &$qc ]
-			);
+			$this->getHookRunner()->onSpecialLogAddLogSearchRelations(
+				$opts->getValue( 'type' ), $this->getRequest(), $qc );
 		}
 
 		# Some log types are only for a 'User:' title but we might have been given
@@ -158,7 +151,7 @@ class SpecialLog extends SpecialPage {
 			'rights',
 		];
 
-		Hooks::run( 'GetLogTypesOnUser', [ &$types ] );
+		Hooks::runner()->onGetLogTypesOnUser( $types );
 		return $types;
 	}
 
@@ -185,7 +178,7 @@ class SpecialLog extends SpecialPage {
 	 */
 	private function parseParams( FormOptions $opts, $par ) {
 		# Get parameters
-		$par = $par !== null ? $par : '';
+		$par = $par ?? '';
 		$parms = explode( '/', $par );
 		$symsForAll = [ '*', 'all' ];
 		if ( $parms[0] != '' &&
@@ -264,7 +257,9 @@ class SpecialLog extends SpecialPage {
 
 	private function getActionButtons( $formcontents ) {
 		$user = $this->getUser();
-		$canRevDelete = $user->isAllowedAll( 'deletedhistory', 'deletelogentry' );
+		$canRevDelete = MediaWikiServices::getInstance()
+			->getPermissionManager()
+			->userHasAllRights( $user, 'deletedhistory', 'deletelogentry' );
 		$showTagEditUI = ChangeTags::showTagEditingUI( $user );
 		# If the user doesn't have the ability to delete log entries nor edit tags,
 		# don't bother showing them the button(s).
@@ -280,6 +275,18 @@ class SpecialLog extends SpecialPage {
 		$s .= Html::hidden( 'action', 'historysubmit' ) . "\n";
 		$s .= Html::hidden( 'type', 'logging' ) . "\n";
 
+		// If no title is set, the fallback is to use the main page, as defined
+		// by MediaWiki:Mainpage
+		// On wikis where the main page can be translated, MediaWiki:Mainpage
+		// is sometimes set to use Special:MyLanguage to redirect to the
+		// appropriate version. This is interpreted as a special page, and
+		// Action::getActionName forces the action to be 'view' if the title
+		// cannot be used as a WikiPage, which includes all pages in NS_SPECIAL.
+		// Set a dummy title to avoid this. The title provided is unused
+		// by the SpecialPageAction class and does not matter.
+		// See T205908
+		$s .= Html::hidden( 'title', 'Unused' ) . "\n";
+
 		$buttons = '';
 		if ( $canRevDelete ) {
 			$buttons .= Html::element(
@@ -288,7 +295,7 @@ class SpecialLog extends SpecialPage {
 					'type' => 'submit',
 					'name' => 'revisiondelete',
 					'value' => '1',
-					'class' => "deleterevision-log-submit mw-log-deleterevision-button"
+					'class' => "deleterevision-log-submit mw-log-deleterevision-button mw-ui-button"
 				],
 				$this->msg( 'showhideselectedlogentries' )->text()
 			) . "\n";
@@ -300,7 +307,7 @@ class SpecialLog extends SpecialPage {
 					'type' => 'submit',
 					'name' => 'editchangetags',
 					'value' => '1',
-					'class' => "editchangetags-log-submit mw-log-editchangetags-button"
+					'class' => "editchangetags-log-submit mw-log-editchangetags-button mw-ui-button"
 				],
 				$this->msg( 'log-edit-tags' )->text()
 			) . "\n";

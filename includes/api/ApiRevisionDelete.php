@@ -38,10 +38,6 @@ class ApiRevisionDelete extends ApiBase {
 		$user = $this->getUser();
 		$this->checkUserRightsAny( RevisionDeleter::getRestriction( $params['type'] ) );
 
-		if ( $user->isBlocked() ) {
-			$this->dieBlocked( $user->getBlock() );
-		}
-
 		if ( !$params['ids'] ) {
 			$this->dieWithError( [ 'apierror-paramempty', 'ids' ], 'paramempty_ids' );
 		}
@@ -95,6 +91,10 @@ class ApiRevisionDelete extends ApiBase {
 			$this->dieWithError( [ 'apierror-revdel-needtarget' ], 'needtarget' );
 		}
 
+		if ( $this->getPermissionManager()->isBlockedFrom( $user, $targetObj ) ) {
+			$this->dieBlocked( $user->getBlock() );
+		}
+
 		$list = RevisionDeleter::createList(
 			$params['type'], $this->getContext(), $targetObj, $params['ids']
 		);
@@ -125,7 +125,7 @@ class ApiRevisionDelete extends ApiBase {
 		$result->addValue( null, $this->getModuleName(), $data );
 	}
 
-	private function extractStatusInfo( $status ) {
+	private function extractStatusInfo( Status $status ) {
 		$ret = [
 			'status' => $status->isOK() ? 'Success' : 'Fail',
 		];

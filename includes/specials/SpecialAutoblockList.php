@@ -21,6 +21,8 @@
  * @ingroup SpecialPage
  */
 
+use MediaWiki\MediaWikiServices;
+
 /**
  * A special page that lists autoblocks
  *
@@ -29,7 +31,7 @@
  */
 class SpecialAutoblockList extends SpecialPage {
 
-	function __construct() {
+	public function __construct() {
 		parent::__construct( 'AutoblockList' );
 	}
 
@@ -81,7 +83,10 @@ class SpecialAutoblockList extends SpecialPage {
 			'ipb_parent_block_id IS NOT NULL'
 		];
 		# Is the user allowed to see hidden blocks?
-		if ( !$this->getUser()->isAllowed( 'hideuser' ) ) {
+		if ( !MediaWikiServices::getInstance()
+			->getPermissionManager()
+			->userHasRight( $this->getUser(), 'hideuser' )
+		) {
 			$conds['ipb_deleted'] = 0;
 		}
 
@@ -111,7 +116,7 @@ class SpecialAutoblockList extends SpecialPage {
 
 		# Check for other blocks, i.e. global/tor blocks
 		$otherAutoblockLink = [];
-		Hooks::run( 'OtherAutoblockLogLink', [ &$otherAutoblockLink ] );
+		$this->getHookRunner()->onOtherAutoblockLogLink( $otherAutoblockLink );
 
 		# Show additional header for the local block only when other blocks exists.
 		# Not necessary in a standard installation without such extensions enabled

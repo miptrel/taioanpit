@@ -30,6 +30,7 @@
  * Base interface for content objects.
  *
  * @ingroup Content
+ * @unstable for implementation, extensions should extend AbstractContent instead.
  */
 interface Content {
 
@@ -269,7 +270,8 @@ interface Content {
 	 *       may call ParserOutput::recordOption() on the output object.
 	 *
 	 * @param Title $title The page title to use as a context for rendering.
-	 * @param int|null $revId Optional revision ID being rendered.
+	 * @param int|null $revId ID of the revision being rendered.
+	 *  See Parser::parse() for the ramifications. (default: null)
 	 * @param ParserOptions|null $options Any parser options.
 	 * @param bool $generateHtml Whether to generate HTML (default: true). If false,
 	 *        the result of calling getText() on the ParserOutput object returned by
@@ -406,7 +408,7 @@ interface Content {
 	 * @param Content $with New content of the section
 	 * @param string $sectionTitle New section's subject, only if $section is 'new'
 	 *
-	 * @return string|null Complete article text, or null if error
+	 * @return Content|null New content of the entire page, or null if error
 	 */
 	public function replaceSection( $sectionId, Content $with, $sectionTitle = '' );
 
@@ -523,6 +525,7 @@ interface Content {
 	 * that conversion is not supported.
 	 */
 	public function convert( $toModel, $lossy = '' );
+
 	// @todo ImagePage and CategoryPage interfere with per-content action handlers
 	// @todo nice&sane integration of GeSHi syntax highlighting
 	//   [11:59] <vvv> Hooks are ugly; make CodeHighlighter interface and a

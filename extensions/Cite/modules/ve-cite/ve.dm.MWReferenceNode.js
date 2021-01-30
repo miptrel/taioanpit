@@ -48,10 +48,11 @@ ve.dm.MWReferenceNode.static.allowedRdfaTypes = [ 'dc:references' ];
 
 ve.dm.MWReferenceNode.static.isContent = true;
 
-ve.dm.MWReferenceNode.static.blacklistedAnnotationTypes = [ 'link' ];
+ve.dm.MWReferenceNode.static.disallowedAnnotationTypes = [ 'link' ];
 
 /**
  * Regular expression for parsing the listKey attribute
+ *
  * @static
  * @property {RegExp}
  * @inheritable
@@ -313,7 +314,8 @@ ve.dm.MWReferenceNode.static.getGroup = function ( dataElement ) {
  */
 ve.dm.MWReferenceNode.static.getIndexLabel = function ( dataElement, internalList ) {
 	var refGroup = dataElement.attributes.refGroup,
-		index = ve.dm.MWReferenceNode.static.getIndex( dataElement, internalList );
+		index = dataElement.attributes.placeholder ? '…' :
+			ve.dm.MWReferenceNode.static.getIndex( dataElement, internalList );
 
 	return '[' + ( refGroup ? refGroup + ' ' : '' ) + index + ']';
 };

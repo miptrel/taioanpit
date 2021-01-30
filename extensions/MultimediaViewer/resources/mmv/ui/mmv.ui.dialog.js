@@ -71,6 +71,7 @@
 
 	/**
 	 * Creates the DOM element that setWarning()/clearWarning() will operate on.
+	 *
 	 * @private
 	 */
 	DP.initWarning = function () {
@@ -98,9 +99,7 @@
 			dialog.dependenciesLoaded = true;
 			dialog.toggleDialog( e );
 		}, function ( error ) {
-			if ( window.console && window.console.error ) {
-				window.console.error( 'mw.loader.using error when trying to load dialog dependencies', error );
-			}
+			mw.log.error( 'mw.loader.using error when trying to load dialog dependencies', error );
 		} );
 
 		return false;
@@ -197,6 +196,7 @@
 
 	/**
 	 * Displays a warning ribbon.
+	 *
 	 * @param {string} content Content of the warning (can be HTML,
 	 *   setWarning does no escaping).
 	 */

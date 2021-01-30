@@ -74,9 +74,9 @@
 						associatedTitleObj = titleObj.isTalkPage() ? titleObj.getSubjectPage() : titleObj.getTalkPage(),
 						associatedTitle = associatedTitleObj.getPrefixedText();
 					$( '.mw-changeslist-line' ).each( function () {
-						var $this = $( this ), $row, $unwatchLink;
+						var $line = $( this ), $row, $link;
 
-						$this.find( '[data-target-page]' ).each( function () {
+						$line.find( '[data-target-page]' ).each( function () {
 							var $this = $( this ), rowTitle = $this.data( 'targetPage' );
 							if ( rowTitle === title || rowTitle === associatedTitle ) {
 
@@ -87,9 +87,9 @@
 								$row =
 									$this.closest(
 										'li, table.mw-collapsible.mw-changeslist-log td[data-target-page], table' );
-								$unwatchLink = $row.find( '.mw-unwatch-link, .mw-watch-link' );
+								$link = $row.find( '.mw-unwatch-link, .mw-watch-link' );
 
-								callback( rowTitle, $row, $unwatchLink );
+								callback( rowTitle, $row, $link );
 							}
 						} );
 					} );
@@ -100,6 +100,7 @@
 
 				// Depending on whether we are watching or unwatching, for each entry of the page (and its associated page i.e. Talk),
 				// change the text, tooltip, and non-JS href of the (un)watch button, and update the styling of the watchlist entry.
+				// eslint-disable-next-line no-jquery/no-class-state
 				if ( $unwatchLink.hasClass( 'mw-unwatch-link' ) ) {
 					api.unwatch( pageTitle )
 						.done( function () {

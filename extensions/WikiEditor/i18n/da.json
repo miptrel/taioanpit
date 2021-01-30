@@ -5,13 +5,13 @@
 			"F. Cosoleto",
 			"Froztbyte",
 			"Hylle",
+			"Kranix",
+			"Macofe",
 			"Peter Alberti",
+			"Saederup92",
 			"Sarrus",
 			"Sir48",
-			"Macofe",
-			"Saederup92",
-			"Weblars",
-			"Kranix"
+			"Weblars"
 		]
 	},
 	"wikieditor": "Avanceret interface til redigering af wikitekst",
@@ -134,6 +134,7 @@
 	"wikieditor-toolbar-tool-replace-success": "{{PLURAL:$1|En udskiftning|$1 udskiftninger}} foretaget.",
 	"wikieditor-toolbar-tool-replace-emptysearch": "Du skrev ikke noget at søge efter",
 	"wikieditor-toolbar-tool-replace-invalidregex": "Det regulære udtryk du skrev er ugyldigt: $1",
+	"wikieditor-toolbar-tool-replace-word": "Match hele ord",
 	"wikieditor-toolbar-section-characters": "Specialtegn",
 	"wikieditor-toolbar-section-help": "Hjælp",
 	"wikieditor-toolbar-help-heading-description": "Beskrivelse",

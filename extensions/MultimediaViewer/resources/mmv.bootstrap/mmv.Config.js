@@ -20,6 +20,7 @@
 
 	/**
 	 * Contains/retrieves configuration/environment information for MediaViewer.
+	 *
 	 * @class mw.mmv.Config
 	 * @constructor
 	 * @param {Object} viewerConfig
@@ -31,30 +32,35 @@
 	function Config( viewerConfig, mwConfig, mwUser, api, localStorage ) {
 		/**
 		 * A plain object storing MediaViewer-specific settings
+		 *
 		 * @type {Object}
 		 */
 		this.viewerConfig = viewerConfig;
 
 		/**
 		 * The mw.config object, for dependency injection
+		 *
 		 * @type {mw.Map}
 		 */
 		this.mwConfig = mwConfig;
 
 		/**
 		 * mw.user object, for dependency injection
+		 *
 		 * @type {Object}
 		 */
 		this.mwUser = mwUser;
 
 		/**
-		 * API object, for dependency injction
+		 * API object, for dependency injection
+		 *
 		 * @type {mw.Api}
 		 */
 		this.api = api;
 
 		/**
 		 * The localStorage object, for dependency injection
+		 *
 		 * @type {mw.SafeStorage}
 		 */
 		this.localStorage = localStorage;
@@ -213,7 +219,7 @@
 	};
 
 	/**
-	 * Called when status info is displayed. Future shouldShowStatusInfo() calls will retrurn false.
+	 * Called when status info is displayed. Future shouldShowStatusInfo() calls will return false.
 	 */
 	CP.disableStatusInfo = function () {
 		this.setInLocalStorage( 'mmv-showStatusInfo', '0' );

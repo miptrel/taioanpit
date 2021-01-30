@@ -35,6 +35,8 @@
  * e.g. immobile_namespace for namespaces which can't be moved
  */
 
+use MediaWiki\MediaWikiServices;
+
 require_once __DIR__ . '/Maintenance.php';
 
 /**
@@ -61,7 +63,7 @@ class MoveBatch extends Maintenance {
 		chdir( $oldCwd );
 
 		# Options processing
-		$user = $this->getOption( 'u', false );
+		$username = $this->getOption( 'u', false );
 		$reason = $this->getOption( 'r', '' );
 		$interval = $this->getOption( 'i', 0 );
 		$noredirects = $this->hasOption( 'noredirects' );
@@ -75,14 +77,15 @@ class MoveBatch extends Maintenance {
 		if ( !$file ) {
 			$this->fatalError( "Unable to read file, exiting" );
 		}
-		if ( $user === false ) {
-			$wgUser = User::newSystemUser( 'Move page script', [ 'steal' => true ] );
+		if ( $username === false ) {
+			$user = User::newSystemUser( 'Move page script', [ 'steal' => true ] );
 		} else {
-			$wgUser = User::newFromName( $user );
+			$user = User::newFromName( $username );
 		}
-		if ( !$wgUser ) {
+		if ( !$user ) {
 			$this->fatalError( "Invalid username" );
 		}
+		$wgUser = $user;
 
 		# Setup complete, now start
 		$dbw = $this->getDB( DB_MASTER );
@@ -98,17 +101,18 @@ class MoveBatch extends Maintenance {
 			}
 			$source = Title::newFromText( $parts[0] );
 			$dest = Title::newFromText( $parts[1] );
-			if ( is_null( $source ) || is_null( $dest ) ) {
+			if ( $source === null || $dest === null ) {
 				$this->error( "Invalid title on line $linenum" );
 				continue;
 			}
 
 			$this->output( $source->getPrefixedText() . ' --> ' . $dest->getPrefixedText() );
 			$this->beginTransaction( $dbw, __METHOD__ );
-			$mp = new MovePage( $source, $dest );
-			$status = $mp->move( $wgUser, $reason, !$noredirects );
+			$mp = MediaWikiServices::getInstance()->getMovePageFactory()
+				->newMovePage( $source, $dest );
+			$status = $mp->move( $user, $reason, !$noredirects );
 			if ( !$status->isOK() ) {
-				$this->output( "\nFAILED: " . $status->getWikiText( false, false, 'en' ) );
+				$this->output( "\nFAILED: " . $status->getMessage( false, false, 'en' )->text() );
 			}
 			$this->commitTransaction( $dbw, __METHOD__ );
 			$this->output( "\n" );

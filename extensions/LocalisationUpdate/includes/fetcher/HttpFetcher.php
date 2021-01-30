@@ -5,7 +5,7 @@
  * @license GPL-2.0-or-later
  */
 
-namespace LocalisationUpdate;
+namespace LocalisationUpdate\Fetcher;
 
 /**
  * Fetches files over HTTP(s).
@@ -17,7 +17,8 @@ class HttpFetcher implements Fetcher {
 	 * @return bool|string
 	 */
 	public function fetchFile( $url ) {
-		return \Http::get( $url );
+		global $wgLocalisationUpdateHttpRequestOptions;
+		return \Http::get( $url, $wgLocalisationUpdateHttpRequestOptions, __METHOD__ );
 	}
 
 	/**
@@ -32,11 +33,6 @@ class HttpFetcher implements Fetcher {
 		$languages = \Language::fetchLanguageNames( null, 'mwfile' );
 
 		foreach ( array_keys( $languages ) as $code ) {
-			// Hack for core
-			if ( strpos( $pattern, 'Messages*.php' ) !== false ) {
-				$code = ucfirst( strtr( $code, '-', '_' ) );
-			}
-
 			$url = str_replace( '*', $code, $pattern );
 			$file = $this->fetchFile( $url );
 			if ( $file ) {

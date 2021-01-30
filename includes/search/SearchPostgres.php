@@ -25,6 +25,7 @@
  */
 use MediaWiki\MediaWikiServices;
 use MediaWiki\Revision\SlotRecord;
+use Wikimedia\Rdbms\IDatabase;
 
 /**
  * Search engine hook base class for Postgres
@@ -42,7 +43,8 @@ class SearchPostgres extends SearchDatabase {
 	protected function doSearchTitleInDB( $term ) {
 		$q = $this->searchQuery( $term, 'titlevector', 'page_title' );
 		$olderror = error_reporting( E_ERROR );
-		$resultSet = $this->db->query( $q, 'SearchPostgres', true );
+		$dbr = $this->lb->getConnectionRef( DB_REPLICA );
+		$resultSet = $dbr->query( $q, 'SearchPostgres', IDatabase::QUERY_SILENCE_ERRORS );
 		error_reporting( $olderror );
 		return new SqlSearchResultSet( $resultSet, $this->searchTerms );
 	}
@@ -50,7 +52,8 @@ class SearchPostgres extends SearchDatabase {
 	protected function doSearchTextInDB( $term ) {
 		$q = $this->searchQuery( $term, 'textvector', 'old_text' );
 		$olderror = error_reporting( E_ERROR );
-		$resultSet = $this->db->query( $q, 'SearchPostgres', true );
+		$dbr = $this->lb->getConnectionRef( DB_REPLICA );
+		$resultSet = $dbr->query( $q, 'SearchPostgres', IDatabase::QUERY_SILENCE_ERRORS );
 		error_reporting( $olderror );
 		return new SqlSearchResultSet( $resultSet, $this->searchTerms );
 	}
@@ -64,7 +67,7 @@ class SearchPostgres extends SearchDatabase {
 	 * @return string
 	 */
 	private function parseQuery( $term ) {
-		wfDebug( "parseQuery received: $term \n" );
+		wfDebug( "parseQuery received: $term" );
 
 		# # No backslashes allowed
 		$term = preg_replace( '/\\\/', '', $term );
@@ -111,9 +114,10 @@ class SearchPostgres extends SearchDatabase {
 		$searchstring = preg_replace( '/^[\'"](.*)[\'"]$/', "$1", $searchstring );
 
 		# # Quote the whole thing
-		$searchstring = $this->db->addQuotes( $searchstring );
+		$dbr = $this->lb->getConnectionRef( DB_REPLICA );
+		$searchstring = $dbr->addQuotes( $searchstring );
 
-		wfDebug( "parseQuery returned: $searchstring \n" );
+		wfDebug( "parseQuery returned: $searchstring" );
 
 		return $searchstring;
 	}
@@ -131,7 +135,8 @@ class SearchPostgres extends SearchDatabase {
 
 		# # We need a separate query here so gin does not complain about empty searches
 		$sql = "SELECT to_tsquery($searchstring)";
-		$res = $this->db->query( $sql );
+		$dbr = $this->lb->getConnectionRef( DB_REPLICA );
+		$res = $dbr->query( $sql, __METHOD__ );
 		if ( !$res ) {
 			# # TODO: Better output (example to catch: one 'two)
 			die( "Sorry, that was not a valid search string. Please go back and try again" );
@@ -168,27 +173,27 @@ class SearchPostgres extends SearchDatabase {
 				"AND $fulltext @@ to_tsquery($searchstring)";
 		}
 		# # Namespaces - defaults to 0
-		if ( !is_null( $this->namespaces ) ) { // null -> search all
+		if ( $this->namespaces !== null ) { // null -> search all
 			if ( count( $this->namespaces ) < 1 ) {
 				$query .= ' AND page_namespace = 0';
 			} else {
-				$namespaces = $this->db->makeList( $this->namespaces );
+				$namespaces = $dbr->makeList( $this->namespaces );
 				$query .= " AND page_namespace IN ($namespaces)";
 			}
 		}
 
 		$query .= " ORDER BY score DESC, page_id DESC";
 
-		$query .= $this->db->limitResult( '', $this->limit, $this->offset );
+		$query .= $dbr->limitResult( '', $this->limit, $this->offset );
 
-		wfDebug( "searchQuery returned: $query \n" );
+		wfDebug( "searchQuery returned: $query" );
 
 		return $query;
 	}
 
 	# # Most of the work of these two functions are done automatically via triggers
 
-	function update( $pageid, $title, $text ) {
+	public function update( $pageid, $title, $text ) {
 		# # We don't want to index older revisions
 		$slotRoleStore = MediaWikiServices::getInstance()->getSlotRoleStore();
 		$sql = "UPDATE pagecontent SET textvector = NULL " .
@@ -201,12 +206,14 @@ class SearchPostgres extends SearchDatabase {
 			" AND s.slot_role_id = " . $slotRoleStore->getId( SlotRecord::MAIN ) . " " .
 			" AND c.content_id = s.slot_content_id " .
 			" ORDER BY old_rev_text_id DESC OFFSET 1)";
-		$this->db->query( $sql );
+
+		$dbw = $this->lb->getConnectionRef( DB_MASTER );
+		$dbw->query( $sql, __METHOD__ );
+
 		return true;
 	}
 
-	function updateTitle( $id, $title ) {
+	public function updateTitle( $id, $title ) {
 		return true;
 	}
-
 }

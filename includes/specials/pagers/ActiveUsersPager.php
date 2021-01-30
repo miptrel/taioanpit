@@ -19,6 +19,8 @@
  * @ingroup Pager
  */
 
+use MediaWiki\MediaWikiServices;
+
 /**
  * This class is used to get a list of active users. The ones with specials
  * rights (sysop, bureaucrat, developer) will have them displayed
@@ -43,11 +45,17 @@ class ActiveUsersPager extends UsersPager {
 	 */
 	private $blockStatusByUid;
 
+	/** @var int */
+	private $RCMaxAge;
+
+	/** @var string[] */
+	private $excludegroups;
+
 	/**
 	 * @param IContextSource|null $context
 	 * @param FormOptions $opts
 	 */
-	public function __construct( IContextSource $context = null, FormOptions $opts ) {
+	public function __construct( ?IContextSource $context, FormOptions $opts ) {
 		parent::__construct( $context );
 
 		$this->RCMaxAge = $this->getConfig()->get( 'ActiveUserDays' );
@@ -56,7 +64,7 @@ class ActiveUsersPager extends UsersPager {
 		$un = $opts->getValue( 'username' );
 		if ( $un != '' ) {
 			$username = Title::makeTitleSafe( NS_USER, $un );
-			if ( !is_null( $username ) ) {
+			if ( $username !== null ) {
 				$this->requestedUser = $username->getText();
 			}
 		}
@@ -72,26 +80,23 @@ class ActiveUsersPager extends UsersPager {
 		}
 	}
 
-	function getIndexField() {
+	public function getIndexField() {
 		return 'qcc_title';
 	}
 
-	function getQueryInfo( $data = null ) {
+	public function getQueryInfo( $data = null ) {
 		$dbr = $this->getDatabase();
-
-		$useActor = (bool)(
-			$this->getConfig()->get( 'ActorTableSchemaMigrationStage' ) & SCHEMA_COMPAT_READ_NEW
-		);
 
 		$activeUserSeconds = $this->getConfig()->get( 'ActiveUserDays' ) * 86400;
 		$timestamp = $dbr->timestamp( wfTimestamp( TS_UNIX ) - $activeUserSeconds );
 		$fname = __METHOD__ . ' (' . $this->getSqlComment() . ')';
 
 		// Inner subselect to pull the active users out of querycachetwo
-		$tables = [ 'querycachetwo', 'user' ];
-		$fields = [ 'qcc_title', 'user_id' ];
+		$tables = [ 'querycachetwo', 'user', 'actor' ];
+		$fields = [ 'qcc_title', 'user_id', 'actor_id' ];
 		$jconds = [
 			'user' => [ 'JOIN', 'user_name = qcc_title' ],
+			'actor' => [ 'JOIN', 'actor_user = user_id' ],
 		];
 		$conds = [
 			'qcc_type' => 'activeusers',
@@ -121,25 +126,20 @@ class ActiveUsersPager extends UsersPager {
 			] ];
 			$conds['ug2.ug_user'] = null;
 		}
-		if ( !$this->getUser()->isAllowed( 'hideuser' ) ) {
+		if ( !MediaWikiServices::getInstance()
+				  ->getPermissionManager()
+				  ->userHasRight( $this->getUser(), 'hideuser' )
+		) {
 			$conds[] = 'NOT EXISTS (' . $dbr->selectSQLText(
-					'ipblocks', '1', [ 'ipb_user=user_id', 'ipb_deleted' => 1 ]
+					'ipblocks', '1', [ 'ipb_user=user_id', 'ipb_deleted' => 1 ], __METHOD__
 				) . ')';
-		}
-		if ( $useActor ) {
-			$tables[] = 'actor';
-			$jconds['actor'] = [
-				'JOIN',
-				'actor_user = user_id',
-			];
-			$fields[] = 'actor_id';
 		}
 		$subquery = $dbr->buildSelectSubquery( $tables, $fields, $conds, $fname, $options, $jconds );
 
 		// Outer query to select the recent edit counts for the selected active users
 		$tables = [ 'qcc_users' => $subquery, 'recentchanges' ];
 		$jconds = [ 'recentchanges' => [ 'LEFT JOIN', [
-			$useActor ? 'rc_actor = actor_id' : 'rc_user_text = qcc_title',
+			'rc_actor = actor_id',
 			'rc_type != ' . $dbr->addQuotes( RC_EXTERNAL ), // Don't count wikidata.
 			'rc_type != ' . $dbr->addQuotes( RC_CATEGORIZE ), // Don't count categorization changes.
 			'rc_log_type IS NULL OR rc_log_type != ' . $dbr->addQuotes( 'newusers' ),
@@ -155,7 +155,7 @@ class ActiveUsersPager extends UsersPager {
 				'user_id' => 'user_id',
 				'recentedits' => 'COUNT(rc_id)'
 			],
-			'options' => [ 'GROUP BY' => [ 'qcc_title' ] ],
+			'options' => [ 'GROUP BY' => [ 'qcc_title', 'user_id' ] ],
 			'conds' => $conds,
 			'join_conds' => $jconds,
 		];
@@ -221,11 +221,22 @@ class ActiveUsersPager extends UsersPager {
 		$this->mResult->seek( 0 );
 	}
 
-	function formatRow( $row ) {
+	public function formatRow( $row ) {
 		$userName = $row->user_name;
 
 		$ulinks = Linker::userLink( $row->user_id, $userName );
-		$ulinks .= Linker::userToolLinks( $row->user_id, $userName );
+		$ulinks .= Linker::userToolLinks(
+			$row->user_id,
+			$userName,
+			// Should the contributions link be red if the user has no edits (using default)
+			false,
+			// Customisation flags (using default 0)
+			0,
+			// User edit count (using default)
+			null,
+			// do not wrap the message in parentheses (CSS will provide these)
+			false
+		);
 
 		$lang = $this->getLanguage();
 

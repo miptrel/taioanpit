@@ -12,7 +12,7 @@ use MediaWiki\MediaWikiServices;
  */
 class TitleMethodsTest extends MediaWikiLangTestCase {
 
-	protected function setUp() {
+	protected function setUp() : void {
 		parent::setUp();
 
 		$this->mergeMwGlobalArrayValue(
@@ -307,7 +307,7 @@ class TitleMethodsTest extends MediaWikiLangTestCase {
 	 */
 	public function testGetOtherPage( $text, $expected ) {
 		if ( $expected === null ) {
-			$this->setExpectedException( MWException::class );
+			$this->expectException( MWException::class );
 		}
 
 		$title = Title::newFromText( $text );
@@ -327,7 +327,7 @@ class TitleMethodsTest extends MediaWikiLangTestCase {
 
 		$title2 = Title::newFromText( 'Foo' );
 		$this->assertNotSame( $title1, $title2, 'title cache should be empty' );
-		$this->assertEquals( 0, $linkCache->getGoodLinkID( 'Foo' ), 'link cache should be empty' );
+		$this->assertSame( 0, $linkCache->getGoodLinkID( 'Foo' ), 'link cache should be empty' );
 	}
 
 	public function provideGetLinkURL() {
@@ -406,7 +406,7 @@ class TitleMethodsTest extends MediaWikiLangTestCase {
 			'wgFragmentMode' => [ 'html5', 'legacy' ]
 		] );
 
-		$interwikiLookup = $this->getMock( InterwikiLookup::class );
+		$interwikiLookup = $this->createMock( InterwikiLookup::class );
 
 		$interwikiLookup->method( 'fetch' )
 			->willReturnCallback( function ( $interwiki ) {
@@ -437,7 +437,7 @@ class TitleMethodsTest extends MediaWikiLangTestCase {
 		$this->assertSame( $expected, $title->getLinkURL( $query, $query2, $proto ) );
 	}
 
-	function tearDown() {
+	protected function tearDown() : void {
 		Title::clearCaches();
 		parent::tearDown();
 	}

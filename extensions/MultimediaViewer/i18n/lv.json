@@ -1,11 +1,10 @@
 {
 	"@metadata": {
 		"authors": [
-			"Papuass",
-			"Edgars2007"
+			"Edgars2007",
+			"Papuass"
 		]
 	},
-	"multimediaviewer-pref": "Multimediju skatīklis",
 	"multimediaviewer-file-page": "Doties uz atbilstošo faila lapu",
 	"multimediaviewer-repository-local": "Vairāk informācijas",
 	"multimediaviewer-datetime-created": "Izveidots: $1",

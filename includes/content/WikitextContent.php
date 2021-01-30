@@ -31,6 +31,7 @@ use MediaWiki\MediaWikiServices;
 /**
  * Content object for wiki text pages.
  *
+ * @newable
  * @ingroup Content
  */
 class WikitextContent extends TextContent {
@@ -43,10 +44,15 @@ class WikitextContent extends TextContent {
 	private $hadSignature = false;
 
 	/**
-	 * @var array|null Stack trace of the previous parse
+	 * @var string|null Stack trace of the previous parse
 	 */
 	private $previousParseStackTrace = null;
 
+	/**
+	 * @stable to call
+	 *
+	 * @param string $text
+	 */
 	public function __construct( $text ) {
 		parent::__construct( $text, CONTENT_MODEL_WIKITEXT );
 	}
@@ -59,10 +65,9 @@ class WikitextContent extends TextContent {
 	 * @see Content::getSection()
 	 */
 	public function getSection( $sectionId ) {
-		global $wgParser;
-
 		$text = $this->getText();
-		$sect = $wgParser->getSection( $text, $sectionId, false );
+		$sect = MediaWikiServices::getInstance()->getParser()
+			->getSection( $text, $sectionId, false );
 
 		if ( $sect === false ) {
 			return false;
@@ -90,6 +95,8 @@ class WikitextContent extends TextContent {
 				"document uses $myModelId but " .
 				"section uses $sectionModelId." );
 		}
+		/** @var self $with $oldtext */
+		'@phan-var self $with';
 
 		$oldtext = $this->getText();
 		$text = $with->getText();
@@ -102,16 +109,15 @@ class WikitextContent extends TextContent {
 			# Inserting a new section
 			$subject = $sectionTitle ? wfMessage( 'newsectionheaderdefaultlevel' )
 					->plaintextParams( $sectionTitle )->inContentLanguage()->text() . "\n\n" : '';
-			if ( Hooks::run( 'PlaceNewSection', [ $this, $oldtext, $subject, &$text ] ) ) {
+			if ( Hooks::runner()->onPlaceNewSection( $this, $oldtext, $subject, $text ) ) {
 				$text = strlen( trim( $oldtext ) ) > 0
 					? "{$oldtext}\n\n{$subject}{$text}"
 					: "{$subject}{$text}";
 			}
 		} else {
 			# Replacing an existing section; roll out the big guns
-			global $wgParser;
-
-			$text = $wgParser->replaceSection( $oldtext, $sectionId, $text );
+			$text = MediaWikiServices::getInstance()->getParser()
+				->replaceSection( $oldtext, $sectionId, $text );
 		}
 
 		$newContent = new static( $text );
@@ -147,10 +153,10 @@ class WikitextContent extends TextContent {
 	 * @return Content
 	 */
 	public function preSaveTransform( Title $title, User $user, ParserOptions $popts ) {
-		global $wgParser;
-
 		$text = $this->getText();
-		$pst = $wgParser->preSaveTransform( $text, $title, $user, $popts );
+
+		$parser = MediaWikiServices::getInstance()->getParser();
+		$pst = $parser->preSaveTransform( $text, $title, $user, $popts );
 
 		if ( $text === $pst ) {
 			return $this;
@@ -158,7 +164,7 @@ class WikitextContent extends TextContent {
 
 		$ret = new static( $pst );
 
-		if ( $wgParser->getOutput()->getFlag( 'user-signature' ) ) {
+		if ( $parser->getOutput()->getFlag( 'user-signature' ) ) {
 			$ret->hadSignature = true;
 		}
 
@@ -176,10 +182,9 @@ class WikitextContent extends TextContent {
 	 * @return Content
 	 */
 	public function preloadTransform( Title $title, ParserOptions $popts, $params = [] ) {
-		global $wgParser;
-
 		$text = $this->getText();
-		$plt = $wgParser->getPreloadText( $text, $title, $popts, $params );
+		$plt = MediaWikiServices::getInstance()->getParser()
+			->getPreloadText( $text, $title, $popts, $params );
 
 		return new static( $plt );
 	}
@@ -329,10 +334,11 @@ class WikitextContent extends TextContent {
 
 	/**
 	 * Returns a ParserOutput object resulting from parsing the content's text
-	 * using $wgParser.
+	 * using the global Parser service.
 	 *
 	 * @param Title $title
-	 * @param int $revId Revision to pass to the parser (default: null)
+	 * @param int|null $revId ID of the revision being rendered.
+	 *  See Parser::parse() for the ramifications. (default: null)
 	 * @param ParserOptions $options (default: null)
 	 * @param bool $generateHtml (default: true)
 	 * @param ParserOutput &$output ParserOutput representing the HTML form of the text,
@@ -341,8 +347,6 @@ class WikitextContent extends TextContent {
 	protected function fillParserOutput( Title $title, $revId,
 			ParserOptions $options, $generateHtml, ParserOutput &$output
 	) {
-		global $wgParser;
-
 		$stackTrace = ( new RuntimeException() )->getTraceAsString();
 		if ( $this->previousParseStackTrace ) {
 			// NOTE: there may be legitimate changes to re-parse the same WikiText content,
@@ -366,7 +370,8 @@ class WikitextContent extends TextContent {
 		$this->previousParseStackTrace = $stackTrace;
 
 		list( $redir, $text ) = $this->getRedirectTargetAndText();
-		$output = $wgParser->parse( $text, $title, $options, true, true, $revId );
+		$output = MediaWikiServices::getInstance()->getParser()
+			->parse( $text, $title, $options, true, true, $revId );
 
 		// Add redirect indicator at the top
 		if ( $redir ) {

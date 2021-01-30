@@ -5,12 +5,10 @@
  * @license MIT
  */
 
-window.MWWIKITEXT_MOCK_API = true;
-
 QUnit.module( 've.ui.MWWikitextStringTransferHandler (Cite)', QUnit.newMwEnvironment( {
 	beforeEach: function () {
 		// Mock XHR for mw.Api()
-		this.server = window.MWWIKITEXT_MOCK_API ? this.sandbox.useFakeServer() : null;
+		this.server = this.sandbox.useFakeServer();
 		ve.test.utils.mwEnvironment.setup.call( this );
 	},
 	afterEach: ve.test.utils.mwEnvironment.teardown
@@ -31,6 +29,7 @@ QUnit.test( 'convert', function ( assert ) {
 					'</ol>',
 				annotations: [],
 				expectedData: [
+					{ type: 'paragraph' },
 					{
 						type: 'mwReference',
 						attributes: {
@@ -42,6 +41,7 @@ QUnit.test( 'convert', function ( assert ) {
 						}
 					},
 					{ type: '/mwReference' },
+					{ type: '/paragraph' },
 					{ type: 'internalList' },
 					{ type: 'internalItem' },
 					{ type: 'paragraph', internal: { generated: 'wrapper' } },
@@ -61,6 +61,7 @@ QUnit.test( 'convert', function ( assert ) {
 					'</ol>',
 				annotations: [],
 				expectedData: [
+					{ type: 'paragraph' },
 					{
 						type: 'mwTransclusionInline',
 						attributes: {
@@ -70,6 +71,7 @@ QUnit.test( 'convert', function ( assert ) {
 					{
 						type: '/mwTransclusionInline'
 					},
+					{ type: '/paragraph' },
 					{ type: 'internalList' },
 					{ type: '/internalList' }
 				]

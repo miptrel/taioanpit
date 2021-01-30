@@ -37,7 +37,7 @@ class LinksDeletionUpdate extends LinksUpdate implements EnqueueableDataUpdate {
 	 * @param string|null $timestamp TS_MW timestamp of deletion
 	 * @throws MWException
 	 */
-	function __construct( WikiPage $page, $pageId = null, $timestamp = null ) {
+	public function __construct( WikiPage $page, $pageId = null, $timestamp = null ) {
 		$this->page = $page;
 		if ( $pageId ) {
 			$this->mId = $pageId; // page ID at time of deletion
@@ -73,7 +73,7 @@ class LinksDeletionUpdate extends LinksUpdate implements EnqueueableDataUpdate {
 			// T166757: do the update after the main job DB commit
 			DeferredUpdates::addCallableUpdate( function () use ( $title ) {
 				$cat = Category::newFromName( $title->getDBkey() );
-				$cat->refreshCountsIfEmpty();
+				$cat->refreshCountsIfSmall();
 			} );
 		}
 

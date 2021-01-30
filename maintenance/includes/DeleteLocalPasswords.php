@@ -50,7 +50,7 @@ class DeleteLocalPasswords extends Maintenance {
 
 	public function __construct() {
 		parent::__construct();
-		$this->mDescription = "Deletes local password for users.";
+		$this->addDescription( "Deletes local password for users." );
 		$this->setBatchSize( 1000 );
 
 		$this->addOption( 'user', 'If specified, only checks the given user', false, true );
@@ -158,7 +158,7 @@ ERROR
 	 * @return Generator
 	 */
 	protected function getUserBatches() {
-		if ( !is_null( $this->user ) ) {
+		if ( $this->user !== null ) {
 			$this->output( "\t ... querying '$this->user'\n" );
 			yield [ [ $this->user ] ];
 			return;

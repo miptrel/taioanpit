@@ -36,7 +36,7 @@ $mmfl = false;
  * @ingroup Maintenance
  */
 class MergeMessageFileList extends Maintenance {
-	function __construct() {
+	public function __construct() {
 		parent::__construct();
 		$this->addOption(
 			'list-file',
@@ -129,7 +129,6 @@ class MergeMessageFileList extends Maintenance {
 		$files = [];
 		$fileLines = file( $fileName );
 		if ( $fileLines === false ) {
-			$this->hasError = true;
 			$this->error( "Unable to open list file $fileName." );
 
 			return $files;
@@ -144,7 +143,6 @@ class MergeMessageFileList extends Maintenance {
 				if ( file_exists( $extension ) ) {
 					$files[] = $extension;
 				} else {
-					$this->hasError = true;
 					$this->error( "Extension {$extension} doesn't exist" );
 				}
 			}
@@ -157,6 +155,7 @@ class MergeMessageFileList extends Maintenance {
 require_once RUN_MAINTENANCE_IF_MAIN;
 
 $queue = [];
+'@phan-var string[][] $mmfl';
 foreach ( $mmfl['setupFiles'] as $fileName ) {
 	if ( strval( $fileName ) === '' ) {
 		continue;

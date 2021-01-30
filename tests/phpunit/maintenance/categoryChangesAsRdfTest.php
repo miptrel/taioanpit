@@ -4,11 +4,11 @@ use Wikimedia\Rdbms\IDatabase;
 
 /**
  * Tests for CategoryChangesAsRdf recent changes exporter.
- *  @covers CategoryChangesAsRdf
+ * @covers CategoryChangesAsRdf
  */
 class CategoryChangesAsRdfTest extends MediaWikiLangTestCase {
 
-	public function setUp() {
+	protected function setUp() : void {
 		parent::setUp();
 		$this->setMwGlobals( [
 			'wgServer' => 'http://acme.test',

@@ -22,17 +22,15 @@
  * @author Ævar Arnfjörð Bjarmason <avarab@gmail.com>
  */
 
-use MediaWiki\MediaWikiServices;
-
 /**
  * Searches the database for files of the requested MIME type, comparing this with the
  * 'img_major_mime' and 'img_minor_mime' fields in the image table.
  * @ingroup SpecialPage
  */
-class MIMEsearchPage extends QueryPage {
+class SpecialMIMESearch extends QueryPage {
 	protected $major, $minor, $mime;
 
-	function __construct( $name = 'MIMEsearch' ) {
+	public function __construct( $name = 'MIMEsearch' ) {
 		parent::__construct( $name );
 	}
 
@@ -40,15 +38,15 @@ class MIMEsearchPage extends QueryPage {
 		return false;
 	}
 
-	function isSyndicated() {
+	public function isSyndicated() {
 		return false;
 	}
 
-	function isCacheable() {
+	public function isCacheable() {
 		return false;
 	}
 
-	function linkParameters() {
+	protected function linkParameters() {
 		return [ 'mime' => "{$this->major}/{$this->minor}" ];
 	}
 
@@ -107,14 +105,15 @@ class MIMEsearchPage extends QueryPage {
 	 * is what we ideally want, so everything works out fine anyhow.
 	 * @return array
 	 */
-	function getOrderFields() {
+	protected function getOrderFields() {
 		return [];
 	}
 
 	/**
 	 * Generate and output the form
+	 * @return string
 	 */
-	function getPageHeader() {
+	protected function getPageHeader() {
 		$formDescriptor = [
 			'mime' => [
 				'type' => 'combobox',
@@ -163,6 +162,7 @@ class MIMEsearchPage extends QueryPage {
 	}
 
 	public function execute( $par ) {
+		$this->addHelpLink( 'Help:Managing_files' );
 		$this->mime = $par ?: $this->getRequest()->getText( 'mime' );
 		$this->mime = trim( $this->mime );
 		list( $this->major, $this->minor ) = File::splitMime( $this->mime );
@@ -184,11 +184,11 @@ class MIMEsearchPage extends QueryPage {
 	 * @param object $result Result row
 	 * @return string
 	 */
-	function formatResult( $skin, $result ) {
+	public function formatResult( $skin, $result ) {
 		$linkRenderer = $this->getLinkRenderer();
 		$nt = Title::makeTitle( $result->namespace, $result->title );
-		$text = MediaWikiServices::getInstance()->getContentLanguage()
-			->convert( htmlspecialchars( $nt->getText() ) );
+
+		$text = $this->getLanguageConverter()->convertHtml( $nt->getText() );
 		$plink = $linkRenderer->makeLink(
 			Title::newFromText( $nt->getPrefixedText() ),
 			new HtmlArmor( $text )

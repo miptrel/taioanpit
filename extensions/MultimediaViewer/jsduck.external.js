@@ -36,6 +36,11 @@
  */
 
 /**
+ * @class mw.widgets.CopyTextLayout
+ * <https://doc.wikimedia.org/mediawiki-core/master/js/#!/api/mw.widgets.CopyTextLayout>
+ */
+
+/**
  * @class HTMLElement
  * An HTML element.
  */
@@ -44,6 +49,11 @@
  * @class HTMLImageElement
  * @extends HTMLElement
  * An HTML <img> element.
+ */
+
+/**
+ * @class OO.Router
+ * <https://doc.wikimedia.org/oojs-router/master/#!/api/OO.Router>
  */
 
 /**
@@ -87,6 +97,6 @@
  */
 
 /**
- * @class jqXHR
+ * @class jQuery.jqXHR
  * An XMLHttpRequest object wrapped by jQuery
  */

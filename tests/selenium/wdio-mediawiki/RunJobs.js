@@ -1,18 +1,18 @@
-const MWBot = require( 'mwbot' ),
-	Page = require( './Page' ),
-	MAINPAGE_REQUESTS_MAX_RUNS = 10; // (arbitrary) safe-guard against endless execution
+'use strict';
+
+const MWBot = require( 'mwbot' );
+const Page = require( './Page' );
+const MAINPAGE_REQUESTS_MAX_RUNS = 10; // (arbitrary) safe-guard against endless execution
 
 function getJobCount() {
-	let bot = new MWBot( {
-		apiUrl: `${browser.options.baseUrl}/api.php`
+	const bot = new MWBot( {
+		apiUrl: `${browser.config.baseUrl}/api.php`
 	} );
 	return bot.request( {
 		action: 'query',
 		meta: 'siteinfo',
 		siprop: 'statistics'
-	} ).then( ( response ) => {
-		return response.query.statistics.jobs;
-	} );
+	} ).then( ( response ) => response.query.statistics.jobs );
 }
 
 function log( message ) {
@@ -20,7 +20,7 @@ function log( message ) {
 }
 
 function runThroughMainPageRequests( runCount = 1 ) {
-	let page = new Page();
+	const page = new Page();
 	log( `through requests to the main page (run ${runCount}).` );
 
 	page.openTitle( '' );

@@ -26,24 +26,24 @@
  *
  * @ingroup SpecialPage
  */
-class UnusedimagesPage extends ImageQueryPage {
-	function __construct( $name = 'Unusedimages' ) {
+class SpecialUnusedImages extends ImageQueryPage {
+	public function __construct( $name = 'Unusedimages' ) {
 		parent::__construct( $name );
 	}
 
-	function isExpensive() {
+	public function isExpensive() {
 		return true;
 	}
 
-	function sortDescending() {
+	protected function sortDescending() {
 		return false;
 	}
 
-	function isSyndicated() {
+	public function isSyndicated() {
 		return false;
 	}
 
-	function getQueryInfo() {
+	public function getQueryInfo() {
 		$retval = [
 			'tables' => [ 'image', 'imagelinks' ],
 			'fields' => [
@@ -71,11 +71,11 @@ class UnusedimagesPage extends ImageQueryPage {
 		return $retval;
 	}
 
-	function usesTimestamps() {
+	public function usesTimestamps() {
 		return true;
 	}
 
-	function getPageHeader() {
+	protected function getPageHeader() {
 		if ( $this->getConfig()->get( 'CountCategorizedImagesAsUsed' ) ) {
 			return $this->msg(
 				'unusedimagestext-categorizedimgisused'

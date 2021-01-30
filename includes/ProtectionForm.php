@@ -22,7 +22,10 @@
  *
  * @file
  */
+
+use MediaWiki\HookContainer\HookRunner;
 use MediaWiki\MediaWikiServices;
+use MediaWiki\Permissions\PermissionManager;
 
 /**
  * Handles the page protection UI and backend
@@ -58,27 +61,52 @@ class ProtectionForm {
 	/** @var array Map of action to the expiry time of the existing protection */
 	protected $mExistingExpiry = [];
 
+	/** @var Article */
+	protected $mArticle;
+
+	/** @var Title */
+	protected $mTitle;
+
+	/** @var bool */
+	protected $disabled;
+
+	/** @var array */
+	protected $disabledAttrib;
+
 	/** @var IContextSource */
 	private $mContext;
 
-	function __construct( Article $article ) {
+	/** @var PermissionManager */
+	private $permManager;
+
+	/** @var HookRunner */
+	private $hookRunner;
+
+	public function __construct( Article $article ) {
 		// Set instance variables.
 		$this->mArticle = $article;
 		$this->mTitle = $article->getTitle();
 		$this->mApplicableTypes = $this->mTitle->getRestrictionTypes();
 		$this->mContext = $article->getContext();
 
+		$services = MediaWikiServices::getInstance();
+		$this->permManager = $services->getPermissionManager();
+		$this->hookRunner = new HookRunner( $services->getHookContainer() );
+
 		// Check if the form should be disabled.
 		// If it is, the form will be available in read-only to show levels.
-		$this->mPermErrors = $this->mTitle->getUserPermissionsErrors(
+		$this->mPermErrors = $this->permManager->getPermissionErrors(
 			'protect',
 			$this->mContext->getUser(),
-			$this->mContext->getRequest()->wasPosted() ? 'secure' : 'full' // T92357
+			$this->mTitle,
+			$this->mContext->getRequest()->wasPosted()
+				? PermissionManager::RIGOR_SECURE
+				: PermissionManager::RIGOR_FULL // T92357
 		);
 		if ( wfReadOnly() ) {
 			$this->mPermErrors[] = [ 'readonlytext', wfReadOnlyReason() ];
 		}
-		$this->disabled = $this->mPermErrors != [];
+		$this->disabled = $this->mPermErrors !== [];
 		$this->disabledAttrib = $this->disabled
 			? [ 'disabled' => 'disabled' ]
 			: [];
@@ -89,8 +117,8 @@ class ProtectionForm {
 	/**
 	 * Loads the current state of protection into the object.
 	 */
-	function loadData() {
-		$levels = MWNamespace::getRestrictionLevels(
+	private function loadData() {
+		$levels = $this->permManager->getNamespaceRestrictionLevels(
 			$this->mTitle->getNamespace(), $this->mContext->getUser()
 		);
 		$this->mCascade = $this->mTitle->areRestrictionsCascading();
@@ -151,7 +179,7 @@ class ProtectionForm {
 	 *
 	 * @return string|false 14-char timestamp or "infinity", or false if the input was invalid
 	 */
-	function getExpiry( $action ) {
+	private function getExpiry( $action ) {
 		if ( $this->mExpirySelection[$action] == 'existing' ) {
 			return $this->mExistingExpiry[$action];
 		} elseif ( $this->mExpirySelection[$action] == 'othertime' ) {
@@ -178,14 +206,18 @@ class ProtectionForm {
 	/**
 	 * Main entry point for action=protect and action=unprotect
 	 */
-	function execute() {
-		if ( MWNamespace::getRestrictionLevels( $this->mTitle->getNamespace() ) === [ '' ] ) {
+	public function execute() {
+		if (
+			$this->permManager->getNamespaceRestrictionLevels(
+				$this->mTitle->getNamespace()
+			) === [ '' ]
+		) {
 			throw new ErrorPageError( 'protect-badnamespace-title', 'protect-badnamespace-text' );
 		}
 
 		if ( $this->mContext->getRequest()->wasPosted() ) {
 			if ( $this->save() ) {
-				$q = $this->mArticle->isRedirect() ? 'redirect=no' : '';
+				$q = $this->mArticle->getPage()->isRedirect() ? 'redirect=no' : '';
 				$this->mContext->getOutput()->redirect( $this->mTitle->getFullURL( $q ) );
 			}
 		} else {
@@ -196,9 +228,9 @@ class ProtectionForm {
 	/**
 	 * Show the input form with optional error message
 	 *
-	 * @param string|null $err Error message or null if there's no error
+	 * @param string|string[]|null $err Error message or null if there's no error
 	 */
-	function show( $err = null ) {
+	private function show( $err = null ) {
 		$out = $this->mContext->getOutput();
 		$out->setRobotPolicy( 'noindex,nofollow' );
 		$out->addBacklinkSubtitle( $this->mTitle );
@@ -266,7 +298,7 @@ class ProtectionForm {
 	 *
 	 * @return bool Success
 	 */
-	function save() {
+	private function save() {
 		# Permission check!
 		if ( $this->disabled ) {
 			$this->show();
@@ -294,7 +326,8 @@ class ProtectionForm {
 		foreach ( $this->mApplicableTypes as $action ) {
 			$expiry[$action] = $this->getExpiry( $action );
 			if ( empty( $this->mRestrictions[$action] ) ) {
-				continue; // unprotected
+				// unprotected
+				continue;
 			}
 			if ( !$expiry[$action] ) {
 				$this->show( [ 'protect_expiry_invalid' ] );
@@ -308,7 +341,7 @@ class ProtectionForm {
 
 		$this->mCascade = $request->getBool( 'mwProtect-cascade' );
 
-		$status = $this->mArticle->doUpdateRestrictions(
+		$status = $this->mArticle->getPage()->doUpdateRestrictions(
 			$this->mRestrictions,
 			$expiry,
 			$this->mCascade,
@@ -317,7 +350,9 @@ class ProtectionForm {
 		);
 
 		if ( !$status->isOK() ) {
-			$this->show( $out->parseInlineAsInterface( $status->getWikiText() ) );
+			$this->show( $out->parseInlineAsInterface(
+				$status->getWikiText( false, false, $this->mContext->getLanguage() )
+			) );
 			return false;
 		}
 
@@ -328,7 +363,7 @@ class ProtectionForm {
 		 *             you can also return an array of message name and its parameters
 		 */
 		$errorMsg = '';
-		if ( !Hooks::run( 'ProtectionForm::save', [ $this->mArticle, &$errorMsg, $reasonstr ] ) ) {
+		if ( !$this->hookRunner->onProtectionForm__save( $this->mArticle, $errorMsg, $reasonstr ) ) {
 			if ( $errorMsg == '' ) {
 				$errorMsg = [ 'hookaborted' ];
 			}
@@ -348,7 +383,7 @@ class ProtectionForm {
 	 *
 	 * @return string HTML form
 	 */
-	function buildForm() {
+	private function buildForm() {
 		$context = $this->mContext;
 		$user = $context->getUser();
 		$output = $context->getOutput();
@@ -366,8 +401,9 @@ class ProtectionForm {
 			Xml::openElement( 'table', [ 'id' => 'mwProtectSet' ] ) .
 			Xml::openElement( 'tbody' );
 
-		$scExpiryOptions = wfMessage( 'protect-expiry-options' )->inContentLanguage()->text();
-		$showProtectOptions = $scExpiryOptions !== '-' && !$this->disabled;
+		$expiryOptionsMsg = wfMessage( 'protect-expiry-options' )->inContentLanguage()->text();
+		$showProtectOptions = $expiryOptionsMsg !== '-' && !$this->disabled;
+		$expiryOptions = XmlSelect::parseOptionsMessage( $expiryOptionsMsg );
 
 		// Not all languages have V_x <-> N_x relation
 		foreach ( $this->mRestrictions as $action => $selected ) {
@@ -420,14 +456,7 @@ class ProtectionForm {
 				$context->msg( 'protect-othertime-op' )->text(),
 				'othertime'
 			);
-			foreach ( explode( ',', $scExpiryOptions ) as $option ) {
-				if ( strpos( $option, ":" ) === false ) {
-					$show = $value = $option;
-				} else {
-					list( $show, $value ) = explode( ":", $option );
-				}
-				$expiryFormOptions->addOption( $show, htmlspecialchars( $value ) );
-			}
+			$expiryFormOptions->addOptions( $expiryOptions );
 			# Add expiry dropdown
 			if ( $showProtectOptions && !$this->disabled ) {
 				$out .= "
@@ -456,7 +485,7 @@ class ProtectionForm {
 			"</td></tr>";
 		}
 		# Give extensions a chance to add items to the form
-		Hooks::run( 'ProtectionForm::buildForm', [ $this->mArticle, &$out ] );
+		$this->hookRunner->onProtectionForm__buildForm( $this->mArticle, $out );
 
 		$out .= Xml::closeElement( 'tbody' ) . Xml::closeElement( 'table' );
 
@@ -549,7 +578,7 @@ class ProtectionForm {
 		}
 		$out .= Xml::closeElement( 'fieldset' );
 
-		if ( $user->isAllowed( 'editinterface' ) ) {
+		if ( $this->permManager->userHasRight( $user, 'editinterface' ) ) {
 			$linkRenderer = MediaWikiServices::getInstance()->getLinkRenderer();
 			$link = $linkRenderer->makeKnownLink(
 				$context->msg( 'protect-dropdown' )->inContentLanguage()->getTitle(),
@@ -578,10 +607,11 @@ class ProtectionForm {
 	 * @param string $selected Current protection level
 	 * @return string HTML fragment
 	 */
-	function buildSelector( $action, $selected ) {
+	private function buildSelector( $action, $selected ) {
 		// If the form is disabled, display all relevant levels. Otherwise,
 		// just show the ones this user can use.
-		$levels = MWNamespace::getRestrictionLevels( $this->mTitle->getNamespace(),
+		$levels = $this->permManager->getNamespaceRestrictionLevels(
+			$this->mTitle->getNamespace(),
 			$this->disabled ? null : $this->mContext->getUser()
 		);
 
@@ -630,6 +660,6 @@ class ProtectionForm {
 		$out->addHTML( Xml::element( 'h2', null, $protectLogPage->getName()->text() ) );
 		LogEventsList::showLogExtract( $out, 'protect', $this->mTitle );
 		# Let extensions add other relevant log extracts
-		Hooks::run( 'ProtectionForm::showLogExtract', [ $this->mArticle, $out ] );
+		$this->hookRunner->onProtectionForm__showLogExtract( $this->mArticle, $out );
 	}
 }

@@ -16,11 +16,13 @@ class OptionWidget extends Widget {
 	use TitledElement;
 
 	/**
+	 * @var bool
+	 */
+	protected $selected;
+
+	/**
 	 * @param array $config Configuration options
-	 *      - string|HtmlSnippet $config['label'] Label text
-	 *      - bool $config['invisibleLabel'] Whether the label should be visually hidden (but still
-	 *        accessible to screen-readers). (default: false)
-	 * @param-taint $config escapes_html
+	 *      - bool $config['selected'] Whether to mark the option as selected
 	 */
 	public function __construct( array $config = [] ) {
 		parent::__construct( $config );
@@ -30,24 +32,40 @@ class OptionWidget extends Widget {
 		$this->initializeAccessKeyedElement( array_merge( [ 'accessKeyed' => $this ], $config ) );
 		$this->initializeLabelElement( $config );
 
-		$this->setLabel( $config['label'] ?? '' );
 		$this->appendContent( $this->label );
 
-		$selected = $config['selected'] ?? false;
+		$this->setSelected( $config['selected'] ?? false );
 
 		$this->addClasses( [ 'oo-ui-optionWidget' ] );
+		$this->setAttributes( [
+			'role' => 'option'
+		] );
+	}
+
+	/**
+	 * Set the selected state of the option
+	 *
+	 * @param bool $selected The options is selected
+	 * @return $this
+	 */
+	public function setSelected( bool $selected ) {
+		$this->selected = $selected;
 		$this->toggleClasses( [ 'oo-ui-optionWidget-selected' ], $selected );
 		$this->setAttributes( [
-			'role' => 'option',
 			// 'selected' is not a config option, so set aria-selected false by default (same as js)
 			'aria-selected' => $selected ? 'true' : 'false',
 		] );
+		return $this;
+	}
+
+	public function isSelected() {
+		return $this->selected;
 	}
 
 	public function getConfig( &$config ) {
 		$selected = $this->hasClass( 'oo-ui-optionWidget-selected' );
-		if ( $selected ) {
-			$config['selected'] = $selected;
+		if ( $this->selected ) {
+			$config['selected'] = $this->selected;
 		}
 		return parent::getConfig( $config );
 	}

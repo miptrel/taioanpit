@@ -27,9 +27,8 @@
  * @code
  * $job = new JobSpecification(
  *		'null',
- *		array( 'lives' => 1, 'usleep' => 100, 'pi' => 3.141569 ),
- *		array( 'removeDuplicates' => 1 ),
- *		Title::makeTitle( NS_SPECIAL, 'nullity' )
+ *		[ 'lives' => 1, 'usleep' => 100, 'pi' => 3.141569 ],
+ *		[ 'removeDuplicates' => 1 ]
  * );
  * JobQueueGroup::singleton()->push( $job )
  * @endcode
@@ -53,7 +52,9 @@ class JobSpecification implements IJobSpecification {
 	/**
 	 * @param string $type
 	 * @param array $params Map of key/values
-	 * @param array $opts Map of key/values; includes 'removeDuplicates'
+	 * @param array $opts Map of key/values
+	 *   'removeDuplicates' key - whether to remove duplicate jobs
+	 *   'removeDuplicatesIgnoreParams' key - array with parameters to ignore for deduplication
 	 * @param Title|null $title Optional descriptive title
 	 */
 	public function __construct(
@@ -63,8 +64,19 @@ class JobSpecification implements IJobSpecification {
 		$this->validateParams( $opts );
 
 		$this->type = $type;
+		if ( $title instanceof Title ) {
+			// Make sure JobQueue classes can pull the title from parameters alone
+			if ( $title->getDBkey() !== '' ) {
+				$params += [
+					'namespace' => $title->getNamespace(),
+					'title' => $title->getDBkey()
+				];
+			}
+		} else {
+			$title = Title::makeTitle( NS_SPECIAL, '' );
+		}
 		$this->params = $params;
-		$this->title = $title ?: Title::makeTitle( NS_SPECIAL, 'Blankpage' );
+		$this->title = $title;
 		$this->opts = $opts;
 	}
 
@@ -106,8 +118,6 @@ class JobSpecification implements IJobSpecification {
 	public function getDeduplicationInfo() {
 		$info = [
 			'type' => $this->getType(),
-			'namespace' => $this->getTitle()->getNamespace(),
-			'title' => $this->getTitle()->getDBkey(),
 			'params' => $this->getParams()
 		];
 		if ( is_array( $info['params'] ) ) {
@@ -116,6 +126,11 @@ class JobSpecification implements IJobSpecification {
 			unset( $info['params']['rootJobTimestamp'] );
 			// Likewise for jobs with different delay times
 			unset( $info['params']['jobReleaseTimestamp'] );
+			if ( isset( $this->opts['removeDuplicatesIgnoreParams'] ) ) {
+				foreach ( $this->opts['removeDuplicatesIgnoreParams'] as $field ) {
+					unset( $info['params'][$field] );
+				}
+			}
 		}
 
 		return $info;

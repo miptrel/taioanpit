@@ -22,6 +22,8 @@
  * @since 1.25
  */
 
+use MediaWiki\MediaWikiServices;
+
 /**
  * This class formats block log entries.
  *
@@ -67,7 +69,7 @@ class BlockLogFormatter extends LogFormatter {
 			} else {
 				$params[4] = Message::rawParam(
 					"<span class=\"blockExpiry\" title=\"$durationTooltip\">" .
-					$blockExpiry .
+					htmlspecialchars( $blockExpiry ) .
 					'</span>'
 				);
 			}
@@ -84,8 +86,8 @@ class BlockLogFormatter extends LogFormatter {
 				$namespaces = $params[6]['namespaces'] ?? [];
 				$namespaces = array_map( function ( $ns ) {
 					$text = (int)$ns === NS_MAIN
-						? $this->msg( 'blanknamespace' )->text()
-						: $this->context->getLanguage()->getFormattedNsText( $ns );
+						? $this->msg( 'blanknamespace' )->escaped()
+						: htmlspecialchars( $this->context->getLanguage()->getFormattedNsText( $ns ) );
 					$params = [ 'namespace' => $ns ];
 
 					return $this->makePageLink( SpecialPage::getTitleFor( 'Allpages' ), $params, $text );
@@ -126,11 +128,19 @@ class BlockLogFormatter extends LogFormatter {
 
 	public function getPreloadTitles() {
 		$title = $this->entry->getTarget();
+		$preload = [];
 		// Preload user page for non-autoblocks
-		if ( substr( $title->getText(), 0, 1 ) !== '#' ) {
-			return [ $title->getTalkPage() ];
+		if ( substr( $title->getText(), 0, 1 ) !== '#' && $title->canExist() ) {
+			$preload[] = $title->getTalkPage();
 		}
-		return [];
+		// Preload page restriction
+		$params = $this->extractParameters();
+		if ( isset( $params[6]['pages'] ) ) {
+			foreach ( $params[6]['pages'] as $page ) {
+				$preload[] = Title::newFromText( $page );
+			}
+		}
+		return $preload;
 	}
 
 	public function getActionLinks() {
@@ -138,7 +148,9 @@ class BlockLogFormatter extends LogFormatter {
 		$linkRenderer = $this->getLinkRenderer();
 		if ( $this->entry->isDeleted( LogPage::DELETED_ACTION ) // Action is hidden
 			|| !( $subtype === 'block' || $subtype === 'reblock' )
-			|| !$this->context->getUser()->isAllowed( 'block' )
+			|| !MediaWikiServices::getInstance()
+				->getPermissionManager()
+				->userHasRight( $this->context->getUser(), 'block' )
 		) {
 			return '';
 		}
@@ -245,6 +257,7 @@ class BlockLogFormatter extends LogFormatter {
 			];
 
 			if ( !is_array( $params['6:array:flags'] ) ) {
+				// @phan-suppress-next-line PhanSuspiciousValueComparison
 				$params['6:array:flags'] = $params['6:array:flags'] === ''
 					? []
 					: explode( ',', $params['6:array:flags'] );
@@ -262,6 +275,10 @@ class BlockLogFormatter extends LogFormatter {
 		return $params;
 	}
 
+	/**
+	 * @inheritDoc
+	 * @suppress PhanTypeInvalidDimOffset
+	 */
 	public function formatParametersForApi() {
 		$ret = parent::formatParametersForApi();
 		if ( isset( $ret['flags'] ) ) {

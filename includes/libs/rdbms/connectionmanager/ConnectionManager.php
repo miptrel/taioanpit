@@ -73,10 +73,10 @@ class ConnectionManager {
 	 * @param int $i
 	 * @param string[]|null $groups
 	 *
-	 * @return Database
+	 * @return IDatabase
 	 */
 	private function getConnection( $i, array $groups = null ) {
-		$groups = $groups === null ? $this->groups : $groups;
+		$groups = $groups ?? $this->groups;
 		return $this->loadBalancer->getConnection( $i, $groups, $this->domain );
 	}
 
@@ -87,7 +87,7 @@ class ConnectionManager {
 	 * @return DBConnRef
 	 */
 	private function getConnectionRef( $i, array $groups = null ) {
-		$groups = $groups === null ? $this->groups : $groups;
+		$groups = $groups ?? $this->groups;
 		return $this->loadBalancer->getConnectionRef( $i, $groups, $this->domain );
 	}
 
@@ -97,7 +97,7 @@ class ConnectionManager {
 	 *
 	 * @since 1.29
 	 *
-	 * @return Database
+	 * @return IDatabase
 	 */
 	public function getWriteConnection() {
 		return $this->getConnection( DB_MASTER );
@@ -111,10 +111,10 @@ class ConnectionManager {
 	 *
 	 * @param string[]|null $groups
 	 *
-	 * @return Database
+	 * @return IDatabase
 	 */
 	public function getReadConnection( array $groups = null ) {
-		$groups = $groups === null ? $this->groups : $groups;
+		$groups = $groups ?? $this->groups;
 		return $this->getConnection( DB_REPLICA, $groups );
 	}
 
@@ -148,7 +148,7 @@ class ConnectionManager {
 	 * @return DBConnRef
 	 */
 	public function getReadConnectionRef( array $groups = null ) {
-		$groups = $groups === null ? $this->groups : $groups;
+		$groups = $groups ?? $this->groups;
 		return $this->getConnectionRef( DB_REPLICA, $groups );
 	}
 

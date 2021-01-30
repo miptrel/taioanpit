@@ -49,7 +49,7 @@
 	 *
 	 * @private
 	 * @param {string} id
-	 * @return {HTMLIframeElement}
+	 * @return {HTMLIFrameElement}
 	 */
 	function getNewIframe( id ) {
 		var frame = document.createElement( 'iframe' );
@@ -76,7 +76,7 @@
 	 * Process the result of the form submission, returned to an iframe.
 	 * This is the iframe's onload event.
 	 *
-	 * @param {HTMLIframeElement} iframe Iframe to extract result from
+	 * @param {HTMLIFrameElement} iframe Iframe to extract result from
 	 * @return {Object} Response from the server. The return value may or may
 	 *   not be an XMLDocument, this code was copied from elsewhere, so if you
 	 *   see an unexpected return type, please file a bug.
@@ -178,8 +178,7 @@
 				tokenPromise = $.Deferred(),
 				api = this,
 				deferred = $.Deferred(),
-				nonce = getNonce(),
-				id = 'uploadframe-' + nonce,
+				id = 'uploadframe-' + getNonce(),
 				$form = $( '<form>' ),
 				iframe = getNewIframe( id ),
 				$iframe = $( iframe );
@@ -234,8 +233,8 @@
 			file.name = 'file';
 
 			// eslint-disable-next-line no-jquery/no-each-util
-			$.each( data, function ( key, val ) {
-				$form.append( getHiddenInput( key, val ) );
+			$.each( data, function ( k, v ) {
+				$form.append( getHiddenInput( k, v ) );
 			} );
 
 			if ( !data.filename && !data.stash ) {
@@ -251,7 +250,7 @@
 				tokenPromise.resolve();
 			}
 
-			$( 'body' ).append( $form, $iframe );
+			$( document.body ).append( $form, $iframe );
 
 			deferred.always( function () {
 				$form.remove();
@@ -362,10 +361,10 @@
 				// 47. This'll work around it, but comes with the drawback of
 				// having to properly relay the results to the returned promise.
 				// eslint-disable-next-line no-loop-func
-				promise.done( function ( start, end, next, result ) {
+				promise.done( function ( s, e, n, result ) {
 					var filekey = result.upload.filekey;
-					active = this.uploadChunk( file, data, start, end, filekey, chunkRetries )
-						.done( end === file.size ? deferred.resolve : next.resolve )
+					active = this.uploadChunk( file, data, s, e, filekey, chunkRetries )
+						.done( e === file.size ? deferred.resolve : n.resolve )
 						.fail( deferred.reject )
 						.progress( deferred.notify );
 				// start, end & next must be bound to closure, or they'd have
@@ -426,10 +425,10 @@
 					// failure handlers have a complete result object (including
 					// possibly more warnings, e.g. duplicate)
 					// This matches .upload, which also completes the upload.
-					if ( result.upload && result.upload.warnings && code in result.upload.warnings ) {
+					if ( result.upload && result.upload.warnings ) {
 						if ( end === file.size ) {
 							// uploaded last chunk = reject with result data
-							return $.Deferred().reject( code, result );
+							return $.Deferred().reject( result.upload.warnings.code || 'unknown', result );
 						} else {
 							// still uploading chunks = resolve to keep going
 							return $.Deferred().resolve( result );
@@ -441,7 +440,7 @@
 					}
 
 					// If the call flat out failed, we may want to try again...
-					retry = api.uploadChunk.bind( this, file, data, start, end, filekey, retries - 1 );
+					retry = api.uploadChunk.bind( api, file, data, start, end, filekey, retries - 1 );
 					return api.retry( code, result, retry );
 				},
 				function ( fraction ) {
@@ -551,8 +550,12 @@
 					return finishUpload;
 				},
 				function ( errorCode, result ) {
-					if ( result && result.upload && result.upload.filekey ) {
-						// Ignore any warnings if 'filekey' was returned, that's all we care about
+					if ( result && result.upload && result.upload.result === 'Success' && result.upload.filekey ) {
+						// When a file is uploaded with `ignorewarnings` and there are warnings,
+						// the promise will be rejected (because of those warnings, e.g. 'duplicate')
+						// but the result is actually a success
+						// We don't really care about those warnings, as long as the upload got stashed...
+						// Turn this back into a successful promise and allow the upload to complete
 						filekey = result.upload.filekey;
 						return $.Deferred().resolve( finishUpload );
 					}
@@ -592,7 +595,7 @@
 				throw new Error( 'Filename not included in file data.' );
 			}
 
-			promise = this.upload( file, { stash: true, filename: data.filename } );
+			promise = this.upload( file, { stash: true, filename: data.filename, ignorewarnings: data.ignorewarnings } );
 
 			return this.finishUploadToStash( promise, data );
 		},
@@ -623,7 +626,7 @@
 
 			promise = this.chunkedUpload(
 				file,
-				{ stash: true, filename: data.filename },
+				{ stash: true, filename: data.filename, ignorewarnings: data.ignorewarnings },
 				chunkSize,
 				chunkRetries
 			);

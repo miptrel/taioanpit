@@ -31,7 +31,7 @@ class JobQueueGroup {
 	/** @var JobQueueGroup[] */
 	protected static $instances = [];
 
-	/** @var ProcessCacheLRU */
+	/** @var MapCacheLRU */
 	protected $cache;
 
 	/** @var string Wiki domain ID */
@@ -44,14 +44,14 @@ class JobQueueGroup {
 	/** @var array Map of (bucket => (queue => JobQueue, types => list of types) */
 	protected $coalescedQueues;
 
-	const TYPE_DEFAULT = 1; // integer; jobs popped by default
-	const TYPE_ANY = 2; // integer; any job
+	public const TYPE_DEFAULT = 1; // integer; jobs popped by default
+	private const TYPE_ANY = 2; // integer; any job
 
-	const USE_CACHE = 1; // integer; use process or persistent cache
+	public const USE_CACHE = 1; // integer; use process or persistent cache
 
-	const PROC_CACHE_TTL = 15; // integer; seconds
+	private const PROC_CACHE_TTL = 15; // integer; seconds
 
-	const CACHE_VERSION = 1; // integer; cache version
+	private const CACHE_VERSION = 1; // integer; cache version
 
 	/**
 	 * @param string $domain Wiki domain ID
@@ -118,10 +118,19 @@ class JobQueueGroup {
 			$conf['readOnlyReason'] = $this->readOnlyReason;
 		}
 
+		return $this->factoryJobQueue( $conf );
+	}
+
+	/**
+	 * @param array $conf
+	 * @return JobQueue
+	 * @throws JobQueueError
+	 */
+	private function factoryJobQueue( array $conf ) {
 		$services = MediaWikiServices::getInstance();
 		$conf['stats'] = $services->getStatsdDataFactory();
 		$conf['wanCache'] = $services->getMainWANObjectCache();
-		$conf['stash'] = $services->getMainObjectStash();
+		$conf['idGenerator'] = $services->getGlobalIdGenerator();
 
 		return JobQueue::factory( $conf );
 	}
@@ -187,10 +196,6 @@ class JobQueueGroup {
 	/**
 	 * Buffer jobs for insertion via push() or call it now if in CLI mode
 	 *
-	 * Note that pushLazyJobs() is registered as a deferred update just before
-	 * DeferredUpdates::doUpdates() in MediaWiki and JobRunner classes in order
-	 * to be executed as the very last deferred update (T100085, T154425).
-	 *
 	 * @param IJobSpecification|IJobSpecification[] $jobs A single Job or a list of Jobs
 	 * @return void
 	 * @since 1.26
@@ -215,17 +220,6 @@ class JobQueueGroup {
 	}
 
 	/**
-	 * Push all jobs buffered via lazyPush() into their respective queues
-	 *
-	 * @return void
-	 * @since 1.26
-	 * @deprecated Since 1.33 Not needed anymore
-	 */
-	public static function pushLazyJobs() {
-		wfDeprecated( __METHOD__, '1.33' );
-	}
-
-	/**
 	 * Pop a job off one of the job queues
 	 *
 	 * This pops a job off a queue as specified by $wgJobTypeConf and
@@ -234,7 +228,7 @@ class JobQueueGroup {
 	 * @param int|string $qtype JobQueueGroup::TYPE_* constant or job type string
 	 * @param int $flags Bitfield of JobQueueGroup::USE_* constants
 	 * @param array $blacklist List of job types to ignore
-	 * @return Job|bool Returns false on failure
+	 * @return RunnableJob|bool Returns false on failure
 	 */
 	public function pop( $qtype = self::TYPE_DEFAULT, $flags = 0, array $blacklist = [] ) {
 		global $wgJobClasses;
@@ -286,10 +280,10 @@ class JobQueueGroup {
 	/**
 	 * Acknowledge that a job was completed
 	 *
-	 * @param Job $job
+	 * @param RunnableJob $job
 	 * @return void
 	 */
-	public function ack( Job $job ) {
+	public function ack( RunnableJob $job ) {
 		$this->get( $job->getType() )->ack( $job );
 	}
 
@@ -297,10 +291,10 @@ class JobQueueGroup {
 	 * Register the "root job" of a given job into the queue for de-duplication.
 	 * This should only be called right *after* all the new jobs have been inserted.
 	 *
-	 * @param Job $job
+	 * @param RunnableJob $job
 	 * @return bool
 	 */
-	public function deduplicateRootJob( Job $job ) {
+	public function deduplicateRootJob( RunnableJob $job ) {
 		return $this->get( $job->getType() )->deduplicateRootJob( $job );
 	}
 
@@ -390,7 +384,7 @@ class JobQueueGroup {
 	}
 
 	/**
-	 * Get the size of the queus for a list of job types
+	 * Get the size of the queues for a list of job types
 	 *
 	 * @return int[] Map of (job type => size)
 	 */
@@ -413,7 +407,8 @@ class JobQueueGroup {
 	}
 
 	/**
-	 * @return JobQueue[]
+	 * @return array[]
+	 * @phan-return array<string,array{queue:JobQueue,types:array<string,class-string>}>
 	 */
 	protected function getCoalescedQueues() {
 		global $wgJobTypeConf;
@@ -421,7 +416,7 @@ class JobQueueGroup {
 		if ( $this->coalescedQueues === null ) {
 			$this->coalescedQueues = [];
 			foreach ( $wgJobTypeConf as $type => $conf ) {
-				$queue = JobQueue::factory(
+				$queue = $this->factoryJobQueue(
 					[ 'domain' => $this->domain, 'type' => 'null' ] + $conf );
 				$loc = $queue->getCoalesceLocationInternal();
 				if ( !isset( $this->coalescedQueues[$loc] ) ) {

@@ -21,15 +21,19 @@
  */
 
 use MediaWiki\MediaWikiServices;
-use Wikimedia\Rdbms\ResultWrapper;
+use Wikimedia\Rdbms\IResultWrapper;
 
 /**
  * Class for viewing MediaWiki file description pages
  *
  * @ingroup Media
+ *
+ * @method WikiFilePage getPage()
  */
 class ImagePage extends Article {
-	/** @var File */
+	use MediaFileTrait;
+
+	/** @var File|false */
 	private $displayImg;
 
 	/** @var FileRepo */
@@ -40,11 +44,6 @@ class ImagePage extends Article {
 
 	/** @var bool */
 	protected $mExtraDescription = false;
-
-	/**
-	 * @var WikiFilePage
-	 */
-	protected $mPage;
 
 	/**
 	 * @param Title $title
@@ -60,7 +59,7 @@ class ImagePage extends Article {
 	 * @return void
 	 */
 	public function setFile( $file ) {
-		$this->mPage->setFile( $file );
+		$this->getPage()->setFile( $file );
 		$this->displayImg = $file;
 		$this->fileLoaded = true;
 	}
@@ -73,14 +72,15 @@ class ImagePage extends Article {
 
 		$this->displayImg = $img = false;
 
-		Hooks::run( 'ImagePageFindFile', [ $this, &$img, &$this->displayImg ] );
+		$this->getHookRunner()->onImagePageFindFile( $this, $img, $this->displayImg );
 		if ( !$img ) { // not set by hook?
-			$img = wfFindFile( $this->getTitle() );
+			$services = MediaWikiServices::getInstance();
+			$img = $services->getRepoGroup()->findFile( $this->getTitle() );
 			if ( !$img ) {
-				$img = wfLocalFile( $this->getTitle() );
+				$img = $services->getRepoGroup()->getLocalRepo()->newFile( $this->getTitle() );
 			}
 		}
-		$this->mPage->setFile( $img );
+		$this->getPage()->setFile( $img );
 		if ( !$this->displayImg ) { // not set by hook?
 			$this->displayImg = $img;
 		}
@@ -111,8 +111,14 @@ class ImagePage extends Article {
 
 		$this->loadFile();
 
-		if ( $this->getTitle()->getNamespace() == NS_FILE && $this->mPage->getFile()->getRedirected() ) {
-			if ( $this->getTitle()->getDBkey() == $this->mPage->getFile()->getName() || $diff !== null ) {
+		if (
+			$this->getTitle()->getNamespace() == NS_FILE
+			&& $this->getFile()->getRedirected()
+		) {
+			if (
+				$this->getTitle()->getDBkey() == $this->getFile()->getName()
+				|| $diff !== null
+			) {
 				$request->setVal( 'diffonly', 'true' );
 			}
 
@@ -137,7 +143,7 @@ class ImagePage extends Article {
 		}
 
 		# No need to display noarticletext, we use our own message, output in openShowImage()
-		if ( $this->mPage->getId() ) {
+		if ( $this->getPage()->getId() ) {
 			# NS_FILE is in the user language, but this section (the actual wikitext)
 			# should be in page content language
 			$pageLang = $this->getTitle()->getPageViewLanguage();
@@ -152,7 +158,10 @@ class ImagePage extends Article {
 			# Just need to set the right headers
 			$out->setArticleFlag( true );
 			$out->setPageTitle( $this->getTitle()->getPrefixedText() );
-			$this->mPage->doViewUpdates( $this->getContext()->getUser(), $this->getOldID() );
+			$this->getPage()->doViewUpdates(
+				$this->getContext()->getUser(),
+				$this->getOldID()
+			);
 		}
 
 		# Show shared description, if needed
@@ -178,12 +187,13 @@ class ImagePage extends Article {
 
 		# Allow extensions to add something after the image links
 		$html = '';
-		Hooks::run( 'ImagePageAfterImageLinks', [ $this, &$html ] );
+		$this->getHookRunner()->onImagePageAfterImageLinks( $this, $html );
 		if ( $html ) {
 			$out->addHTML( $html );
 		}
 
 		if ( $showmeta ) {
+			'@phan-var array $formattedMetadata';
 			$out->addHTML( Xml::element(
 				'h2',
 				[ 'id' => 'metadata' ],
@@ -230,7 +240,7 @@ class ImagePage extends Article {
 			'<li><a href="#filelinks">' . $this->getContext()->msg( 'imagelinks' )->escaped() . '</a></li>',
 		];
 
-		Hooks::run( 'ImagePageShowTOC', [ $this, &$r ] );
+		$this->getHookRunner()->onImagePageShowTOC( $this, $r );
 
 		if ( $metadata ) {
 			$r[] = '<li><a href="#metadata">' .
@@ -282,7 +292,11 @@ class ImagePage extends Article {
 	 */
 	public function getEmptyPageParserOutput( ParserOptions $options ) {
 		$this->loadFile();
-		if ( $this->mPage->getFile() && !$this->mPage->getFile()->isLocal() && $this->getId() == 0 ) {
+		if (
+			$this->getFile()
+			&& !$this->getFile()->isLocal()
+			&& !$this->getPage()->getId()
+		) {
 			return new ParserOutput();
 		}
 		return parent::getEmptyPageParserOutput( $options );
@@ -321,12 +335,12 @@ class ImagePage extends Article {
 		$dirmark = $lang->getDirMarkEntity();
 		$request = $this->getContext()->getRequest();
 
-		list( $maxWidth, $maxHeight ) = $this->getImageLimitsFromOption( $user, 'imagesize' );
-
 		if ( $this->displayImg->exists() ) {
+			list( $maxWidth, $maxHeight ) = $this->getImageLimitsFromOption( $user, 'imagesize' );
+
 			# image
 			$page = $request->getIntOrNull( 'page' );
-			if ( is_null( $page ) ) {
+			if ( $page === null ) {
 				$params = [];
 				$page = 1;
 			} else {
@@ -334,7 +348,7 @@ class ImagePage extends Article {
 			}
 
 			$renderLang = $this->getLanguageForRendering( $request, $this->displayImg );
-			if ( !is_null( $renderLang ) ) {
+			if ( $renderLang !== null ) {
 				$params['lang'] = $renderLang;
 			}
 
@@ -346,10 +360,7 @@ class ImagePage extends Article {
 			$filename = wfEscapeWikiText( $this->displayImg->getName() );
 			$linktext = $filename;
 
-			// Avoid PHP 7.1 warning from passing $this by reference
-			$imagePage = $this;
-
-			Hooks::run( 'ImageOpenShowImageInlineBefore', [ &$imagePage, &$out ] );
+			$this->getHookRunner()->onImageOpenShowImageInlineBefore( $this, $out );
 
 			if ( $this->displayImg->allowInlineDisplay() ) {
 				# image
@@ -357,9 +368,12 @@ class ImagePage extends Article {
 				# $msgsize = $this->getContext()->msg( 'file-info-size', $width_orig, $height_orig,
 				#   Language::formatSize( $this->displayImg->getSize() ), $mime )->escaped();
 				# We'll show a thumbnail of this image
-				if ( $width > $maxWidth || $height > $maxHeight || $this->displayImg->isVectorized() ) {
-					list( $width, $height ) = $this->getDisplayWidthHeight(
-						$maxWidth, $maxHeight, $width, $height
+				if ( $width > $maxWidth ||
+					$height > $maxHeight ||
+					$this->displayImg->isVectorized()
+				) {
+					list( $width, $height ) = $this->displayImg->getDisplayWidthHeight(
+						$maxWidth, $maxHeight, $page
 					);
 					$linktext = $this->getContext()->msg( 'show-big-image' )->escaped();
 
@@ -413,6 +427,9 @@ class ImagePage extends Article {
 
 				$params['width'] = $width;
 				$params['height'] = $height;
+				// Allow the MediaHandler to handle query string parameters on the file page,
+				// e.g. start time for videos (T203994)
+				$params['imagePageParams'] = $request->getQueryValuesOnly();
 				$thumbnail = $this->displayImg->transform( $params );
 				Linker::processResponsiveImages( $this->displayImg, $thumbnail, $params );
 
@@ -440,14 +457,15 @@ class ImagePage extends Article {
 
 				if ( $isMulti ) {
 					$count = $this->displayImg->pageCount();
+					$linkRenderer = MediaWikiServices::getInstance()->getLinkRenderer();
 
 					if ( $page > 1 ) {
 						$label = $this->getContext()->msg( 'imgmultipageprev' )->text();
 						// on the client side, this link is generated in ajaxifyPageNavigation()
 						// in the mediawiki.page.image.pagination module
-						$link = Linker::linkKnown(
+						$link = $linkRenderer->makeKnownLink(
 							$this->getTitle(),
-							htmlspecialchars( $label ),
+							$label,
 							[],
 							[ 'page' => $page - 1 ]
 						);
@@ -465,9 +483,9 @@ class ImagePage extends Article {
 
 					if ( $page < $count ) {
 						$label = $this->getContext()->msg( 'imgmultipagenext' )->text();
-						$link = Linker::linkKnown(
+						$link = $linkRenderer->makeKnownLink(
 							$this->getTitle(),
-							htmlspecialchars( $label ),
+							$label,
 							[],
 							[ 'page' => $page + 1 ]
 						);
@@ -586,7 +604,7 @@ EOT
 			}
 		} else {
 			# Image does not exist
-			if ( !$this->getId() ) {
+			if ( !$this->getPage()->getId() ) {
 				$dbr = wfGetDB( DB_REPLICA );
 
 				# No article exists either
@@ -604,12 +622,17 @@ EOT
 				);
 			}
 
-			if ( $wgEnableUploads && $user->isAllowed( 'upload' ) ) {
+			if ( $wgEnableUploads && MediaWikiServices::getInstance()
+					->getPermissionManager()
+					->userHasRight( $user, 'upload' )
+			) {
 				// Only show an upload link if the user can upload
 				$uploadTitle = SpecialPage::getTitleFor( 'Upload' );
 				$nofile = [
 					'filepage-nofile-link',
-					$uploadTitle->getFullURL( [ 'wpDestFile' => $this->mPage->getFile()->getName() ] )
+					$uploadTitle->getFullURL( [
+						'wpDestFile' => $this->getFile()->getName()
+					] )
 				];
 			} else {
 				$nofile = 'filepage-nofile';
@@ -619,7 +642,7 @@ EOT
 			// by Article::View().
 			$out->setRobotPolicy( 'noindex,nofollow' );
 			$out->wrapWikiMsg( "<div id='mw-imagepage-nofile' class='plainlinks'>\n$1\n</div>", $nofile );
-			if ( !$this->getId() && $wgSend404Code ) {
+			if ( !$this->getPage()->getId() && $wgSend404Code ) {
 				// If there is no image, no shared image, and no description page,
 				// output a 404, to be consistent with Article::showMissingArticle.
 				$request->response()->statusHeader( 404 );
@@ -696,16 +719,16 @@ EOT
 		$out = $this->getContext()->getOutput();
 		$this->loadFile();
 
-		$descUrl = $this->mPage->getFile()->getDescriptionUrl();
-		$descText = $this->mPage->getFile()->getDescriptionText( $this->getContext()->getLanguage() );
+		$descUrl = $this->getFile()->getDescriptionUrl();
+		$descText = $this->getFile()->getDescriptionText( $this->getContext()->getLanguage() );
 
 		/* Add canonical to head if there is no local page for this shared file */
-		if ( $descUrl && $this->mPage->getId() == 0 ) {
+		if ( $descUrl && !$this->getPage()->getId() ) {
 			$out->setCanonicalUrl( $descUrl );
 		}
 
 		$wrap = "<div class=\"sharedUploadNotice\">\n$1\n</div>\n";
-		$repo = $this->mPage->getFile()->getRepo()->getDisplayName();
+		$repo = $this->getFile()->getRepo()->getDisplayName();
 
 		if ( $descUrl &&
 			$descText &&
@@ -729,48 +752,46 @@ EOT
 		$this->loadFile();
 		$uploadTitle = SpecialPage::getTitleFor( 'Upload' );
 		return $uploadTitle->getFullURL( [
-			'wpDestFile' => $this->mPage->getFile()->getName(),
+			'wpDestFile' => $this->getFile()->getName(),
 			'wpForReUpload' => 1
 		] );
 	}
 
 	/**
-	 * Print out the various links at the bottom of the image page, e.g. reupload,
-	 * external editing (and instructions link) etc.
+	 * Add the re-upload link (or message about not being able to re-upload) to the output.
 	 */
 	protected function uploadLinksBox() {
-		global $wgEnableUploads;
-
-		if ( !$wgEnableUploads ) {
+		if ( !$this->getContext()->getConfig()->get( 'EnableUploads' ) ) {
 			return;
 		}
 
 		$this->loadFile();
-		if ( !$this->mPage->getFile()->isLocal() ) {
+		if ( !$this->getFile()->isLocal() ) {
 			return;
 		}
 
-		$out = $this->getContext()->getOutput();
-		$out->addHTML( "<ul>\n" );
-
-		# "Upload a new version of this file" link
-		$canUpload = $this->getTitle()->quickUserCan( 'upload', $this->getContext()->getUser() );
+		$canUpload = MediaWikiServices::getInstance()->getPermissionManager()
+			->quickUserCan( 'upload', $this->getContext()->getUser(), $this->getTitle() );
 		if ( $canUpload && UploadBase::userCanReUpload(
 				$this->getContext()->getUser(),
-				$this->mPage->getFile() )
+				$this->getFile() )
 		) {
+			// "Upload a new version of this file" link
 			$ulink = Linker::makeExternalLink(
 				$this->getUploadUrl(),
 				$this->getContext()->msg( 'uploadnewversion-linktext' )->text()
 			);
-			$out->addHTML( "<li id=\"mw-imagepage-reupload-link\">"
-				. "<div class=\"plainlinks\">{$ulink}</div></li>\n" );
+			$attrs = [ 'class' => 'plainlinks', 'id' => 'mw-imagepage-reupload-link' ];
+			$linkPara = Html::rawElement( 'p', $attrs, $ulink );
 		} else {
-			$out->addHTML( "<li id=\"mw-imagepage-upload-disallowed\">"
-				. $this->getContext()->msg( 'upload-disallowed-here' )->escaped() . "</li>\n" );
+			// "You cannot overwrite this file." message
+			$attrs = [ 'id' => 'mw-imagepage-upload-disallowed' ];
+			$msg = $this->getContext()->msg( 'upload-disallowed-here' )->text();
+			$linkPara = Html::element( 'p', $attrs, $msg );
 		}
 
-		$out->addHTML( "</ul>\n" );
+		$uploadLinks = Html::rawElement( 'div', [ 'class' => 'mw-imagepage-upload-links' ], $linkPara );
+		$this->getContext()->getOutput()->addHTML( $uploadLinks );
 	}
 
 	/**
@@ -790,19 +811,19 @@ EOT
 		$out->addHTML( $pager->getBody() );
 		$out->preventClickjacking( $pager->getPreventClickjacking() );
 
-		$this->mPage->getFile()->resetHistory(); // free db resources
+		$this->getFile()->resetHistory(); // free db resources
 
 		# Exist check because we don't want to show this on pages where an image
 		# doesn't exist along with the noimage message, that would suck. -ævar
-		if ( $this->mPage->getFile()->exists() ) {
+		if ( $this->getFile()->exists() ) {
 			$this->uploadLinksBox();
 		}
 	}
 
 	/**
-	 * @param string $target
+	 * @param string|string[] $target
 	 * @param int $limit
-	 * @return ResultWrapper
+	 * @return IResultWrapper
 	 */
 	protected function queryImageLinks( $target, $limit ) {
 		$dbr = wfGetDB( DB_REPLICA );
@@ -872,10 +893,10 @@ EOT
 			Html::openElement( 'ul',
 				[ 'class' => 'mw-imagepage-linkstoimage' ] ) . "\n"
 		);
-		$count = 0;
-
 		// Sort the list by namespace:title
 		usort( $rows, [ $this, 'compare' ] );
+
+		$linkRenderer = MediaWikiServices::getInstance()->getLinkRenderer();
 
 		// Create links for every element
 		$currentCount = 0;
@@ -890,7 +911,7 @@ EOT
 			if ( isset( $redirects[$element->page_title] ) ) {
 				$query['redirect'] = 'no';
 			}
-			$link = Linker::linkKnown(
+			$link = $linkRenderer->makeKnownLink(
 				Title::makeTitle( $element->page_namespace, $element->page_title ),
 				null, [], $query
 			);
@@ -911,7 +932,8 @@ EOT
 						break;
 					}
 
-					$link2 = Linker::linkKnown( Title::makeTitle( $row->page_namespace, $row->page_title ) );
+					$link2 = $linkRenderer->makeKnownLink(
+						Title::makeTitle( $row->page_namespace, $row->page_title ) );
 					$li .= Html::rawElement(
 						'li',
 						[ 'class' => 'mw-imagepage-linkstoimage-ns' . $element->page_namespace ],
@@ -934,12 +956,12 @@ EOT
 				) . "\n"
 			);
 
-		};
+		}
 		$out->addHTML( Html::closeElement( 'ul' ) . "\n" );
 		$res->free();
 
 		// Add a links to [[Special:Whatlinkshere]]
-		if ( $count > $limit ) {
+		if ( $currentCount > $limit ) {
 			$out->addWikiMsg( 'morelinkstoimage', $this->getTitle()->getPrefixedDBkey() );
 		}
 		$out->addHTML( Html::closeElement( 'div' ) . "\n" );
@@ -949,7 +971,7 @@ EOT
 		$this->loadFile();
 		$out = $this->getContext()->getOutput();
 
-		$dupes = $this->mPage->getDuplicates();
+		$dupes = $this->getPage()->getDuplicates();
 		if ( count( $dupes ) == 0 ) {
 			return;
 		}
@@ -960,13 +982,15 @@ EOT
 		);
 		$out->addHTML( "<ul class='mw-imagepage-duplicates'>\n" );
 
+		$linkRenderer = MediaWikiServices::getInstance()->getLinkRenderer();
+
 		/**
-		 * @var $file File
+		 * @var File $file
 		 */
 		foreach ( $dupes as $file ) {
 			$fromSrc = '';
 			if ( $file->isLocal() ) {
-				$link = Linker::linkKnown( $file->getTitle() );
+				$link = $linkRenderer->makeKnownLink( $file->getTitle() );
 			} else {
 				$link = Linker::makeExternalLink( $file->getDescriptionUrl(),
 					$file->getTitle()->getPrefixedText() );
@@ -984,14 +1008,15 @@ EOT
 	 * Delete the file, or an earlier version of it
 	 */
 	public function delete() {
-		$file = $this->mPage->getFile();
+		$file = $this->getFile();
 		if ( !$file->exists() || !$file->isLocal() || $file->getRedirected() ) {
 			// Standard article deletion
 			parent::delete();
 			return;
 		}
+		'@phan-var LocalFile $file';
 
-		$deleter = new FileDeleteForm( $file );
+		$deleter = new FileDeleteForm( $file, $this->getContext()->getUser() );
 		$deleter->execute();
 	}
 
@@ -1000,7 +1025,7 @@ EOT
 	 *
 	 * @param string $description
 	 */
-	function showError( $description ) {
+	public function showError( $description ) {
 		$out = $this->getContext()->getOutput();
 		$out->setPageTitle( $this->getContext()->msg( 'internalerror' ) );
 		$out->setRobotPolicy( 'noindex,nofollow' );
@@ -1029,24 +1054,10 @@ EOT
 	 * @param string $optionName Name of a option to check, typically imagesize or thumbsize
 	 * @return int[]
 	 * @since 1.21
+	 * @deprecated Since 1.35 Use static function MediaFileTrait::getImageLimitsFromOption
 	 */
 	public function getImageLimitsFromOption( $user, $optionName ) {
-		global $wgImageLimits;
-
-		$option = $user->getIntOption( $optionName );
-		if ( !isset( $wgImageLimits[$option] ) ) {
-			$option = User::getDefaultOption( $optionName );
-		}
-
-		// The user offset might still be incorrect, specially if
-		// $wgImageLimits got changed (see T10858).
-		if ( !isset( $wgImageLimits[$option] ) ) {
-			// Default to the first offset in $wgImageLimits
-			$option = 0;
-		}
-
-		// if nothing is set, fallback to a hardcoded default
-		return $wgImageLimits[$option] ?? [ 800, 600 ];
+		return MediaFileTrait::getImageLimitsFromOption( $user, $optionName );
 	}
 
 	/**
@@ -1075,7 +1086,7 @@ EOT
 			Xml::option(
 				$this->getContext()->msg( 'img-lang-default' )->text(),
 				'und',
-				is_null( $matchedRenderLang )
+				$matchedRenderLang === null
 			);
 
 		$select = Html::rawElement(
@@ -1103,7 +1114,9 @@ EOT
 	 */
 	private function createXmlOptionStringForLanguage( $lang, $selected ) {
 		$code = LanguageCode::bcp47( $lang );
-		$name = Language::fetchLanguageName( $code, $this->getContext()->getLanguage()->getCode() );
+		$name = MediaWikiServices::getInstance()
+			->getLanguageNameUtils()
+			->getLanguageName( $code, $this->getContext()->getLanguage()->getCode() );
 		if ( $name !== '' ) {
 			$display = $this->getContext()->msg( 'img-lang-opt', $code, $name )->text();
 		} else {
@@ -1118,54 +1131,13 @@ EOT
 	}
 
 	/**
-	 * Get the width and height to display image at.
-	 *
-	 * @note This method assumes that it is only called if one
-	 *  of the dimensions are bigger than the max, or if the
-	 *  image is vectorized.
-	 *
-	 * @param int $maxWidth Max width to display at
-	 * @param int $maxHeight Max height to display at
-	 * @param int $width Actual width of the image
-	 * @param int $height Actual height of the image
-	 * @throws MWException
-	 * @return array Array (width, height)
-	 */
-	protected function getDisplayWidthHeight( $maxWidth, $maxHeight, $width, $height ) {
-		if ( !$maxWidth || !$maxHeight ) {
-			// should never happen
-			throw new MWException( 'Using a choice from $wgImageLimits that is 0x0' );
-		}
-
-		if ( !$width || !$height ) {
-			return [ 0, 0 ];
-		}
-
-		# Calculate the thumbnail size.
-		if ( $width <= $maxWidth && $height <= $maxHeight ) {
-			// Vectorized image, do nothing.
-		} elseif ( $width / $height >= $maxWidth / $maxHeight ) {
-			# The limiting factor is the width, not the height.
-			$height = round( $height * $maxWidth / $width );
-			$width = $maxWidth;
-			# Note that $height <= $maxHeight now.
-		} else {
-			$newwidth = floor( $width * $maxHeight / $height );
-			$height = round( $height * $newwidth / $width );
-			$width = $newwidth;
-			# Note that $height <= $maxHeight now, but might not be identical
-			# because of rounding.
-		}
-		return [ $width, $height ];
-	}
-
-	/**
 	 * Get alternative thumbnail sizes.
 	 *
 	 * @note This will only list several alternatives if thumbnails are rendered on 404
 	 * @param int $origWidth Actual width of image
 	 * @param int $origHeight Actual height of image
-	 * @return array An array of [width, height] pairs.
+	 * @return int[][] An array of [width, height] pairs.
+	 * @phan-return array<int,array{0:int,1:int}>
 	 */
 	protected function getThumbSizes( $origWidth, $origHeight ) {
 		global $wgImageLimits;
@@ -1198,7 +1170,7 @@ EOT
 	 * @return bool|File
 	 */
 	public function getFile() {
-		return $this->mPage->getFile();
+		return $this->getPage()->getFile();
 	}
 
 	/**
@@ -1206,7 +1178,7 @@ EOT
 	 * @return bool
 	 */
 	public function isLocal() {
-		return $this->mPage->isLocal();
+		return $this->getPage()->isLocal();
 	}
 
 	/**
@@ -1214,7 +1186,7 @@ EOT
 	 * @return array|null
 	 */
 	public function getDuplicates() {
-		return $this->mPage->getDuplicates();
+		return $this->getPage()->getDuplicates();
 	}
 
 	/**
@@ -1222,7 +1194,7 @@ EOT
 	 * @return TitleArray|Title[]
 	 */
 	public function getForeignCategories() {
-		return $this->mPage->getForeignCategories();
+		return $this->getPage()->getForeignCategories();
 	}
 
 }

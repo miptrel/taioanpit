@@ -1,6 +1,7 @@
 <?php
 
 use MediaWiki\MediaWikiServices;
+use Wikimedia\TestingAccessWrapper;
 
 /**
  * @group API
@@ -10,8 +11,18 @@ use MediaWiki\MediaWikiServices;
  * @covers ApiQuerySiteinfo
  */
 class ApiQuerySiteinfoTest extends ApiTestCase {
-	// We don't try to test every single thing for every category, just a sample
+	private $originalRegistryLoaded = null;
 
+	protected function tearDown() : void {
+		if ( $this->originalRegistryLoaded !== null ) {
+			$reg = TestingAccessWrapper::newFromObject( ExtensionRegistry::getInstance() );
+			$reg->loaded = $this->originalRegistryLoaded;
+			$this->originalRegistryLoaded = null;
+		}
+		parent::tearDown();
+	}
+
+	// We don't try to test every single thing for every category, just a sample
 	protected function doQuery( $siprop = null, $extraParams = [] ) {
 		$params = [ 'action' => 'query', 'meta' => 'siteinfo' ];
 		if ( $siprop !== null ) {
@@ -30,6 +41,7 @@ class ApiQuerySiteinfoTest extends ApiTestCase {
 	public function testGeneral() {
 		$this->setMwGlobals( [
 			'wgAllowExternalImagesFrom' => '//localhost/',
+			'wgMainPageIsDomainRoot' => true,
 		] );
 
 		$data = $this->doQuery();
@@ -37,10 +49,11 @@ class ApiQuerySiteinfoTest extends ApiTestCase {
 		$this->assertSame( Title::newMainPage()->getPrefixedText(), $data['mainpage'] );
 		$this->assertSame( PHP_VERSION, $data['phpversion'] );
 		$this->assertSame( [ '//localhost/' ], $data['externalimages'] );
+		$this->assertTrue( $data['mainpageisdomainroot'] );
 	}
 
 	public function testLinkPrefixCharset() {
-		$contLang = Language::factory( 'ar' );
+		$contLang = MediaWikiServices::getInstance()->getLanguageFactory()->getLanguage( 'ar' );
 		$this->setContentLang( $contLang );
 		$this->assertTrue( $contLang->linkPrefixExtension(), 'Sanity check' );
 
@@ -50,7 +63,7 @@ class ApiQuerySiteinfoTest extends ApiTestCase {
 	}
 
 	public function testVariants() {
-		$contLang = Language::factory( 'zh' );
+		$contLang = MediaWikiServices::getInstance()->getLanguageFactory()->getLanguage( 'zh' );
 		$this->setContentLang( $contLang );
 		$this->assertTrue( $contLang->hasVariants(), 'Sanity check' );
 
@@ -79,22 +92,48 @@ class ApiQuerySiteinfoTest extends ApiTestCase {
 		$this->assertSame( 'Need more donations', $data['readonlyreason'] );
 	}
 
-	public function testNamespaces() {
-		$this->setMwGlobals( 'wgExtraNamespaces', [ '138' => 'Testing' ] );
-
+	public function testNamespacesBasic() {
 		$this->assertSame(
 			array_keys( MediaWikiServices::getInstance()->getContentLanguage()->getFormattedNamespaces() ),
 			array_keys( $this->doQuery( 'namespaces' ) )
 		);
 	}
 
-	public function testNamespaceAliases() {
-		global $wgNamespaceAliases;
-
-		$expected = array_merge(
-			$wgNamespaceAliases,
-			MediaWikiServices::getInstance()->getContentLanguage()->getNamespaceAliases()
+	public function testNamespacesExtraNS() {
+		$this->setMwGlobals( 'wgExtraNamespaces', [ '138' => 'Testing' ] );
+		$this->assertSame(
+			array_keys( MediaWikiServices::getInstance()->getContentLanguage()->getFormattedNamespaces() ),
+			array_keys( $this->doQuery( 'namespaces' ) )
 		);
+	}
+
+	public function testNamespacesProtection() {
+		$this->setMwGlobals(
+			'wgNamespaceProtection',
+			[
+				'0' => '',
+				'2' => [ '' ],
+				'4' => 'editsemiprotected',
+				'8' => [
+					'editinterface',
+					'noratelimit'
+				],
+				'14' => [
+					'move-categorypages',
+					''
+				]
+			]
+		);
+		$data = $this->doQuery( 'namespaces' );
+		$this->assertArrayNotHasKey( 'namespaceprotection', $data['0'] );
+		$this->assertArrayNotHasKey( 'namespaceprotection', $data['2'] );
+		$this->assertSame( 'editsemiprotected', $data['4']['namespaceprotection'] );
+		$this->assertSame( 'editinterface|noratelimit', $data['8']['namespaceprotection'] );
+		$this->assertSame( 'move-categorypages', $data['14']['namespaceprotection'] );
+	}
+
+	public function testNamespaceAliases() {
+		$expected = MediaWikiServices::getInstance()->getContentLanguage()->getNamespaceAliases();
 		$expected = array_map(
 			function ( $key, $val ) {
 				return [ 'id' => $val, 'alias' => strtr( $key, '_', ' ' ) ];
@@ -102,9 +141,6 @@ class ApiQuerySiteinfoTest extends ApiTestCase {
 			array_keys( $expected ),
 			$expected
 		);
-
-		// Test that we don't list duplicates
-		$this->mergeMwGlobalArrayValue( 'wgNamespaceAliases', [ 'Talk' => NS_TALK ] );
 
 		$this->assertSame( $expected, $this->doQuery( 'namespacealiases' ) );
 	}
@@ -160,8 +196,9 @@ class ApiQuerySiteinfoTest extends ApiTestCase {
 			'wgExtraInterlanguageLinkPrefixes' => [ 'self' ],
 			'wgExtraLanguageNames' => [ 'self' => 'Recursion' ],
 		] );
+		$this->resetServices();
 
-		MessageCache::singleton()->enable();
+		MediaWikiServices::getInstance()->getMessageCache()->enable();
 
 		$this->editPage( 'MediaWiki:Interlanguage-link-self', 'Self!' );
 		$this->editPage( 'MediaWiki:Interlanguage-link-sitename-self', 'Circular logic' );
@@ -210,15 +247,16 @@ class ApiQuerySiteinfoTest extends ApiTestCase {
 			$this->setExpectedApiException( 'apierror-siteinfo-includealldenied' );
 		}
 
-		$mockLB = $this->getMockBuilder( LoadBalancer::class )
-			->disableOriginalConstructor()
-			->setMethods( [ 'getMaxLag', 'getLagTimes', 'getServerName', '__destruct' ] )
-			->getMock();
+		$mockLB = $this->createMock( LoadBalancer::class );
 		$mockLB->method( 'getMaxLag' )->willReturn( [ null, 7, 1 ] );
 		$mockLB->method( 'getLagTimes' )->willReturn( [ 5, 7 ] );
 		$mockLB->method( 'getServerName' )->will( $this->returnValueMap( [
 			[ 0, 'apple' ], [ 1, 'carrot' ]
 		] ) );
+		$mockLB->method( 'getLocalDomainID' )->willReturn( 'testdomain' );
+		$mockLB->expects( $this->never() )->method( $this->anythingBut(
+			'getMaxLag', 'getLagTimes', 'getServerName', 'getLocalDomainID', '__destruct'
+		) );
 		$this->setService( 'DBLoadBalancer', $mockLB );
 
 		$this->setMwGlobals( 'wgShowHostnames', $showHostnames );
@@ -399,6 +437,11 @@ class ApiQuerySiteinfoTest extends ApiTestCase {
 				'author' => [ 'John Smith', 'John Smith Jr.', '...' ],
 				'descriptionmsg' => [ 'another-extension-desc', 'param' ] ],
 		] ] );
+		// Make the main registry empty
+		// TODO: Make ExtensionRegistry an injected service?
+		$reg = TestingAccessWrapper::newFromObject( ExtensionRegistry::getInstance() );
+		$this->originalRegistryLoaded = $reg->loaded;
+		$reg->loaded = [];
 
 		$data = $this->doQuery( 'extensions' );
 
@@ -482,7 +525,9 @@ class ApiQuerySiteinfoTest extends ApiTestCase {
 	 * @dataProvider languagesProvider
 	 */
 	public function testLanguages( $langCode ) {
-		$expected = Language::fetchLanguageNames( (string)$langCode );
+		$expected = MediaWikiServices::getInstance()
+			->getLanguageNameUtils()
+			->getLanguageNames( (string)$langCode );
 
 		$expected = array_map(
 			function ( $code, $name ) {
@@ -509,7 +554,11 @@ class ApiQuerySiteinfoTest extends ApiTestCase {
 	public function testLanguageVariants() {
 		$expectedKeys = array_filter( LanguageConverter::$languagesWithVariants,
 			function ( $langCode ) {
-				return !Language::factory( $langCode )->getConverter() instanceof FakeConverter;
+				$lang = MediaWikiServices::getInstance()->getLanguageFactory()
+					->getLanguage( $langCode );
+				$converter = MediaWikiServices::getInstance()->getLanguageConverterFactory()
+					->getLanguageConverter( $lang );
+					return $converter->hasVariants();
 			}
 		);
 		sort( $expectedKeys );
@@ -537,12 +586,13 @@ class ApiQuerySiteinfoTest extends ApiTestCase {
 		$expectedAllowed = Skin::getAllowedSkins();
 		$expectedDefault = Skin::normalizeKey( 'default' );
 
+		$languageNameUtils = MediaWikiServices::getInstance()->getLanguageNameUtils();
 		$i = 0;
 		foreach ( Skin::getSkinNames() as $name => $displayName ) {
 			$this->assertSame( $name, $data[$i]['code'] );
 
 			$msg = wfMessage( "skinname-$name" );
-			if ( $code && Language::isValidCode( $code ) ) {
+			if ( $code && $languageNameUtils->isValidCode( $code ) ) {
 				$msg->inLanguage( $code );
 			} else {
 				$msg->inContentLanguage();
@@ -571,22 +621,19 @@ class ApiQuerySiteinfoTest extends ApiTestCase {
 	}
 
 	public function testExtensionTags() {
-		global $wgParser;
-
 		$expected = array_map(
 			function ( $tag ) {
 				return "<$tag>";
 			},
-			$wgParser->getTags()
+			MediaWikiServices::getInstance()->getParser()->getTags()
 		);
 
 		$this->assertSame( $expected, $this->doQuery( 'extensiontags' ) );
 	}
 
 	public function testFunctionHooks() {
-		global $wgParser;
-
-		$this->assertSame( $wgParser->getFunctionHooks(), $this->doQuery( 'functionhooks' ) );
+		$this->assertSame( MediaWikiServices::getInstance()->getParser()->getFunctionHooks(),
+			$this->doQuery( 'functionhooks' ) );
 	}
 
 	public function testVariables() {
@@ -636,17 +683,13 @@ class ApiQuerySiteinfoTest extends ApiTestCase {
 	}
 
 	public function testContinuation() {
-		// We make lots and lots of URL protocols that are each 100 bytes
+		// Use $wgUrlProtocols to forge the size of the API query
 		global $wgAPIMaxResultSize, $wgUrlProtocols;
 
-		$this->setMwGlobals( 'wgUrlProtocols', [] );
+		$protocol = 'foo://';
 
-		// Just under the limit
-		$chunks = $wgAPIMaxResultSize / 100 - 1;
-
-		for ( $i = 0; $i < $chunks; $i++ ) {
-			$wgUrlProtocols[] = substr( str_repeat( "$i ", 50 ), 0, 100 );
-		}
+		$this->setMwGlobals( 'wgUrlProtocols', [ $protocol ] );
+		$this->setMwGlobals( 'wgAPIMaxResultSize', strlen( $protocol ) );
 
 		$res = $this->doApiRequest( [
 			'action' => 'query',

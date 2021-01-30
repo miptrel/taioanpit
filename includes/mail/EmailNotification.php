@@ -50,15 +50,15 @@ class EmailNotification {
 	/**
 	 * Notification is due to user's user talk being edited
 	 */
-	const USER_TALK = 'user_talk';
+	private const USER_TALK = 'user_talk';
 	/**
 	 * Notification is due to a watchlisted page being edited
 	 */
-	const WATCHLIST = 'watchlist';
+	private const WATCHLIST = 'watchlist';
 	/**
 	 * Notification because user is notified for all changes
 	 */
-	const ALL_CHANGES = 'all_changes';
+	private const ALL_CHANGES = 'all_changes';
 
 	protected $subject, $body, $replyto, $from;
 	protected $timestamp, $summary, $minorEdit, $oldid, $composed_common, $pageStatus;
@@ -100,14 +100,16 @@ class EmailNotification {
 	 * @param bool $minorEdit
 	 * @param bool $oldid (default: false)
 	 * @param string $pageStatus (default: 'changed')
+	 * @return bool Whether an email job was created or not.
+	 * @since 1.35 returns a boolean indicating whether an email job was created.
 	 */
 	public function notifyOnPageChange( $editor, $title, $timestamp, $summary,
 		$minorEdit, $oldid = false, $pageStatus = 'changed'
-	) {
+	): bool {
 		global $wgEnotifMinorEdits, $wgUsersNotifiedOnAllChanges, $wgEnotifUserTalk;
 
 		if ( $title->getNamespace() < 0 ) {
-			return;
+			return false;
 		}
 
 		// update wl_notificationtimestamp for watchers
@@ -129,7 +131,10 @@ class EmailNotification {
 		if ( $watchers === [] && !count( $wgUsersNotifiedOnAllChanges ) ) {
 			$sendEmail = false;
 			// Only send notification for non minor edits, unless $wgEnotifMinorEdits
-			if ( !$minorEdit || ( $wgEnotifMinorEdits && !$editor->isAllowed( 'nominornewtalk' ) ) ) {
+			if ( !$minorEdit || ( $wgEnotifMinorEdits && !MediaWikiServices::getInstance()
+						->getPermissionManager()
+						->userHasRight( $editor, 'nominornewtalk' ) )
+			) {
 				$isUserTalkPage = ( $title->getNamespace() == NS_USER_TALK );
 				if ( $wgEnotifUserTalk
 					&& $isUserTalkPage
@@ -155,6 +160,8 @@ class EmailNotification {
 				]
 			) );
 		}
+
+		return $sendEmail;
 	}
 
 	/**
@@ -173,12 +180,22 @@ class EmailNotification {
 	 * @param string $pageStatus
 	 * @throws MWException
 	 */
-	public function actuallyNotifyOnPageChange( $editor, $title, $timestamp, $summary, $minorEdit,
-		$oldid, $watchers, $pageStatus = 'changed' ) {
+	public function actuallyNotifyOnPageChange(
+		$editor,
+		$title,
+		$timestamp,
+		$summary,
+		$minorEdit,
+		$oldid,
+		$watchers,
+		$pageStatus = 'changed'
+	) {
 		# we use $wgPasswordSender as sender's address
 		global $wgUsersNotifiedOnAllChanges;
 		global $wgEnotifWatchlist, $wgBlockDisablesLogin;
 		global $wgEnotifMinorEdits, $wgEnotifUserTalk;
+
+		$messageCache = MediaWikiServices::getInstance()->getMessageCache();
 
 		# The following code is only run, if several conditions are met:
 		# 1. EmailNotification for pages (other than user_talk pages) must be enabled
@@ -197,20 +214,23 @@ class EmailNotification {
 
 		$formattedPageStatus = [ 'deleted', 'created', 'moved', 'restored', 'changed' ];
 
-		Hooks::run( 'UpdateUserMailerFormattedPageStatus', [ &$formattedPageStatus ] );
+		Hooks::runner()->onUpdateUserMailerFormattedPageStatus( $formattedPageStatus );
 		if ( !in_array( $this->pageStatus, $formattedPageStatus ) ) {
 			throw new MWException( 'Not a valid page status!' );
 		}
 
 		$userTalkId = false;
 
-		if ( !$minorEdit || ( $wgEnotifMinorEdits && !$editor->isAllowed( 'nominornewtalk' ) ) ) {
+		if ( !$minorEdit || ( $wgEnotifMinorEdits && !MediaWikiServices::getInstance()
+				   ->getPermissionManager()
+				   ->userHasRight( $editor, 'nominornewtalk' ) )
+		) {
 			if ( $wgEnotifUserTalk
 				&& $isUserTalkPage
 				&& $this->canSendUserTalkEmail( $editor, $title, $minorEdit )
 			) {
 				$targetUser = User::newFromName( $title->getText() );
-				$this->compose( $targetUser, self::USER_TALK );
+				$this->compose( $targetUser, self::USER_TALK, $messageCache );
 				$userTalkId = $targetUser->getId();
 			}
 
@@ -224,10 +244,12 @@ class EmailNotification {
 						&& $watchingUser->isEmailConfirmed()
 						&& $watchingUser->getId() != $userTalkId
 						&& !in_array( $watchingUser->getName(), $wgUsersNotifiedOnAllChanges )
-						&& !( $wgBlockDisablesLogin && $watchingUser->isBlocked() )
-						&& Hooks::run( 'SendWatchlistEmailNotification', [ $watchingUser, $title, $this ] )
+						// @TODO Partial blocks should not prevent the user from logging in.
+						//       see: https://phabricator.wikimedia.org/T208895
+						&& !( $wgBlockDisablesLogin && $watchingUser->getBlock() )
+						&& Hooks::runner()->onSendWatchlistEmailNotification( $watchingUser, $title, $this )
 					) {
-						$this->compose( $watchingUser, self::WATCHLIST );
+						$this->compose( $watchingUser, self::WATCHLIST, $messageCache );
 					}
 				}
 			}
@@ -239,7 +261,7 @@ class EmailNotification {
 				continue;
 			}
 			$user = User::newFromName( $name );
-			$this->compose( $user, self::ALL_CHANGES );
+			$this->compose( $user, self::ALL_CHANGES, $messageCache );
 		}
 
 		$this->sendMails();
@@ -259,24 +281,26 @@ class EmailNotification {
 			$targetUser = User::newFromName( $title->getText() );
 
 			if ( !$targetUser || $targetUser->isAnon() ) {
-				wfDebug( __METHOD__ . ": user talk page edited, but user does not exist\n" );
+				wfDebug( __METHOD__ . ": user talk page edited, but user does not exist" );
 			} elseif ( $targetUser->getId() == $editor->getId() ) {
-				wfDebug( __METHOD__ . ": user edited their own talk page, no notification sent\n" );
-			} elseif ( $wgBlockDisablesLogin && $targetUser->isBlocked() ) {
-				wfDebug( __METHOD__ . ": talk page owner is blocked and cannot login, no notification sent\n" );
+				wfDebug( __METHOD__ . ": user edited their own talk page, no notification sent" );
+			} elseif ( $wgBlockDisablesLogin && $targetUser->getBlock() ) {
+				// @TODO Partial blocks should not prevent the user from logging in.
+				//       see: https://phabricator.wikimedia.org/T208895
+				wfDebug( __METHOD__ . ": talk page owner is blocked and cannot login, no notification sent" );
 			} elseif ( $targetUser->getOption( 'enotifusertalkpages' )
 				&& ( !$minorEdit || $targetUser->getOption( 'enotifminoredits' ) )
 			) {
 				if ( !$targetUser->isEmailConfirmed() ) {
-					wfDebug( __METHOD__ . ": talk page owner doesn't have validated email\n" );
-				} elseif ( !Hooks::run( 'AbortTalkPageEmailNotification', [ $targetUser, $title ] ) ) {
-					wfDebug( __METHOD__ . ": talk page update notification is aborted for this user\n" );
+					wfDebug( __METHOD__ . ": talk page owner doesn't have validated email" );
+				} elseif ( !Hooks::runner()->onAbortTalkPageEmailNotification( $targetUser, $title ) ) {
+					wfDebug( __METHOD__ . ": talk page update notification is aborted for this user" );
 				} else {
-					wfDebug( __METHOD__ . ": sending talk page update notification\n" );
+					wfDebug( __METHOD__ . ": sending talk page update notification" );
 					return true;
 				}
 			} else {
-				wfDebug( __METHOD__ . ": talk page owner doesn't want notifications\n" );
+				wfDebug( __METHOD__ . ": talk page owner doesn't want notifications" );
 			}
 		}
 		return false;
@@ -284,8 +308,9 @@ class EmailNotification {
 
 	/**
 	 * Generate the generic "this page has been changed" e-mail text.
+	 * @param MessageCache $messageCache
 	 */
-	private function composeCommonMailtext() {
+	private function composeCommonMailtext( MessageCache $messageCache ) {
 		global $wgPasswordSender, $wgNoReplyAddress;
 		global $wgEnotifFromEditor, $wgEnotifRevealEditorAddress;
 		global $wgEnotifImpersonal, $wgEnotifUseRealName;
@@ -370,7 +395,7 @@ class EmailNotification {
 
 		$body = wfMessage( 'enotif_body' )->inContentLanguage()->plain();
 		$body = strtr( $body, $keys );
-		$body = MessageCache::singleton()->transform( $body, false, null, $this->title );
+		$body = $messageCache->transform( $body, false, null, $this->title );
 		$this->body = wordwrap( strtr( $body, $postTransformKeys ), 72 );
 
 		# Reveal the page editor's address as REPLY-TO address only if
@@ -402,12 +427,13 @@ class EmailNotification {
 	 * Call sendMails() to send any mails that were queued.
 	 * @param User $user
 	 * @param string $source
+	 * @param MessageCache $messageCache
 	 */
-	function compose( $user, $source ) {
+	private function compose( $user, $source, MessageCache $messageCache ) {
 		global $wgEnotifImpersonal;
 
 		if ( !$this->composed_common ) {
-			$this->composeCommonMailtext();
+			$this->composeCommonMailtext( $messageCache );
 		}
 
 		if ( $wgEnotifImpersonal ) {
@@ -420,7 +446,7 @@ class EmailNotification {
 	/**
 	 * Send any queued mails
 	 */
-	function sendMails() {
+	private function sendMails() {
 		global $wgEnotifImpersonal;
 		if ( $wgEnotifImpersonal ) {
 			$this->sendImpersonal( $this->mailTargets );
@@ -436,9 +462,8 @@ class EmailNotification {
 	 * @param User $watchingUser
 	 * @param string $source
 	 * @return Status
-	 * @private
 	 */
-	function sendPersonalised( $watchingUser, $source ) {
+	private function sendPersonalised( $watchingUser, $source ) {
 		global $wgEnotifUseRealName;
 		// From the PHP manual:
 		//   Note: The to parameter cannot be an address in the form of
@@ -477,7 +502,7 @@ class EmailNotification {
 	 * @param MailAddress[] $addresses
 	 * @return Status|null
 	 */
-	function sendImpersonal( $addresses ) {
+	private function sendImpersonal( $addresses ) {
 		if ( empty( $addresses ) ) {
 			return null;
 		}

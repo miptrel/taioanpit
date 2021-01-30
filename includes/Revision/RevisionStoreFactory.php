@@ -27,9 +27,11 @@ namespace MediaWiki\Revision;
 
 use ActorMigration;
 use CommentStore;
-use MediaWiki\Logger\Spi as LoggerSpi;
+use MediaWiki\Content\IContentHandlerFactory;
+use MediaWiki\HookContainer\HookContainer;
 use MediaWiki\Storage\BlobStoreFactory;
 use MediaWiki\Storage\NameTableStoreFactory;
+use Psr\Log\LoggerInterface;
 use WANObjectCache;
 use Wikimedia\Assert\Assert;
 use Wikimedia\Rdbms\ILBFactory;
@@ -54,26 +56,25 @@ class RevisionStoreFactory {
 	private $dbLoadBalancerFactory;
 	/** @var WANObjectCache */
 	private $cache;
-	/** @var LoggerSpi */
-	private $loggerProvider;
+	/** @var LoggerInterface */
+	private $logger;
 
 	/** @var CommentStore */
 	private $commentStore;
 	/** @var ActorMigration */
 	private $actorMigration;
-	/** @var int One of the MIGRATION_* constants */
-	private $mcrMigrationStage;
-	/**
-	 * @var bool
-	 * @see $wgContentHandlerUseDB
-	 */
-	private $contentHandlerUseDB;
 
 	/** @var NameTableStoreFactory */
 	private $nameTables;
 
 	/** @var SlotRoleRegistry */
 	private $slotRoleRegistry;
+
+	/** @var IContentHandlerFactory */
+	private $contentHandlerFactory;
+
+	/** @var HookContainer */
+	private $hookContainer;
 
 	/**
 	 * @param ILBFactory $dbLoadBalancerFactory
@@ -83,10 +84,9 @@ class RevisionStoreFactory {
 	 * @param WANObjectCache $cache
 	 * @param CommentStore $commentStore
 	 * @param ActorMigration $actorMigration
-	 * @param int $migrationStage
-	 * @param LoggerSpi $loggerProvider
-	 * @param bool $contentHandlerUseDB see {@link $wgContentHandlerUseDB}. Must be the same
-	 *        for all wikis in the cluster. Will go away after MCR migration.
+	 * @param LoggerInterface $logger
+	 * @param IContentHandlerFactory $contentHandlerFactory
+	 * @param HookContainer $hookContainer
 	 */
 	public function __construct(
 		ILBFactory $dbLoadBalancerFactory,
@@ -96,11 +96,10 @@ class RevisionStoreFactory {
 		WANObjectCache $cache,
 		CommentStore $commentStore,
 		ActorMigration $actorMigration,
-		$migrationStage,
-		LoggerSpi $loggerProvider,
-		$contentHandlerUseDB
+		LoggerInterface $logger,
+		IContentHandlerFactory $contentHandlerFactory,
+		HookContainer $hookContainer
 	) {
-		Assert::parameterType( 'integer', $migrationStage, '$migrationStage' );
 		$this->dbLoadBalancerFactory = $dbLoadBalancerFactory;
 		$this->blobStoreFactory = $blobStoreFactory;
 		$this->slotRoleRegistry = $slotRoleRegistry;
@@ -108,36 +107,36 @@ class RevisionStoreFactory {
 		$this->cache = $cache;
 		$this->commentStore = $commentStore;
 		$this->actorMigration = $actorMigration;
-		$this->mcrMigrationStage = $migrationStage;
-		$this->loggerProvider = $loggerProvider;
-		$this->contentHandlerUseDB = $contentHandlerUseDB;
+		$this->logger = $logger;
+		$this->contentHandlerFactory = $contentHandlerFactory;
+		$this->hookContainer = $hookContainer;
 	}
 
 	/**
 	 * @since 1.32
 	 *
-	 * @param bool|string $wikiId false for the current domain / wikid
+	 * @param bool|string $dbDomain DB domain of the relevant wiki or false for the current one
 	 *
-	 * @return RevisionStore for the given wikiId with all necessary services and a logger
+	 * @return RevisionStore for the given wikiId with all necessary services
 	 */
-	public function getRevisionStore( $wikiId = false ) {
-		Assert::parameterType( 'string|boolean', $wikiId, '$wikiId' );
+	public function getRevisionStore( $dbDomain = false ) {
+		Assert::parameterType( 'string|boolean', $dbDomain, '$dbDomain' );
 
 		$store = new RevisionStore(
-			$this->dbLoadBalancerFactory->getMainLB( $wikiId ),
-			$this->blobStoreFactory->newSqlBlobStore( $wikiId ),
+			$this->dbLoadBalancerFactory->getMainLB( $dbDomain ),
+			$this->blobStoreFactory->newSqlBlobStore( $dbDomain ),
 			$this->cache, // Pass local cache instance; Leave cache sharing to RevisionStore.
 			$this->commentStore,
-			$this->nameTables->getContentModels( $wikiId ),
-			$this->nameTables->getSlotRoles( $wikiId ),
+			$this->nameTables->getContentModels( $dbDomain ),
+			$this->nameTables->getSlotRoles( $dbDomain ),
 			$this->slotRoleRegistry,
-			$this->mcrMigrationStage,
 			$this->actorMigration,
-			$wikiId
+			$this->contentHandlerFactory,
+			$this->hookContainer,
+			$dbDomain
 		);
 
-		$store->setLogger( $this->loggerProvider->getLogger( 'RevisionStore' ) );
-		$store->setContentHandlerUseDB( $this->contentHandlerUseDB );
+		$store->setLogger( $this->logger );
 
 		return $store;
 	}

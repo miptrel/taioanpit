@@ -38,7 +38,7 @@ use Wikimedia\Assert\Assert;
  */
 class SlotRecord {
 
-	const MAIN = 'main';
+	public const MAIN = 'main';
 
 	/**
 	 * @var object database result row, as a raw object. Callbacks are supported for field values,
@@ -539,6 +539,11 @@ class SlotRecord {
 		try {
 			$sha1 = $this->getStringField( 'content_sha1' );
 		} catch ( IncompleteRevisionException $ex ) {
+			$sha1 = null;
+		}
+
+		// Compute if missing. Missing could mean null or empty.
+		if ( $sha1 === null || $sha1 === '' ) {
 			$format = $this->hasField( 'format_name' )
 				? $this->getStringField( 'format_name' )
 				: null;

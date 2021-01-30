@@ -76,17 +76,12 @@ class ApiExpandTemplates extends ApiBase {
 					$this->addWarning( [ 'apierror-revwrongpage', $rev->getId(),
 						wfEscapeWikiText( $pTitleObj->getPrefixedText() ) ] );
 				}
-			} else {
-				// Consider the title derived from the revid as having
-				// been provided.
-				$titleProvided = true;
 			}
 		}
 
 		$result = $this->getResult();
 
 		// Parse text
-		global $wgParser;
 		$options = ParserOptions::newFromContext( $this->getContext() );
 
 		if ( $params['includecomments'] ) {
@@ -95,17 +90,20 @@ class ApiExpandTemplates extends ApiBase {
 
 		$reset = null;
 		$suppressCache = false;
-		Hooks::run( 'ApiMakeParserOptions',
-			[ $options, $titleObj, $params, $this, &$reset, &$suppressCache ] );
+		$this->getHookRunner()->onApiMakeParserOptions(
+			$options, $titleObj, $params, $this, $reset, $suppressCache );
 
 		$retval = [];
 
+		$parser = MediaWikiServices::getInstance()->getParser();
 		if ( isset( $prop['parsetree'] ) || $params['generatexml'] ) {
-			$wgParser->startExternalParse( $titleObj, $options, Parser::OT_PREPROCESS );
-			$dom = $wgParser->preprocessToDom( $params['text'] );
+			$parser->startExternalParse( $titleObj, $options, Parser::OT_PREPROCESS );
+			$dom = $parser->preprocessToDom( $params['text'] );
 			if ( is_callable( [ $dom, 'saveXML' ] ) ) {
+				// @phan-suppress-next-line PhanUndeclaredMethod
 				$xml = $dom->saveXML();
 			} else {
+				// @phan-suppress-next-line PhanUndeclaredMethod
 				$xml = $dom->__toString();
 			}
 			if ( isset( $prop['parsetree'] ) ) {
@@ -121,14 +119,14 @@ class ApiExpandTemplates extends ApiBase {
 		// if they didn't want any output except (probably) the parse tree,
 		// then don't bother actually fully expanding it
 		if ( $prop || $params['prop'] === null ) {
-			$wgParser->startExternalParse( $titleObj, $options, Parser::OT_PREPROCESS );
-			$frame = $wgParser->getPreprocessor()->newFrame();
-			$wikitext = $wgParser->preprocess( $params['text'], $titleObj, $options, $revid, $frame );
+			$parser->startExternalParse( $titleObj, $options, Parser::OT_PREPROCESS );
+			$frame = $parser->getPreprocessor()->newFrame();
+			$wikitext = $parser->preprocess( $params['text'], $titleObj, $options, $revid, $frame );
 			if ( $params['prop'] === null ) {
 				// the old way
 				ApiResult::setContentValue( $retval, 'wikitext', $wikitext );
 			} else {
-				$p_output = $wgParser->getOutput();
+				$p_output = $parser->getOutput();
 				if ( isset( $prop['categories'] ) ) {
 					$categories = $p_output->getCategories();
 					if ( $categories ) {

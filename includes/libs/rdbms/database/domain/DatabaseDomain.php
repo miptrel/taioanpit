@@ -23,7 +23,19 @@ namespace Wikimedia\Rdbms;
 use InvalidArgumentException;
 
 /**
- * Class to handle database/prefix specification for IDatabase domains
+ * Class to handle database/schema/prefix specifications for IDatabase
+ *
+ * The components of a database domain are defined as follows:
+ *   - database: name of a server-side collection of schemas that is client-selectable
+ *   - schema: name of a server-side collection of tables within the given database
+ *   - prefix: table name prefix of an application-defined table collection
+ *
+ * If an RDBMS does not support server-side collections of table collections (schemas) then
+ * the schema component should be null and the "database" component treated as a collection
+ * of exactly one table collection (the implied schema for that "database").
+ *
+ * The above criteria should determine how components should map to RDBMS specific keywords
+ * rather than "database"/"schema" always mapping to "DATABASE"/"SCHEMA" as used by the RDBMS.
  */
 class DatabaseDomain {
 	/** @var string|null */
@@ -53,9 +65,7 @@ class DatabaseDomain {
 		}
 		$this->schema = $schema;
 		if ( !is_string( $prefix ) ) {
-			throw new InvalidArgumentException( 'Prefix must be a string.' );
-		} elseif ( $prefix !== '' && substr( $prefix, -1, 1 ) !== '_' ) {
-			throw new InvalidArgumentException( 'A non-empty prefix must end with "_".' );
+			throw new InvalidArgumentException( "Prefix must be a string." );
 		}
 		$this->prefix = $prefix;
 	}
@@ -92,7 +102,10 @@ class DatabaseDomain {
 			$schema = null;
 		}
 
-		return new self( $database, $schema, $prefix );
+		$instance = new self( $database, $schema, $prefix );
+		$instance->equivalentString = (string)$domain;
+
+		return $instance;
 	}
 
 	/**
@@ -254,7 +267,7 @@ class DatabaseDomain {
 	/**
 	 * @return string
 	 */
-	function __toString() {
+	public function __toString() {
 		return $this->getId();
 	}
 }

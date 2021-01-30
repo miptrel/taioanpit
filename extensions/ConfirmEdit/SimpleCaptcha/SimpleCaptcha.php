@@ -1,6 +1,11 @@
 <?php
 
 use MediaWiki\Auth\AuthenticationRequest;
+use MediaWiki\MediaWikiServices;
+use MediaWiki\Revision\RevisionAccessException;
+use MediaWiki\Revision\RevisionLookup;
+use MediaWiki\Revision\SlotRecord;
+use Wikimedia\IPUtils;
 
 /**
  * Demo CAPTCHA (not for production usage) and base class for real CAPTCHAs
@@ -150,6 +155,27 @@ class SimpleCaptcha {
 	}
 
 	/**
+	 * @return string[]
+	 */
+	public static function getCSPUrls() {
+		return [];
+	}
+
+	/**
+	 * Adds the CSP policies necessary for the captcha module to work in a CSP enforced
+	 * setup.
+	 *
+	 * @param ContentSecurityPolicy $csp The CSP instance to add the policies to, usually
+	 * obtained from {@link OutputPage::getCSP()}
+	 */
+	public static function addCSPSources( ContentSecurityPolicy $csp ) {
+		foreach ( static::getCSPUrls() as $src ) {
+			$csp->addScriptSrc( $src );
+			$csp->addStyleSrc( $src );
+		}
+	}
+
+	/**
 	 * Uses getFormInformation() to get the CAPTCHA form and adds it to the given
 	 * OutputPage object.
 	 *
@@ -168,6 +194,8 @@ class SimpleCaptcha {
 	 * @param array $formInformation
 	 */
 	public function addFormInformationToOutput( OutputPage $out, array $formInformation ) {
+		static::addCSPSources( $out->getCSP() );
+
 		if ( !$formInformation ) {
 			return;
 		}
@@ -191,15 +219,16 @@ class SimpleCaptcha {
 	 * @return string Description of the captcha. Format is not specified; could be text, HTML, URL...
 	 */
 	public function getCaptchaInfo( $captchaData, $id ) {
-		return $captchaData['question'] . ' =';
+		return array_key_exists( 'question', $captchaData ) ? ( $captchaData['question'] . ' =' ) : '';
 	}
 
 	/**
 	 * Show error message for missing or incorrect captcha on EditPage.
-	 * @param EditPage &$editPage
-	 * @param OutputPage &$out
+	 * @param EditPage $editPage
+	 * @param OutputPage $out
 	 */
-	public function showEditFormFields( &$editPage, &$out ) {
+	public function showEditFormFields( EditPage $editPage, OutputPage $out ) {
+		$out->enableOOUI();
 		$page = $editPage->getArticle()->getPage();
 		if ( !isset( $page->ConfirmEdit_ActivateCaptcha ) ) {
 			return;
@@ -249,10 +278,10 @@ class SimpleCaptcha {
 	/**
 	 * Inject whazawhoo
 	 * @fixme if multiple thingies insert a header, could break
-	 * @param HTMLForm &$form
+	 * @param HTMLForm $form
 	 * @return bool true to keep running callbacks
 	 */
-	public function injectEmailUser( &$form ) {
+	public function injectEmailUser( HTMLForm $form ) {
 		$out = $form->getOutput();
 		$user = $form->getUser();
 		if ( $this->triggersCaptcha( CaptchaTriggers::SENDEMAIL ) ) {
@@ -285,23 +314,13 @@ class SimpleCaptcha {
 		$cache = ObjectCache::getLocalClusterInstance();
 
 		if ( $this->triggersCaptcha( CaptchaTriggers::BAD_LOGIN ) ) {
-			$key = $this->badLoginKey();
-			$count = ObjectCache::getLocalClusterInstance()->get( $key );
-			if ( !$count ) {
-				$cache->add( $key, 0, $wgCaptchaBadLoginExpiration );
-			}
-
-			$cache->incr( $key );
+			$key = $this->badLoginKey( $cache );
+			$cache->incrWithInit( $key, $wgCaptchaBadLoginExpiration );
 		}
 
 		if ( $this->triggersCaptcha( CaptchaTriggers::BAD_LOGIN_PER_USER ) && $username ) {
-			$key = $this->badLoginPerUserKey( $username );
-			$count = $cache->get( $key );
-			if ( !$count ) {
-				$cache->add( $key, 0, $wgCaptchaBadLoginPerUserExpiration );
-			}
-
-			$cache->incr( $key );
+			$key = $this->badLoginPerUserKey( $username, $cache );
+			$cache->incrWithInit( $key, $wgCaptchaBadLoginPerUserExpiration );
 		}
 	}
 
@@ -312,7 +331,7 @@ class SimpleCaptcha {
 	public function resetBadLoginCounter( $username ) {
 		if ( $this->triggersCaptcha( CaptchaTriggers::BAD_LOGIN_PER_USER ) && $username ) {
 			$cache = ObjectCache::getLocalClusterInstance();
-			$cache->delete( $this->badLoginPerUserKey( $username ) );
+			$cache->delete( $this->badLoginPerUserKey( $username, $cache ) );
 		}
 	}
 
@@ -327,7 +346,7 @@ class SimpleCaptcha {
 
 		$cache = ObjectCache::getLocalClusterInstance();
 		return $this->triggersCaptcha( CaptchaTriggers::BAD_LOGIN )
-			&& (int)$cache->get( $this->badLoginKey() ) >= $wgCaptchaBadLoginAttempts;
+			&& (int)$cache->get( $this->badLoginKey( $cache ) ) >= $wgCaptchaBadLoginAttempts;
 	}
 
 	/**
@@ -344,8 +363,9 @@ class SimpleCaptcha {
 		if ( is_object( $u ) ) {
 			$u = $u->getName();
 		}
+		$badLoginPerUserKey = $this->badLoginPerUserKey( $u, $cache );
 		return $this->triggersCaptcha( CaptchaTriggers::BAD_LOGIN_PER_USER )
-			&& (int)$cache->get( $this->badLoginPerUserKey( $u ) ) >= $wgCaptchaBadLoginPerUserAttempts;
+			&& (int)$cache->get( $badLoginPerUserKey ) >= $wgCaptchaBadLoginPerUserAttempts;
 	}
 
 	/**
@@ -361,7 +381,7 @@ class SimpleCaptcha {
 		$ip = $wgRequest->getIP();
 
 		if ( $wgCaptchaWhitelistIP ) {
-			if ( IP::isInRanges( $ip, $wgCaptchaWhitelistIP ) ) {
+			if ( IPUtils::isInRanges( $ip, $wgCaptchaWhitelistIP ) ) {
 				return true;
 			}
 		}
@@ -369,7 +389,7 @@ class SimpleCaptcha {
 		$whitelistMsg = wfMessage( 'captcha-ip-whitelist' )->inContentLanguage();
 		if ( !$whitelistMsg->isDisabled() ) {
 			$whitelistedIPs = $this->getWikiIPWhitelist( $whitelistMsg );
-			if ( IP::isInRanges( $ip, $whitelistedIPs ) ) {
+			if ( IPUtils::isInRanges( $ip, $whitelistedIPs ) ) {
 				return true;
 			}
 		}
@@ -385,7 +405,7 @@ class SimpleCaptcha {
 	 * @return array whitelisted IP addresses or IP ranges, empty array if no whitelist
 	 */
 	private function getWikiIPWhitelist( Message $msg ) {
-		$cache = ObjectCache::getMainWANInstance();
+		$cache = MediaWikiServices::getInstance()->getMainWANObjectCache();
 		$cacheKey = $cache->makeKey( 'confirmedit', 'ipwhitelist' );
 
 		$cachedWhitelist = $cache->get( $cacheKey );
@@ -397,7 +417,7 @@ class SimpleCaptcha {
 			);
 			// And then store it in cache for one day. This cache is cleared on
 			// modifications to the whitelist page.
-			// @see ConfirmEditHooks::onPageContentSaveComplete()
+			// @see ConfirmEditHooks::onPageSaveComplete()
 			$cache->set( $cacheKey, $whitelist, 86400 );
 		} else {
 			// Whitelist from the cache
@@ -425,7 +445,7 @@ class SimpleCaptcha {
 
 		$validIPs = [];
 		foreach ( $ips as $ip ) {
-			if ( IP::isIPAddress( $ip ) ) {
+			if ( IPUtils::isIPAddress( $ip ) ) {
 				$validIPs[] = $ip;
 			}
 		}
@@ -435,22 +455,28 @@ class SimpleCaptcha {
 
 	/**
 	 * Internal cache key for badlogin checks.
+	 * @param BagOStuff $cache
 	 * @return string
 	 */
-	private function badLoginKey() {
+	private function badLoginKey( BagOStuff $cache ) {
 		global $wgRequest;
 		$ip = $wgRequest->getIP();
-		return wfGlobalCacheKey( 'captcha', 'badlogin', 'ip', $ip );
+
+		return $cache->makeGlobalKey( 'captcha', 'badlogin', 'ip', $ip );
 	}
 
 	/**
 	 * Cache key for badloginPerUser checks.
 	 * @param string $username
+	 * @param BagOStuff $cache
 	 * @return string
 	 */
-	private function badLoginPerUserKey( $username ) {
+	private function badLoginPerUserKey( $username, BagOStuff $cache ) {
 		$username = User::getCanonicalName( $username, 'usable' ) ?: $username;
-		return wfGlobalCacheKey( 'captcha', 'badlogin', 'user', md5( $username ) );
+
+		return $cache->makeGlobalKey(
+			'captcha', 'badlogin', 'user', md5( $username )
+		);
 	}
 
 	/**
@@ -685,8 +711,8 @@ class SimpleCaptcha {
 
 	/**
 	 * Build regex from whitelist
-	 * @param string $lines string from [[MediaWiki:Captcha-addurl-whitelist]]
-	 * @return array Regexes
+	 * @param string[] $lines string from [[MediaWiki:Captcha-addurl-whitelist]]
+	 * @return string[] Regexes
 	 * @private
 	 */
 	private function buildRegexes( $lines ) {
@@ -750,7 +776,7 @@ class SimpleCaptcha {
 			}
 			foreach ( $build as $key => $value ) {
 				$regexes[] = $regexStart[$key] .
-					str_replace( '/', '\/', preg_replace( '|\\\*/|', '/', $build[$key] ) ) .
+					str_replace( '/', '\/', preg_replace( '|\\\*/|', '/', $value ) ) .
 					$regexEnd[$key];
 			}
 			return $regexes;
@@ -778,13 +804,20 @@ class SimpleCaptcha {
 	/**
 	 * Backend function for confirmEditMerged()
 	 * @param WikiPage $page
-	 * @param string $newtext
+	 * @param Content|string $newtext
 	 * @param string $section
 	 * @param IContextSource $context
+	 * @param User $user
 	 * @return bool false if the CAPTCHA is rejected, true otherwise
 	 */
-	private function doConfirmEdit( WikiPage $page, $newtext, $section, IContextSource $context ) {
-		global $wgUser, $wgRequest;
+	private function doConfirmEdit(
+		WikiPage $page,
+		$newtext,
+		$section,
+		IContextSource $context,
+		User $user
+	) {
+		global $wgRequest;
 		$request = $context->getRequest();
 
 		// FIXME: Stop using wgRequest in other parts of ConfirmEdit so we can
@@ -798,7 +831,7 @@ class SimpleCaptcha {
 			$wgRequest->setVal( 'wpCaptchaWord', $request->getVal( 'captchaword' ) );
 		}
 		if ( $this->shouldCheck( $page, $newtext, $section, $context ) ) {
-			return $this->passCaptchaLimitedFromRequest( $wgRequest, $wgUser );
+			return $this->passCaptchaLimitedFromRequest( $wgRequest, $user );
 		} else {
 			wfDebug( "ConfirmEdit: no need to show captcha.\n" );
 			return true;
@@ -833,7 +866,7 @@ class SimpleCaptcha {
 			return true;
 		}
 		$page = $context->getWikiPage();
-		if ( !$this->doConfirmEdit( $page, $content, false, $context ) ) {
+		if ( !$this->doConfirmEdit( $page, $content, '', $context, $user ) ) {
 			$status->value = EditPage::AS_HOOK_ERROR_EXPECTED;
 			$status->apiHookResult = [];
 			// give an error message for the user to know, what goes wrong here.
@@ -861,13 +894,10 @@ class SimpleCaptcha {
 	 * Logic to check if we need to pass a captcha for the current user
 	 * to create a new account, or not
 	 *
-	 * @param User|null $creatingUser
+	 * @param User $creatingUser
 	 * @return bool true to show captcha, false to skip captcha
 	 */
-	public function needCreateAccountCaptcha( User $creatingUser = null ) {
-		global $wgUser;
-		$creatingUser = $creatingUser ?: $wgUser;
-
+	public function needCreateAccountCaptcha( User $creatingUser ) {
 		if ( $this->triggersCaptcha( CaptchaTriggers::CREATE_ACCOUNT ) ) {
 			if ( $this->canSkipCaptcha( $creatingUser,
 				\MediaWiki\MediaWikiServices::getInstance()->getMainConfig() ) ) {
@@ -888,10 +918,11 @@ class SimpleCaptcha {
 	 * @return bool true to continue saving, false to abort and show a captcha form
 	 */
 	public function confirmEmailUser( $from, $to, $subject, $text, &$error ) {
-		global $wgUser, $wgRequest;
+		global $wgRequest;
 
+		$user = RequestContext::getMain()->getUser();
 		if ( $this->triggersCaptcha( CaptchaTriggers::SENDEMAIL ) ) {
-			if ( $this->canSkipCaptcha( $wgUser,
+			if ( $this->canSkipCaptcha( $user,
 				\MediaWiki\MediaWikiServices::getInstance()->getMainConfig() ) ) {
 				return true;
 			}
@@ -902,8 +933,8 @@ class SimpleCaptcha {
 				$error = Status::newFatal( 'captcha-disabledinapi' );
 				return false;
 			}
-			$this->trigger = "{$wgUser->getName()} sending email";
-			if ( !$this->passCaptchaLimitedFromRequest( $wgRequest, $wgUser ) ) {
+			$this->trigger = "{$user->getName()} sending email";
+			if ( !$this->passCaptchaLimitedFromRequest( $wgRequest, $user ) ) {
 				$error = Status::newFatal( 'captcha-sendemail-fail' );
 				return false;
 			}
@@ -920,12 +951,12 @@ class SimpleCaptcha {
 	}
 
 	/**
-	 * @param ApiBase &$module
+	 * @param ApiBase $module
 	 * @param array &$params
 	 * @param int $flags
 	 * @return bool
 	 */
-	public function apiGetAllowedParams( &$module, &$params, $flags ) {
+	public function apiGetAllowedParams( ApiBase $module, &$params, $flags ) {
 		if ( $this->isAPICaptchaModule( $module ) ) {
 			$params['captchaword'] = [
 				ApiBase::PARAM_HELP_MSG => 'captcha-apihelp-param-captchaword',
@@ -1087,18 +1118,25 @@ class SimpleCaptcha {
 	 * @return string
 	 * @private
 	 */
-	private function loadText( $title, $section, $flags = Revision::READ_LATEST ) {
-		global $wgParser;
+	private function loadText( $title, $section, $flags = RevisionLookup::READ_LATEST ) {
+		$revRecord = MediaWikiServices::getInstance()
+			->getRevisionLookup()
+			->getRevisionByTitle( $title, 0, $flags );
 
-		$rev = Revision::newFromTitle( $title, false, $flags );
-		if ( is_null( $rev ) ) {
+		if ( $revRecord === null ) {
 			return "";
 		}
 
-		$content = $rev->getContent();
+		try {
+			$content = $revRecord->getContent( SlotRecord::MAIN );
+		} catch ( RevisionAccessException $e ) {
+			return '';
+		}
+
 		$text = ContentHandler::getContentText( $content );
 		if ( $section !== '' ) {
-			return $wgParser->getSection( $text, $section );
+			return MediaWikiServices::getInstance()->getParser()
+				->getSection( $text, $section );
 		}
 
 		return $text;
@@ -1108,14 +1146,14 @@ class SimpleCaptcha {
 	 * Extract a list of all recognized HTTP links in the text.
 	 * @param Title $title
 	 * @param string $text
-	 * @return array of strings
+	 * @return string[]
 	 */
 	private function findLinks( $title, $text ) {
-		global $wgParser, $wgUser;
-
-		$options = new ParserOptions();
-		$text = $wgParser->preSaveTransform( $text, $title, $wgUser, $options );
-		$out = $wgParser->parse( $text, $title, $options );
+		$parser = MediaWikiServices::getInstance()->getParser();
+		$user = $parser->getUser();
+		$options = new ParserOptions( $user );
+		$text = $parser->preSaveTransform( $text, $title, $user, $options );
+		$out = $parser->parse( $text, $title, $options );
 
 		return array_keys( $out->getExternalLinks() );
 	}

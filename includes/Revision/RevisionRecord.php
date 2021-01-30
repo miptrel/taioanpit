@@ -27,6 +27,7 @@ use Content;
 use InvalidArgumentException;
 use LogicException;
 use MediaWiki\Linker\LinkTarget;
+use MediaWiki\MediaWikiServices;
 use MediaWiki\User\UserIdentity;
 use MWException;
 use Title;
@@ -45,20 +46,20 @@ use Wikimedia\Assert\Assert;
 abstract class RevisionRecord {
 
 	// RevisionRecord deletion constants
-	const DELETED_TEXT = 1;
-	const DELETED_COMMENT = 2;
-	const DELETED_USER = 4;
-	const DELETED_RESTRICTED = 8;
-	const SUPPRESSED_USER = self::DELETED_USER | self::DELETED_RESTRICTED; // convenience
-	const SUPPRESSED_ALL = self::DELETED_TEXT | self::DELETED_COMMENT | self::DELETED_USER |
+	public const DELETED_TEXT = 1;
+	public const DELETED_COMMENT = 2;
+	public const DELETED_USER = 4;
+	public const DELETED_RESTRICTED = 8;
+	public const SUPPRESSED_USER = self::DELETED_USER | self::DELETED_RESTRICTED; // convenience
+	public const SUPPRESSED_ALL = self::DELETED_TEXT | self::DELETED_COMMENT | self::DELETED_USER |
 		self::DELETED_RESTRICTED; // convenience
 
 	// Audience options for accessors
-	const FOR_PUBLIC = 1;
-	const FOR_THIS_USER = 2;
-	const RAW = 3;
+	public const FOR_PUBLIC = 1;
+	public const FOR_THIS_USER = 2;
+	public const RAW = 3;
 
-	/** @var string Wiki ID; false means the current wiki */
+	/** @var string|false Wiki ID; false means the current wiki */
 	protected $mWiki = false;
 	/** @var int|null */
 	protected $mId;
@@ -81,7 +82,7 @@ abstract class RevisionRecord {
 	/** @var CommentStoreComment|null */
 	protected $mComment;
 
-	/**  @var Title */
+	/** @var Title */
 	protected $mTitle; // TODO: we only need the title for permission checks!
 
 	/** @var RevisionSlots */
@@ -93,17 +94,16 @@ abstract class RevisionRecord {
 	 *
 	 * @param Title $title The title of the page this Revision is associated with.
 	 * @param RevisionSlots $slots The slots of this revision.
-	 * @param bool|string $wikiId the wiki ID of the site this Revision belongs to,
-	 *        or false for the local site.
+	 * @param bool|string $dbDomain DB domain of the relevant wiki or false for the current one.
 	 *
 	 * @throws MWException
 	 */
-	function __construct( Title $title, RevisionSlots $slots, $wikiId = false ) {
-		Assert::parameterType( 'string|boolean', $wikiId, '$wikiId' );
+	public function __construct( Title $title, RevisionSlots $slots, $dbDomain = false ) {
+		Assert::parameterType( 'string|boolean', $dbDomain, '$dbDomain' );
 
 		$this->mTitle = $title;
 		$this->mSlots = $slots;
-		$this->mWiki = $wikiId;
+		$this->mWiki = $dbDomain;
 
 		// XXX: this is a sensible default, but we may not have a Title object here in the future.
 		$this->mPageId = $title->getArticleID();
@@ -185,7 +185,7 @@ abstract class RevisionRecord {
 	 *
 	 * @throws RevisionAccessException if the slot does not exist or slot data
 	 *        could not be lazy-loaded.
-	 * @return SlotRecord The slot meta-data. If access to the slot content is forbidden,
+	 * @return SlotRecord The slot meta-data. If access to the slot's content is forbidden,
 	 *         calling getContent() on the SlotRecord will throw an exception.
 	 */
 	public function getSlot( $role, $audience = self::FOR_PUBLIC, User $user = null ) {
@@ -221,6 +221,12 @@ abstract class RevisionRecord {
 
 	/**
 	 * Returns the slots defined for this revision.
+	 *
+	 * @note This provides access to slot content with no audience checks applied.
+	 * Calling getContent() on the RevisionSlots object returned here, or on any
+	 * SlotRecord it returns from getSlot(), will not fail due to access restrictions.
+	 * If audience checks are desired, use getSlot( $role, $audience, $user )
+	 * or getContent( $role, $audience, $user ) instead.
 	 *
 	 * @return RevisionSlots
 	 */
@@ -514,15 +520,25 @@ abstract class RevisionRecord {
 			} else {
 				$permissions = [ 'deletedhistory' ];
 			}
+
+			// XXX: How can we avoid global scope here?
+			//      Perhaps the audience check should be done in a callback.
+			$permissionManager = MediaWikiServices::getInstance()->getPermissionManager();
 			$permissionlist = implode( ', ', $permissions );
 			if ( $title === null ) {
-				wfDebug( "Checking for $permissionlist due to $field match on $bitfield\n" );
-				return $user->isAllowedAny( ...$permissions );
+				wfDebug( "Checking for $permissionlist due to $field match on $bitfield" );
+				foreach ( $permissions as $perm ) {
+					if ( $permissionManager->userHasRight( $user, $perm ) ) {
+						return true;
+					}
+				}
+				return false;
 			} else {
 				$text = $title->getPrefixedText();
-				wfDebug( "Checking for $permissionlist on $text due to $field match on $bitfield\n" );
+				wfDebug( "Checking for $permissionlist on $text due to $field match on $bitfield" );
+
 				foreach ( $permissions as $perm ) {
-					if ( $title->userCan( $perm, $user ) ) {
+					if ( $permissionManager->userCan( $perm, $user, $title ) ) {
 						return true;
 					}
 				}
@@ -550,12 +566,21 @@ abstract class RevisionRecord {
 		// null if mSlots is not empty.
 
 		// NOTE: getId() and getPageId() may return null before a revision is saved, so don't
-		//check them.
+		// check them.
 
 		return $this->getTimestamp() !== null
 			&& $this->getComment( self::RAW ) !== null
 			&& $this->getUser( self::RAW ) !== null
 			&& $this->mSlots->getSlotRoles() !== [];
+	}
+
+	/**
+	 * Checks whether the revision record is a stored current revision.
+	 * @since 1.35
+	 * @return bool
+	 */
+	public function isCurrent() {
+		return false;
 	}
 
 }

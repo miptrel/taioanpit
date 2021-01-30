@@ -122,8 +122,8 @@
 		var matches,
 			logger = this,
 			stats = { type: type,
-				contentHost: window.location.host,
-				isHttps: window.location.protocol === 'https:',
+				contentHost: location.host,
+				isHttps: location.protocol === 'https:',
 				total: total },
 			connection = this.getNavigatorConnection();
 
@@ -279,7 +279,7 @@
 	 *
 	 * @param {string} type the type of request to be measured
 	 * @param {number} total the total load time tracked with a basic technique
-	 * @param {jqXHR} jqxhr
+	 * @param {jQuery.jqXHR} jqxhr
 	 */
 	PL.recordJQueryEntry = function ( type, total, jqxhr ) {
 		var perf = this;
@@ -339,7 +339,7 @@
 	 *
 	 * @param {string} type the type of request to be measured
 	 * @param {number} total the total load time tracked with a basic technique
-	 * @param {jqXHR} jqxhr
+	 * @param {jQuery.jqXHR} jqxhr
 	 */
 	PL.recordJQueryEntryDelayed = function ( type, total, jqxhr ) {
 		var perf = this;

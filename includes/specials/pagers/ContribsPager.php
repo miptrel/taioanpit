@@ -23,10 +23,13 @@
  * Pager for Special:Contributions
  * @ingroup Pager
  */
+use MediaWiki\Linker\LinkRenderer;
 use MediaWiki\MediaWikiServices;
-use Wikimedia\Rdbms\IResultWrapper;
+use MediaWiki\Revision\RevisionRecord;
+use Wikimedia\IPUtils;
 use Wikimedia\Rdbms\FakeResultWrapper;
 use Wikimedia\Rdbms\IDatabase;
+use Wikimedia\Rdbms\IResultWrapper;
 
 class ContribsPager extends RangeChronologicalPager {
 
@@ -39,12 +42,6 @@ class ContribsPager extends RangeChronologicalPager {
 	 * @var string User name, or a string describing an IP address range
 	 */
 	private $target;
-
-	/**
-	 * @var string Set to "newbie" to list contributions from the most recent 1% registered users.
-	 *  $this->target is ignored then. Defaults to "users".
-	 */
-	private $contribs;
 
 	/**
 	 * @var string|int A single namespace number, or an empty string for all namespaces
@@ -89,9 +86,6 @@ class ContribsPager extends RangeChronologicalPager {
 
 	private $preventClickjacking = false;
 
-	/** @var IDatabase */
-	private $mDbSecondary;
-
 	/**
 	 * @var array
 	 */
@@ -102,8 +96,24 @@ class ContribsPager extends RangeChronologicalPager {
 	 */
 	private $templateParser;
 
-	public function __construct( IContextSource $context, array $options ) {
-		parent::__construct( $context );
+	public function __construct( IContextSource $context, array $options,
+		LinkRenderer $linkRenderer = null
+	) {
+		// Set ->target before calling parent::__construct() so
+		// parent can call $this->getIndexField() and get the right result. Set
+		// the rest too just to keep things simple.
+		$this->target = $options['target'] ?? '';
+		$this->namespace = $options['namespace'] ?? '';
+		$this->tagFilter = $options['tagfilter'] ?? false;
+		$this->nsInvert = $options['nsInvert'] ?? false;
+		$this->associated = $options['associated'] ?? false;
+
+		$this->deletedOnly = !empty( $options['deletedOnly'] );
+		$this->topOnly = !empty( $options['topOnly'] );
+		$this->newOnly = !empty( $options['newOnly'] );
+		$this->hideMinor = !empty( $options['hideMinor'] );
+
+		parent::__construct( $context, $linkRenderer );
 
 		$msgs = [
 			'diff',
@@ -116,38 +126,24 @@ class ContribsPager extends RangeChronologicalPager {
 			$this->messages[$msg] = $this->msg( $msg )->escaped();
 		}
 
-		$this->target = $options['target'] ?? '';
-		$this->contribs = $options['contribs'] ?? 'users';
-		$this->namespace = $options['namespace'] ?? '';
-		$this->tagFilter = $options['tagfilter'] ?? false;
-		$this->nsInvert = $options['nsInvert'] ?? false;
-		$this->associated = $options['associated'] ?? false;
-
-		$this->deletedOnly = !empty( $options['deletedOnly'] );
-		$this->topOnly = !empty( $options['topOnly'] );
-		$this->newOnly = !empty( $options['newOnly'] );
-		$this->hideMinor = !empty( $options['hideMinor'] );
-
 		// Date filtering: use timestamp if available
 		$startTimestamp = '';
 		$endTimestamp = '';
-		if ( $options['start'] ) {
+		if ( isset( $options['start'] ) && $options['start'] ) {
 			$startTimestamp = $options['start'] . ' 00:00:00';
 		}
-		if ( $options['end'] ) {
+		if ( isset( $options['end'] ) && $options['end'] ) {
 			$endTimestamp = $options['end'] . ' 23:59:59';
 		}
 		$this->getDateRangeCond( $startTimestamp, $endTimestamp );
 
 		// Most of this code will use the 'contributions' group DB, which can map to replica DBs
-		// with extra user based indexes or partioning by user. The additional metadata
-		// queries should use a regular replica DB since the lookup pattern is not all by user.
-		$this->mDbSecondary = wfGetDB( DB_REPLICA ); // any random replica DB
+		// with extra user based indexes or partioning by user.
 		$this->mDb = wfGetDB( DB_REPLICA, 'contributions' );
 		$this->templateParser = new TemplateParser();
 	}
 
-	function getDefaultQuery() {
+	public function getDefaultQuery() {
 		$query = parent::getDefaultQuery();
 		$query['target'] = $this->target;
 
@@ -161,7 +157,7 @@ class ContribsPager extends RangeChronologicalPager {
 	 *
 	 * @return string HTML
 	 */
-	function getNavigationBar() {
+	public function getNavigationBar() {
 		return Html::rawElement( 'p', [ 'class' => 'mw-pager-navigation-bar' ],
 			parent::getNavigationBar()
 		);
@@ -176,7 +172,7 @@ class ContribsPager extends RangeChronologicalPager {
 	 * @param bool $order IndexPager::QUERY_ASCENDING or IndexPager::QUERY_DESCENDING
 	 * @return IResultWrapper
 	 */
-	function reallyDoQuery( $offset, $limit, $order ) {
+	public function reallyDoQuery( $offset, $limit, $order ) {
 		list( $tables, $fields, $conds, $fname, $options, $join_conds ) = $this->buildQueryInfo(
 			$offset,
 			$limit,
@@ -204,18 +200,20 @@ class ContribsPager extends RangeChronologicalPager {
 		$data = [ $this->mDb->select(
 			$tables, $fields, $conds, $fname, $options, $join_conds
 		) ];
-		Hooks::run(
-			'ContribsPager::reallyDoQuery',
-			[ &$data, $this, $offset, $limit, $order ]
-		);
+		$this->getHookRunner()->onContribsPager__reallyDoQuery(
+			$data, $this, $offset, $limit, $order );
 
 		$result = [];
 
 		// loop all results and collect them in an array
 		foreach ( $data as $query ) {
 			foreach ( $query as $i => $row ) {
+				// If the query results are in descending order, the indexes must also be in descending order
+				$index = $order === self::QUERY_ASCENDING ? $i : $limit - 1 - $i;
+				// Left-pad with zeroes, because these values will be sorted as strings
+				$index = str_pad( $index, strlen( $limit ), '0', STR_PAD_LEFT );
 				// use index column as key, allowing us to easily sort in PHP
-				$result[$row->{$this->getIndexField()} . "-$i"] = $row;
+				$result[$row->{$this->getIndexField()} . "-$index"] = $row;
 			}
 		}
 
@@ -235,8 +233,35 @@ class ContribsPager extends RangeChronologicalPager {
 		return new FakeResultWrapper( $result );
 	}
 
-	function getQueryInfo() {
-		$revQuery = Revision::getQueryInfo( [ 'page', 'user' ] );
+	/**
+	 * Return the table targeted for ordering and continuation
+	 *
+	 * See T200259 and T221380.
+	 *
+	 * @warning Keep this in sync with self::getQueryInfo()!
+	 *
+	 * @return string
+	 */
+	private function getTargetTable() {
+		$user = User::newFromName( $this->target, false );
+		$ipRangeConds = $user->isAnon() ? $this->getIpRangeConds( $this->mDb, $this->target ) : null;
+		if ( $ipRangeConds ) {
+			return 'ip_changes';
+		} else {
+			$conds = ActorMigration::newMigration()->getWhere( $this->mDb, 'rev_user', $user );
+			if ( isset( $conds['orconds']['actor'] ) ) {
+				// @todo: This will need changing when revision_actor_temp goes away
+				return 'revision_actor_temp';
+			}
+		}
+
+		return 'revision';
+	}
+
+	public function getQueryInfo() {
+		$revQuery = MediaWikiServices::getInstance()
+			->getRevisionStore()
+			->getQueryInfo( [ 'page', 'user' ] );
 		$queryInfo = [
 			'tables' => $revQuery['tables'],
 			'fields' => array_merge( $revQuery['fields'], [ 'page_is_new' ] ),
@@ -244,73 +269,25 @@ class ContribsPager extends RangeChronologicalPager {
 			'options' => [],
 			'join_conds' => $revQuery['joins'],
 		];
+		$permissionManager = MediaWikiServices::getInstance()->getPermissionManager();
 
-		if ( $this->contribs == 'newbie' ) {
-			$max = $this->mDb->selectField( 'user', 'max(user_id)', '', __METHOD__ );
-			$queryInfo['conds'][] = $revQuery['fields']['rev_user'] . ' >' . (int)( $max - $max / 100 );
-			# ignore local groups with the bot right
-			# @todo FIXME: Global groups may have 'bot' rights
-			$groupsWithBotPermission = User::getGroupsWithPermission( 'bot' );
-			if ( count( $groupsWithBotPermission ) ) {
-				$queryInfo['tables'][] = 'user_groups';
-				$queryInfo['conds'][] = 'ug_group IS NULL';
-				$queryInfo['join_conds']['user_groups'] = [
-					'LEFT JOIN', [
-						'ug_user = ' . $revQuery['fields']['rev_user'],
-						'ug_group' => $groupsWithBotPermission,
-						'ug_expiry IS NULL OR ug_expiry >= ' .
-							$this->mDb->addQuotes( $this->mDb->timestamp() )
-					]
-				];
-			}
-			// (T140537) Disallow looking too far in the past for 'newbies' queries. If the user requested
-			// a timestamp offset far in the past such that there are no edits by users with user_ids in
-			// the range, we would end up scanning all revisions from that offset until start of time.
-			$queryInfo['conds'][] = 'rev_timestamp > ' .
-				$this->mDb->addQuotes( $this->mDb->timestamp( wfTimestamp() - 30 * 24 * 60 * 60 ) );
+		// WARNING: Keep this in sync with getTargetTable()!
+		$user = User::newFromName( $this->target, false );
+		$ipRangeConds = $user->isAnon() ? $this->getIpRangeConds( $this->mDb, $this->target ) : null;
+		if ( $ipRangeConds ) {
+			$queryInfo['tables'][] = 'ip_changes';
+			$queryInfo['join_conds']['ip_changes'] = [
+				'LEFT JOIN', [ 'ipc_rev_id = rev_id' ]
+			];
+			$queryInfo['conds'][] = $ipRangeConds;
 		} else {
-			$user = User::newFromName( $this->target, false );
-			$ipRangeConds = $user->isAnon() ? $this->getIpRangeConds( $this->mDb, $this->target ) : null;
-			if ( $ipRangeConds ) {
-				$queryInfo['tables'][] = 'ip_changes';
-				/**
-				 * These aliases make `ORDER BY rev_timestamp, rev_id` from {@see getIndexField} and
-				 * {@see getExtraSortFields} use the replicated `ipc_rev_timestamp` and `ipc_rev_id`
-				 * columns from the `ip_changes` table, for more efficient queries.
-				 * @see https://phabricator.wikimedia.org/T200259#4832318
-				 */
-				$queryInfo['fields'] = array_merge(
-					[
-						'rev_timestamp' => 'ipc_rev_timestamp',
-						'rev_id' => 'ipc_rev_id',
-					],
-					array_diff( $queryInfo['fields'], [
-						'rev_timestamp',
-						'rev_id',
-					] )
-				);
-				$queryInfo['join_conds']['ip_changes'] = [
-					'LEFT JOIN', [ 'ipc_rev_id = rev_id' ]
-				];
-				$queryInfo['conds'][] = $ipRangeConds;
-			} else {
-				// tables and joins are already handled by Revision::getQueryInfo()
-				$conds = ActorMigration::newMigration()->getWhere( $this->mDb, 'rev_user', $user );
-				$queryInfo['conds'][] = $conds['conds'];
-				// Force the appropriate index to avoid bad query plans (T189026)
-				if ( isset( $conds['orconds']['actor'] ) ) {
-					// @todo: This will need changing when revision_comment_temp goes away
-					$queryInfo['options']['USE INDEX']['temp_rev_user'] = 'actor_timestamp';
-					// Alias 'rev_timestamp' => 'revactor_timestamp' so "ORDER BY rev_timestamp" is interpreted to
-					// use revactor_timestamp instead.
-					$queryInfo['fields'] = array_merge(
-						array_diff( $queryInfo['fields'], [ 'rev_timestamp' ] ),
-						[ 'rev_timestamp' => 'revactor_timestamp' ]
-					);
-				} else {
-					$queryInfo['options']['USE INDEX']['revision'] =
-						isset( $conds['orconds']['userid'] ) ? 'user_timestamp' : 'usertext_timestamp';
-				}
+			// tables and joins are already handled by Revision::getQueryInfo()
+			$conds = ActorMigration::newMigration()->getWhere( $this->mDb, 'rev_user', $user );
+			$queryInfo['conds'][] = $conds['conds'];
+			// Force the appropriate index to avoid bad query plans (T189026)
+			if ( isset( $conds['orconds']['actor'] ) ) {
+				// @todo: This will need changing when revision_actor_temp goes away
+				$queryInfo['options']['USE INDEX']['temp_rev_user'] = 'actor_timestamp';
 			}
 		}
 
@@ -334,17 +311,20 @@ class ContribsPager extends RangeChronologicalPager {
 		$queryInfo['conds'] = array_merge( $queryInfo['conds'], $this->getNamespaceCond() );
 
 		// Paranoia: avoid brute force searches (T19342)
-		if ( !$user->isAllowed( 'deletedhistory' ) ) {
-			$queryInfo['conds'][] = $this->mDb->bitAnd( 'rev_deleted', Revision::DELETED_USER ) . ' = 0';
-		} elseif ( !$user->isAllowedAny( 'suppressrevision', 'viewsuppressed' ) ) {
-			$queryInfo['conds'][] = $this->mDb->bitAnd( 'rev_deleted', Revision::SUPPRESSED_USER ) .
-				' != ' . Revision::SUPPRESSED_USER;
+		if ( !$permissionManager->userHasRight( $user, 'deletedhistory' ) ) {
+			$queryInfo['conds'][] = $this->mDb->bitAnd(
+				'rev_deleted', RevisionRecord::DELETED_USER
+				) . ' = 0';
+		} elseif ( !$permissionManager->userHasAnyRight( $user, 'suppressrevision', 'viewsuppressed' ) ) {
+			$queryInfo['conds'][] = $this->mDb->bitAnd(
+				'rev_deleted', RevisionRecord::SUPPRESSED_USER
+				) . ' != ' . RevisionRecord::SUPPRESSED_USER;
 		}
 
-		// For IPv6, we use ipc_rev_timestamp on ip_changes as the index field,
-		// which will be referenced when parsing the results of a query.
-		if ( self::isQueryableRange( $this->target ) ) {
-			$queryInfo['fields'][] = 'ipc_rev_timestamp';
+		// $this->getIndexField() must be in the result rows, as reallyDoQuery() tries to access it.
+		$indexField = $this->getIndexField();
+		if ( $indexField !== 'rev_timestamp' ) {
+			$queryInfo['fields'][] = $indexField;
 		}
 
 		ChangeTags::modifyDisplayQuery(
@@ -356,14 +336,12 @@ class ContribsPager extends RangeChronologicalPager {
 			$this->tagFilter
 		);
 
-		// Avoid PHP 7.1 warning from passing $this by reference
-		$pager = $this;
-		Hooks::run( 'ContribsPager::getQueryInfo', [ &$pager, &$queryInfo ] );
+		$this->getHookRunner()->onContribsPager__getQueryInfo( $this, $queryInfo );
 
 		return $queryInfo;
 	}
 
-	function getNamespaceCond() {
+	protected function getNamespaceCond() {
 		if ( $this->namespace !== '' ) {
 			$selectedNS = $this->mDb->addQuotes( $this->namespace );
 			$eq_op = $this->nsInvert ? '!=' : '=';
@@ -374,7 +352,7 @@ class ContribsPager extends RangeChronologicalPager {
 			}
 
 			$associatedNS = $this->mDb->addQuotes(
-				MWNamespace::getAssociated( $this->namespace )
+				MediaWikiServices::getInstance()->getNamespaceInfo()->getAssociated( $this->namespace )
 			);
 
 			return [
@@ -389,9 +367,9 @@ class ContribsPager extends RangeChronologicalPager {
 
 	/**
 	 * Get SQL conditions for an IP range, if applicable
-	 * @param IDatabase      $db
-	 * @param string         $ip The IP address or CIDR
-	 * @return string|false  SQL for valid IP ranges, false if invalid
+	 * @param IDatabase $db
+	 * @param string $ip The IP address or CIDR
+	 * @return string|false SQL for valid IP ranges, false if invalid
 	 */
 	private function getIpRangeConds( $db, $ip ) {
 		// First make sure it is a valid range and they are not outside the CIDR limit
@@ -399,7 +377,7 @@ class ContribsPager extends RangeChronologicalPager {
 			return false;
 		}
 
-		list( $start, $end ) = IP::parseRange( $ip );
+		list( $start, $end ) = IPUtils::parseRange( $ip );
 
 		return 'ipc_hex BETWEEN ' . $db->addQuotes( $start ) . ' AND ' . $db->addQuotes( $end );
 	}
@@ -414,11 +392,11 @@ class ContribsPager extends RangeChronologicalPager {
 	public function isQueryableRange( $ipRange ) {
 		$limits = $this->getConfig()->get( 'RangeContributionsCIDRLimit' );
 
-		$bits = IP::parseCIDR( $ipRange )[1];
+		$bits = IPUtils::parseCIDR( $ipRange )[1];
 		if (
 			( $bits === false ) ||
-			( IP::isIPv4( $ipRange ) && $bits < $limits['IPv4'] ) ||
-			( IP::isIPv6( $ipRange ) && $bits < $limits['IPv6'] )
+			( IPUtils::isIPv4( $ipRange ) && $bits < $limits['IPv4'] ) ||
+			( IPUtils::isIPv6( $ipRange ) && $bits < $limits['IPv6'] )
 		) {
 			return false;
 		}
@@ -430,8 +408,24 @@ class ContribsPager extends RangeChronologicalPager {
 	 * @return string
 	 */
 	public function getIndexField() {
-		// Note this is run via parent::__construct() *before* $this->target is set!
-		return 'rev_timestamp';
+		// The returned column is used for sorting and continuation, so we need to
+		// make sure to use the right denormalized column depending on which table is
+		// being targeted by the query to avoid bad query plans.
+		// See T200259, T204669, T220991, and T221380.
+		$target = $this->getTargetTable();
+		switch ( $target ) {
+			case 'revision':
+				return 'rev_timestamp';
+			case 'ip_changes':
+				return 'ipc_rev_timestamp';
+			case 'revision_actor_temp':
+				return 'revactor_timestamp';
+			default:
+				wfWarn(
+					__METHOD__ . ": Unknown value '$target' from " . static::class . '::getTargetTable()', 0
+				);
+				return 'rev_timestamp';
+		}
 	}
 
 	/**
@@ -439,13 +433,6 @@ class ContribsPager extends RangeChronologicalPager {
 	 */
 	public function getTagFilter() {
 		return $this->tagFilter;
-	}
-
-	/**
-	 * @return string
-	 */
-	public function getContribs() {
-		return $this->contribs;
 	}
 
 	/**
@@ -473,8 +460,24 @@ class ContribsPager extends RangeChronologicalPager {
 	 * @return string[]
 	 */
 	protected function getExtraSortFields() {
-		// Note this is run via parent::__construct() *before* $this->target is set!
-		return [ 'rev_id' ];
+		// The returned columns are used for sorting, so we need to make sure
+		// to use the right denormalized column depending on which table is
+		// being targeted by the query to avoid bad query plans.
+		// See T200259, T204669, T220991, and T221380.
+		$target = $this->getTargetTable();
+		switch ( $target ) {
+			case 'revision':
+				return [ 'rev_id' ];
+			case 'ip_changes':
+				return [ 'ipc_rev_id' ];
+			case 'revision_actor_temp':
+				return [ 'revactor_rev' ];
+			default:
+				wfWarn(
+					__METHOD__ . ": Unknown value '$target' from " . static::class . '::getTargetTable()', 0
+				);
+				return [ 'rev_id' ];
+		}
 	}
 
 	protected function doBatchLookups() {
@@ -491,10 +494,7 @@ class ContribsPager extends RangeChronologicalPager {
 			}
 			if ( isset( $row->rev_id ) ) {
 				$this->mParentLens[$row->rev_id] = $row->rev_len;
-				if ( $this->contribs === 'newbie' ) { // multiple users
-					$batch->add( NS_USER, $row->user_name );
-					$batch->add( NS_USER_TALK, $row->user_name );
-				} elseif ( $isIpRange ) {
+				if ( $isIpRange ) {
 					// If this is an IP range, batch the IP's talk page
 					$batch->add( NS_USER_TALK, $row->rev_user_text );
 				}
@@ -502,10 +502,9 @@ class ContribsPager extends RangeChronologicalPager {
 			}
 		}
 		# Fetch rev_len for revisions not already scanned above
-		$this->mParentLens += Revision::getParentLengths(
-			$this->mDbSecondary,
-			array_diff( $parentRevIds, array_keys( $this->mParentLens ) )
-		);
+		$this->mParentLens += MediaWikiServices::getInstance()
+			->getRevisionStore()
+			->getRevisionSizes( array_diff( $parentRevIds, array_keys( $this->mParentLens ) ) );
 		$batch->execute();
 		$this->mResult->seek( 0 );
 	}
@@ -528,11 +527,30 @@ class ContribsPager extends RangeChronologicalPager {
 	 * Check whether the revision associated is valid for formatting. If has no associated revision
 	 * id then null is returned.
 	 *
+	 * @deprecated since 1.35
+	 *
 	 * @param object $row
 	 * @param Title|null $title
 	 * @return Revision|null
 	 */
 	public function tryToCreateValidRevision( $row, $title = null ) {
+		wfDeprecated( __METHOD__, '1.35' );
+		$potentialRevRecord = $this->tryCreatingRevisionRecord( $row, $title );
+		return $potentialRevRecord ? new Revision( $potentialRevRecord ) : null;
+	}
+
+	/**
+	 * Check whether the revision associated is valid for formatting. If has no associated revision
+	 * id then null is returned.
+	 *
+	 * @since 1.35
+	 *
+	 * @param object $row
+	 * @param Title|null $title
+	 * @return RevisionRecord|null
+	 */
+	public function tryCreatingRevisionRecord( $row, $title = null ) {
+		$revFactory = MediaWikiServices::getInstance()->getRevisionFactory();
 		/*
 		 * There may be more than just revision rows. To make sure that we'll only be processing
 		 * revisions here, let's _try_ to build a revision out of our row (without displaying
@@ -542,13 +560,13 @@ class ContribsPager extends RangeChronologicalPager {
 		 */
 		Wikimedia\suppressWarnings();
 		try {
-			$rev = new Revision( $row, 0, $title );
-			$validRevision = (bool)$rev->getId();
+			$revRecord = $revFactory->newRevisionFromRow( $row, 0, $title );
+			$validRevision = (bool)$revRecord->getId();
 		} catch ( Exception $e ) {
 			$validRevision = false;
 		}
 		Wikimedia\restoreWarnings();
-		return $validRevision ? $rev : null;
+		return $validRevision ? $revRecord : null;
 	}
 
 	/**
@@ -563,12 +581,13 @@ class ContribsPager extends RangeChronologicalPager {
 	 * @param object $row
 	 * @return string
 	 */
-	function formatRow( $row ) {
+	public function formatRow( $row ) {
 		$ret = '';
 		$classes = [];
 		$attribs = [];
 
-		$linkRenderer = MediaWikiServices::getInstance()->getLinkRenderer();
+		$linkRenderer = $this->getLinkRenderer();
+		$permissionManager = MediaWikiServices::getInstance()->getPermissionManager();
 
 		$page = null;
 		// Create a title for the revision if possible
@@ -576,9 +595,9 @@ class ContribsPager extends RangeChronologicalPager {
 		if ( isset( $row->page_namespace ) && isset( $row->page_title ) ) {
 			$page = Title::newFromRow( $row );
 		}
-		$rev = $this->tryToCreateValidRevision( $row, $page );
-		if ( $rev ) {
-			$attribs['data-mw-revid'] = $rev->getId();
+		$revRecord = $this->tryCreatingRevisionRecord( $row, $page );
+		if ( $revRecord ) {
+			$attribs['data-mw-revid'] = $revRecord->getId();
 
 			$link = $linkRenderer->makeLink(
 				$page,
@@ -594,15 +613,26 @@ class ContribsPager extends RangeChronologicalPager {
 				$topmarktext .= '<span class="mw-uctop">' . $this->messages['uctop'] . '</span>';
 				$classes[] = 'mw-contributions-current';
 				# Add rollback link
-				if ( !$row->page_is_new && $page->quickUserCan( 'rollback', $user )
-					&& $page->quickUserCan( 'edit', $user )
+				if ( !$row->page_is_new &&
+					$permissionManager->quickUserCan( 'rollback', $user, $page ) &&
+					$permissionManager->quickUserCan( 'edit', $user, $page )
 				) {
 					$this->preventClickjacking();
-					$topmarktext .= ' ' . Linker::generateRollback( $rev, $this->getContext() );
+					$topmarktext .= ' ' . Linker::generateRollback(
+						$revRecord,
+						$this->getContext(),
+						[ 'noBrackets' ]
+					);
 				}
 			}
 			# Is there a visible previous revision?
-			if ( $rev->userCan( Revision::DELETED_TEXT, $user ) && $rev->getParentId() !== 0 ) {
+			if ( $revRecord->getParentId() !== 0 &&
+				RevisionRecord::userCanBitfield(
+					$revRecord->getVisibility(),
+					RevisionRecord::DELETED_TEXT,
+					$user
+				)
+			) {
 				$difftext = $linkRenderer->makeKnownLink(
 					$page,
 					new HtmlArmor( $this->messages['diff'] ),
@@ -645,32 +675,32 @@ class ContribsPager extends RangeChronologicalPager {
 			}
 
 			$lang = $this->getLanguage();
-			$comment = $lang->getDirMark() . Linker::revComment( $rev, false, true, false );
-			$d = ChangesList::revDateLink( $rev, $user, $lang, $page );
+			$comment = $lang->getDirMark() . Linker::revComment( $revRecord, false, true, false );
+			$d = ChangesList::revDateLink( $revRecord, $user, $lang, $page );
 
-			# Show user names for /newbies as there may be different users.
-			# Note that only unprivileged users have rows with hidden user names excluded.
 			# When querying for an IP range, we want to always show user and user talk links.
 			$userlink = '';
-			if ( ( $this->contribs == 'newbie' && !$rev->isDeleted( Revision::DELETED_USER ) )
-				|| $this->isQueryableRange( $this->target ) ) {
+			$revUser = $revRecord->getUser();
+			$revUserId = $revUser ? $revUser->getId() : 0;
+			$revUserText = $revUser ? $revUser->getName() : '';
+			if ( $this->isQueryableRange( $this->target ) ) {
 				$userlink = ' <span class="mw-changeslist-separator"></span> '
 					. $lang->getDirMark()
-					. Linker::userLink( $rev->getUser(), $rev->getUserText() );
+					. Linker::userLink( $revUserId, $revUserText );
 				$userlink .= ' ' . $this->msg( 'parentheses' )->rawParams(
-					Linker::userTalkLink( $rev->getUser(), $rev->getUserText() ) )->escaped() . ' ';
+					Linker::userTalkLink( $revUserId, $revUserText ) )->escaped() . ' ';
 			}
 
 			$flags = [];
-			if ( $rev->getParentId() === 0 ) {
+			if ( $revRecord->getParentId() === 0 ) {
 				$flags[] = ChangesList::flag( 'newpage' );
 			}
 
-			if ( $rev->isMinor() ) {
+			if ( $revRecord->isMinor() ) {
 				$flags[] = ChangesList::flag( 'minor' );
 			}
 
-			$del = Linker::getRevDeleteLink( $user, $rev, $page );
+			$del = Linker::getRevDeleteLink( $user, $revRecord, $page );
 			if ( $del !== '' ) {
 				$del .= ' ';
 			}
@@ -696,7 +726,8 @@ class ContribsPager extends RangeChronologicalPager {
 			);
 			$classes = array_merge( $classes, $newClasses );
 
-			Hooks::run( 'SpecialContributions::formatRow::flags', [ $this->getContext(), $row, &$flags ] );
+			$this->getHookRunner()->onSpecialContributions__formatRow__flags(
+				$this->getContext(), $row, $flags );
 
 			$templateParams = [
 				'del' => $del,
@@ -712,7 +743,7 @@ class ContribsPager extends RangeChronologicalPager {
 			];
 
 			# Denote if username is redacted for this edit
-			if ( $rev->isDeleted( Revision::DELETED_USER ) ) {
+			if ( $revRecord->isDeleted( RevisionRecord::DELETED_USER ) ) {
 				$templateParams['rev-deleted-user-contribs'] =
 					$this->msg( 'rev-deleted-user-contribs' )->escaped();
 			}
@@ -724,7 +755,7 @@ class ContribsPager extends RangeChronologicalPager {
 		}
 
 		// Let extensions add data
-		Hooks::run( 'ContributionsLineEnding', [ $this, &$ret, $row, &$classes, &$attribs ] );
+		$this->getHookRunner()->onContributionsLineEnding( $this, $ret, $row, $classes, $attribs );
 		$attribs = array_filter( $attribs,
 			[ Sanitizer::class, 'isReservedDataAttribute' ],
 			ARRAY_FILTER_USE_KEY
@@ -734,7 +765,7 @@ class ContribsPager extends RangeChronologicalPager {
 		// receiving empty rows?
 
 		if ( $classes === [] && $attribs === [] && $ret === '' ) {
-			wfDebug( "Dropping Special:Contribution row that could not be formatted\n" );
+			wfDebug( "Dropping Special:Contribution row that could not be formatted" );
 			return "<!-- Could not format Special:Contribution row. -->\n";
 		}
 		$attribs['class'] = $classes;
@@ -748,7 +779,7 @@ class ContribsPager extends RangeChronologicalPager {
 	 * Overwrite Pager function and return a helpful comment
 	 * @return string
 	 */
-	function getSqlComment() {
+	protected function getSqlComment() {
 		if ( $this->namespace || $this->deletedOnly ) {
 			// potentially slow, see CR r58153
 			return 'contributions page filtered for namespace or RevisionDeleted edits';

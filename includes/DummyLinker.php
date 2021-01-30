@@ -1,5 +1,7 @@
 <?php
 
+use MediaWiki\MediaWikiServices;
+
 /**
  * @since 1.18
  */
@@ -66,7 +68,8 @@ class DummyLinker {
 	}
 
 	public function normaliseSpecialPage( Title $title ) {
-		return Linker::normaliseSpecialPage( $title );
+		$linkRenderer = MediaWikiServices::getInstance()->getLinkRenderer();
+		return $linkRenderer->normalizeTarget( $title );
 	}
 
 	public function makeExternalImage( $url, $alt = '' ) {
@@ -315,7 +318,7 @@ class DummyLinker {
 		);
 	}
 
-	public function revComment( Revision $rev, $local = false, $isPublic = false ) {
+	public function revComment( $rev, $local = false, $isPublic = false ) {
 		return Linker::revComment( $rev, $local, $isPublic );
 	}
 
@@ -345,11 +348,11 @@ class DummyLinker {
 		return Linker::tocLineEnd();
 	}
 
-	public function tocList( $toc, $lang = null ) {
+	public function tocList( $toc, Language $lang = null ) {
 		return Linker::tocList( $toc, $lang );
 	}
 
-	public function generateTOC( $tree, $lang = null ) {
+	public function generateTOC( $tree, Language $lang = null ) {
 		return Linker::generateTOC( $tree, $lang );
 	}
 
@@ -419,7 +422,7 @@ class DummyLinker {
 		return Linker::accesskey( $name );
 	}
 
-	public function getRevDeleteLink( User $user, Revision $rev, Title $title ) {
+	public function getRevDeleteLink( User $user, $rev, Title $title ) {
 		return Linker::getRevDeleteLink(
 			$user,
 			$rev,

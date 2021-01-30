@@ -3,17 +3,16 @@
 /**
  * @group Search
  */
-class SearchUpdateTest extends MediaWikiTestCase {
+class SearchUpdateTest extends MediaWikiIntegrationTestCase {
 
 	/**
 	 * @var SearchUpdate
 	 */
 	private $su;
 
-	protected function setUp() {
+	protected function setUp() : void {
 		parent::setUp();
-		$this->setMwGlobals( 'wgSearchType', 'MockSearch' );
-		$this->su = new SearchUpdate( 0, "" );
+		$this->su = new SearchUpdate( 0, Title::newMainPage() );
 	}
 
 	public function updateText( $text ) {
@@ -75,9 +74,6 @@ class MockSearch extends SearchEngine {
 	public static $id;
 	public static $title;
 	public static $text;
-
-	public function __construct( $db ) {
-	}
 
 	public function update( $id, $title, $text ) {
 		self::$id = $id;

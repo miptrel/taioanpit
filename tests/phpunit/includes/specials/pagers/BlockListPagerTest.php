@@ -1,7 +1,8 @@
 <?php
 
-use MediaWiki\Block\Restriction\PageRestriction;
+use MediaWiki\Block\DatabaseBlock;
 use MediaWiki\Block\Restriction\NamespaceRestriction;
+use MediaWiki\Block\Restriction\PageRestriction;
 use MediaWiki\MediaWikiServices;
 use Wikimedia\TestingAccessWrapper;
 
@@ -9,7 +10,18 @@ use Wikimedia\TestingAccessWrapper;
  * @group Database
  * @coversDefaultClass BlockListPager
  */
-class BlockListPagerTest extends MediaWikiTestCase {
+class BlockListPagerTest extends MediaWikiIntegrationTestCase {
+
+	/**
+	 * @var LinkRenderer
+	 */
+	private $linkRenderer;
+
+	protected function setUp() : void {
+		parent::setUp();
+
+		$this->linkRenderer = MediaWikiServices::getInstance()->getLinkRenderer();
+	}
 
 	/**
 	 * @covers ::formatValue
@@ -19,17 +31,14 @@ class BlockListPagerTest extends MediaWikiTestCase {
 	 * @param string $expected
 	 */
 	public function testFormatValue( $name, $expected = null, $row = null ) {
-		$this->setMwGlobals( [
-			'wgEnablePartialBlocks' => false,
-		] );
 		// Set the time to now so it does not get off during the test.
 		MWTimestamp::setFakeTime( MWTimestamp::time() );
 
 		$value = $name === 'ipb_timestamp' ? MWTimestamp::time() : '';
 		$expected = $expected ?? MWTimestamp::getInstance()->format( 'H:i, j F Y' );
 
-		$row = $row ?: new stdClass;
-		$pager = new BlockListPager( new SpecialPage(),  [] );
+		$row = $row ?: (object)[];
+		$pager = new BlockListPager( new SpecialPage(),  [], $this->linkRenderer );
 		$wrappedPager = TestingAccessWrapper::newFromObject( $pager );
 		$wrappedPager->mCurrentRow = $row;
 
@@ -101,7 +110,8 @@ class BlockListPagerTest extends MediaWikiTestCase {
 			],
 			[
 				'ipb_params',
-				'<ul><li>account creation disabled</li><li>cannot edit own talk page</li></ul>',
+				'<ul><li>editing (sitewide)</li>' .
+					'<li>account creation disabled</li><li>cannot edit own talk page</li></ul>',
 				$row,
 			]
 		];
@@ -117,7 +127,7 @@ class BlockListPagerTest extends MediaWikiTestCase {
 			'wgScript' => '/w/index.php',
 		] );
 
-		$pager = new BlockListPager( new SpecialPage(),  [] );
+		$pager = new BlockListPager( new SpecialPage(),  [], $this->linkRenderer );
 
 		$row = (object)[
 			'ipb_id' => 0,
@@ -197,7 +207,7 @@ class BlockListPagerTest extends MediaWikiTestCase {
 			'ipb_sitewide' => 1,
 			'ipb_timestamp' => $this->db->timestamp( wfTimestamp( TS_MW ) ),
 		];
-		$pager = new BlockListPager( new SpecialPage(),  [] );
+		$pager = new BlockListPager( new SpecialPage(),  [], $this->linkRenderer );
 		$pager->preprocessResults( [ $row ] );
 
 		foreach ( $links as $link ) {
@@ -210,7 +220,7 @@ class BlockListPagerTest extends MediaWikiTestCase {
 			'by_user_name' => 'Admin',
 			'ipb_sitewide' => 1,
 		];
-		$pager = new BlockListPager( new SpecialPage(),  [] );
+		$pager = new BlockListPager( new SpecialPage(),  [], $this->linkRenderer );
 		$pager->preprocessResults( [ $row ] );
 
 		$this->assertObjectNotHasAttribute( 'ipb_restrictions', $row );
@@ -222,7 +232,7 @@ class BlockListPagerTest extends MediaWikiTestCase {
 		$target = '127.0.0.1';
 
 		// Test Partial Blocks Blocks.
-		$block = new Block( [
+		$block = new DatabaseBlock( [
 			'address' => $target,
 			'by' => $this->getTestSysop()->getUser()->getId(),
 			'reason' => 'Parce que',
@@ -236,18 +246,18 @@ class BlockListPagerTest extends MediaWikiTestCase {
 
 		$result = $this->db->select( 'ipblocks', [ '*' ], [ 'ipb_id' => $block->getId() ] );
 
-		$pager = new BlockListPager( new SpecialPage(),  [] );
+		$pager = new BlockListPager( new SpecialPage(),  [], $this->linkRenderer );
 		$pager->preprocessResults( $result );
 
 		$wrappedPager = TestingAccessWrapper::newFromObject( $pager );
 
 		$restrictions = $wrappedPager->restrictions;
-		$this->assertInternalType( 'array', $restrictions );
+		$this->assertIsArray( $restrictions );
 
 		$restriction = $restrictions[0];
 		$this->assertEquals( $page->getId(), $restriction->getValue() );
 		$this->assertEquals( $page->getId(), $restriction->getTitle()->getArticleID() );
-		$this->assertEquals( $title->getDBKey(), $restriction->getTitle()->getDBKey() );
+		$this->assertEquals( $title->getDBkey(), $restriction->getTitle()->getDBkey() );
 		$this->assertEquals( $title->getNamespace(), $restriction->getTitle()->getNamespace() );
 
 		// Delete the block and the restrictions.

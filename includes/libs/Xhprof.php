@@ -20,18 +20,16 @@
 
 /**
  * Convenience class for working with XHProf
- * <https://github.com/phacility/xhprof>. XHProf can be installed as a PECL
- * package for use with PHP5 (Zend PHP) and is built-in to HHVM 3.3.0.
+ * <https://github.com/phacility/xhprof>. XHProf can be installed via PECL.
  *
  * This also supports using the Tideways profiler
- * <https://github.com/tideways/php-profiler-extension>, which additionally
- * has support for PHP7.
+ * <https://github.com/tideways/php-xhprof-extension>.
  *
  * @since 1.28
  */
 class Xhprof {
 	/**
-	 * @var bool $enabled Whether XHProf is currently running.
+	 * @var bool Whether XHProf is currently running.
 	 */
 	protected static $enabled;
 
@@ -53,15 +51,21 @@ class Xhprof {
 		if ( self::isEnabled() ) {
 			throw new Exception( 'Profiling is already enabled.' );
 		}
-		self::$enabled = true;
+
+		$args = [ $flags ];
+		if ( $options ) {
+			$args[] = $options;
+		}
+
 		self::callAny(
 			[
 				'xhprof_enable',
 				'tideways_enable',
 				'tideways_xhprof_enable'
 			],
-			[ $flags, $options ]
+			$args
 		);
+		self::$enabled = true;
 	}
 
 	/**
@@ -77,6 +81,8 @@ class Xhprof {
 				'tideways_disable',
 				'tideways_xhprof_disable'
 			] );
+		} else {
+			return null;
 		}
 	}
 
@@ -84,6 +90,7 @@ class Xhprof {
 	 * Call the first available function from $functions.
 	 * @param array $functions
 	 * @param array $args
+	 * @return mixed
 	 * @throws Exception
 	 */
 	protected static function callAny( array $functions, array $args = [] ) {

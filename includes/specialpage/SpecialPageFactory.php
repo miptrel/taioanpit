@@ -22,18 +22,20 @@
  * @defgroup SpecialPage SpecialPage
  */
 
-namespace MediaWiki\Special;
+namespace MediaWiki\SpecialPage;
 
-use Config;
-use Hooks;
 use IContextSource;
 use Language;
+use MediaWiki\Config\ServiceOptions;
+use MediaWiki\HookContainer\HookContainer;
+use MediaWiki\HookContainer\HookRunner;
 use MediaWiki\Linker\LinkRenderer;
 use Profiler;
 use RequestContext;
 use SpecialPage;
 use Title;
 use User;
+use Wikimedia\ObjectFactory;
 
 /**
  * Factory for handling the special page list and generating SpecialPage objects.
@@ -63,40 +65,38 @@ use User;
 class SpecialPageFactory {
 	/**
 	 * List of special page names to the subclass of SpecialPage which handles them.
-	 * @todo Make this a const when we drop HHVM support (T192166).  It can still be private in PHP
-	 * 7.1.
 	 */
-	private static $coreList = [
+	private const CORE_LIST = [
 		// Maintenance Reports
-		'BrokenRedirects' => \BrokenRedirectsPage::class,
-		'Deadendpages' => \DeadendPagesPage::class,
-		'DoubleRedirects' => \DoubleRedirectsPage::class,
-		'Longpages' => \LongPagesPage::class,
-		'Ancientpages' => \AncientPagesPage::class,
-		'Lonelypages' => \LonelyPagesPage::class,
-		'Fewestrevisions' => \FewestrevisionsPage::class,
-		'Withoutinterwiki' => \WithoutInterwikiPage::class,
+		'BrokenRedirects' => \SpecialBrokenRedirects::class,
+		'Deadendpages' => \SpecialDeadendPages::class,
+		'DoubleRedirects' => \SpecialDoubleRedirects::class,
+		'Longpages' => \SpecialLongPages::class,
+		'Ancientpages' => \SpecialAncientPages::class,
+		'Lonelypages' => \SpecialLonelyPages::class,
+		'Fewestrevisions' => \SpecialFewestRevisions::class,
+		'Withoutinterwiki' => \SpecialWithoutInterwiki::class,
 		'Protectedpages' => \SpecialProtectedpages::class,
 		'Protectedtitles' => \SpecialProtectedtitles::class,
-		'Shortpages' => \ShortPagesPage::class,
-		'Uncategorizedcategories' => \UncategorizedCategoriesPage::class,
-		'Uncategorizedimages' => \UncategorizedImagesPage::class,
-		'Uncategorizedpages' => \UncategorizedPagesPage::class,
-		'Uncategorizedtemplates' => \UncategorizedTemplatesPage::class,
-		'Unusedcategories' => \UnusedCategoriesPage::class,
-		'Unusedimages' => \UnusedimagesPage::class,
-		'Unusedtemplates' => \UnusedtemplatesPage::class,
-		'Unwatchedpages' => \UnwatchedpagesPage::class,
-		'Wantedcategories' => \WantedCategoriesPage::class,
+		'Shortpages' => \SpecialShortPages::class,
+		'Uncategorizedcategories' => \SpecialUncategorizedCategories::class,
+		'Uncategorizedimages' => \SpecialUncategorizedImages::class,
+		'Uncategorizedpages' => \SpecialUncategorizedPages::class,
+		'Uncategorizedtemplates' => \SpecialUncategorizedTemplates::class,
+		'Unusedcategories' => \SpecialUnusedCategories::class,
+		'Unusedimages' => \SpecialUnusedImages::class,
+		'Unusedtemplates' => \SpecialUnusedTemplates::class,
+		'Unwatchedpages' => \SpecialUnwatchedPages::class,
+		'Wantedcategories' => \SpecialWantedCategories::class,
 		'Wantedfiles' => \WantedFilesPage::class,
 		'Wantedpages' => \WantedPagesPage::class,
-		'Wantedtemplates' => \WantedTemplatesPage::class,
+		'Wantedtemplates' => \SpecialWantedTemplates::class,
 
 		// List of pages
 		'Allpages' => \SpecialAllPages::class,
 		'Prefixindex' => \SpecialPrefixindex::class,
 		'Categories' => \SpecialCategories::class,
-		'Listredirects' => \ListredirectsPage::class,
+		'Listredirects' => \SpecialListRedirects::class,
 		'PagesWithProp' => \SpecialPagesWithProp::class,
 		'TrackingCategories' => \SpecialTrackingCategories::class,
 
@@ -111,14 +111,19 @@ class SpecialPageFactory {
 
 		// Users and rights
 		'Activeusers' => \SpecialActiveUsers::class,
-		'Block' => \SpecialBlock::class,
+		'Block' => [
+			'class' => \SpecialBlock::class,
+			'services' => [
+				'PermissionManager'
+			]
+		],
 		'Unblock' => \SpecialUnblock::class,
 		'BlockList' => \SpecialBlockList::class,
 		'AutoblockList' => \SpecialAutoblockList::class,
 		'ChangePassword' => \SpecialChangePassword::class,
 		'BotPasswords' => \SpecialBotPasswords::class,
 		'PasswordReset' => \SpecialPasswordReset::class,
-		'DeletedContributions' => \DeletedContributionsPage::class,
+		'DeletedContributions' => \SpecialDeletedContributions::class,
 		'Preferences' => \SpecialPreferences::class,
 		'ResetTokens' => \SpecialResetTokens::class,
 		'Contributions' => \SpecialContributions::class,
@@ -128,7 +133,12 @@ class SpecialPageFactory {
 		'Listadmins' => \SpecialListAdmins::class,
 		'Listbots' => \SpecialListBots::class,
 		'Userrights' => \UserrightsPage::class,
-		'EditWatchlist' => \SpecialEditWatchlist::class,
+		'EditWatchlist' => [
+			'class' => \SpecialEditWatchlist::class,
+			'services' => [
+				'WatchedItemStore'
+			]
+		],
 		'PasswordPolicies' => \SpecialPasswordPolicies::class,
 
 		// Recent changes and logs
@@ -143,12 +153,12 @@ class SpecialPageFactory {
 		// Media reports and uploads
 		'Listfiles' => \SpecialListFiles::class,
 		'Filepath' => \SpecialFilepath::class,
-		'MediaStatistics' => \MediaStatisticsPage::class,
-		'MIMEsearch' => \MIMEsearchPage::class,
-		'FileDuplicateSearch' => \FileDuplicateSearchPage::class,
+		'MediaStatistics' => \SpecialMediaStatistics::class,
+		'MIMEsearch' => \SpecialMIMESearch::class,
+		'FileDuplicateSearch' => \SpecialFileDuplicateSearch::class,
 		'Upload' => \SpecialUpload::class,
 		'UploadStash' => \SpecialUploadStash::class,
-		'ListDuplicatedFiles' => \ListDuplicatedFilesPage::class,
+		'ListDuplicatedFiles' => \SpecialListDuplicatedFiles::class,
 
 		// Data and tools
 		'ApiSandbox' => \SpecialApiSandbox::class,
@@ -159,7 +169,7 @@ class SpecialPageFactory {
 		'Unlockdb' => \SpecialUnlockdb::class,
 
 		// Redirecting special pages
-		'LinkSearch' => \LinkSearchPage::class,
+		'LinkSearch' => \SpecialLinkSearch::class,
 		'Randompage' => \RandomPage::class,
 		'RandomInCategory' => \SpecialRandomInCategory::class,
 		'Randomredirect' => \SpecialRandomredirect::class,
@@ -167,13 +177,13 @@ class SpecialPageFactory {
 		'GoToInterwiki' => \SpecialGoToInterwiki::class,
 
 		// High use pages
-		'Mostlinkedcategories' => \MostlinkedCategoriesPage::class,
+		'Mostlinkedcategories' => \SpecialMostLinkedCategories::class,
 		'Mostimages' => \MostimagesPage::class,
-		'Mostinterwikis' => \MostinterwikisPage::class,
-		'Mostlinked' => \MostlinkedPage::class,
-		'Mostlinkedtemplates' => \MostlinkedTemplatesPage::class,
-		'Mostcategories' => \MostcategoriesPage::class,
-		'Mostrevisions' => \MostrevisionsPage::class,
+		'Mostinterwikis' => \SpecialMostInterwikis::class,
+		'Mostlinked' => \SpecialMostLinked::class,
+		'Mostlinkedtemplates' => \SpecialMostLinkedTemplates::class,
+		'Mostcategories' => \SpecialMostCategories::class,
+		'Mostrevisions' => \SpecialMostRevisions::class,
 
 		// Page tools
 		'ComparePages' => \SpecialComparePages::class,
@@ -183,6 +193,12 @@ class SpecialPageFactory {
 		'Whatlinkshere' => \SpecialWhatLinksHere::class,
 		'MergeHistory' => \SpecialMergeHistory::class,
 		'ExpandTemplates' => \SpecialExpandTemplates::class,
+		'ChangeContentModel' => [
+			'class' => \SpecialChangeContentModel::class,
+			'services' => [
+				'ContentHandlerFactory',
+			],
+		],
 
 		// Other
 		'Booksources' => \SpecialBookSources::class,
@@ -191,18 +207,34 @@ class SpecialPageFactory {
 		'ApiHelp' => \SpecialApiHelp::class,
 		'Blankpage' => \SpecialBlankpage::class,
 		'Diff' => \SpecialDiff::class,
-		'EditTags' => \SpecialEditTags::class,
+		'EditPage' => \SpecialEditPage::class,
+		'EditTags' => [
+			'class' => \SpecialEditTags::class,
+			'services' => [
+				'PermissionManager',
+			],
+		],
 		'Emailuser' => \SpecialEmailUser::class,
 		'Movepage' => \MovePageForm::class,
 		'Mycontributions' => \SpecialMycontributions::class,
 		'MyLanguage' => \SpecialMyLanguage::class,
 		'Mypage' => \SpecialMypage::class,
 		'Mytalk' => \SpecialMytalk::class,
+		'PageHistory' => \SpecialPageHistory::class,
+		'PageInfo' => \SpecialPageInfo::class,
+		'Purge' => \SpecialPurge::class,
 		'Myuploads' => \SpecialMyuploads::class,
 		'AllMyUploads' => \SpecialAllMyUploads::class,
+		'NewSection' => \SpecialNewSection::class,
 		'PermanentLink' => \SpecialPermanentLink::class,
 		'Redirect' => \SpecialRedirect::class,
-		'Revisiondelete' => \SpecialRevisionDelete::class,
+		'Revisiondelete' => [
+			'class' => \SpecialRevisionDelete::class,
+			'services' => [
+				'PermissionManager',
+				'RepoGroup',
+			],
+		],
 		'RunJobs' => \SpecialRunJobs::class,
 		'Specialpages' => \SpecialSpecialpages::class,
 		'PageData' => \SpecialPageData::class,
@@ -214,19 +246,53 @@ class SpecialPageFactory {
 	/** @var array */
 	private $aliases;
 
-	/** @var Config */
-	private $config;
+	/** @var ServiceOptions */
+	private $options;
 
 	/** @var Language */
 	private $contLang;
 
+	/** @var ObjectFactory */
+	private $objectFactory;
+
+	/** @var HookContainer */
+	private $hookContainer;
+
+	/** @var HookRunner */
+	private $hookRunner;
+
 	/**
-	 * @param Config $config
-	 * @param Language $contLang
+	 * @var array
+	 * @since 1.35
 	 */
-	public function __construct( Config $config, Language $contLang ) {
-		$this->config = $config;
+	public const CONSTRUCTOR_OPTIONS = [
+		'DisableInternalSearch',
+		'EmailAuthentication',
+		'EnableEmail',
+		'EnableJavaScriptTest',
+		'EnableSpecialMute',
+		'PageLanguageUseDB',
+		'SpecialPages',
+	];
+
+	/**
+	 * @param ServiceOptions $options
+	 * @param Language $contLang
+	 * @param ObjectFactory $objectFactory
+	 * @param HookContainer $hookContainer
+	 */
+	public function __construct(
+		ServiceOptions $options,
+		Language $contLang,
+		ObjectFactory $objectFactory,
+		HookContainer $hookContainer
+	) {
+		$options->assertRequiredOptions( self::CONSTRUCTOR_OPTIONS );
+		$this->options = $options;
 		$this->contLang = $contLang;
+		$this->objectFactory = $objectFactory;
+		$this->hookContainer = $hookContainer;
+		$this->hookRunner = new HookRunner( $hookContainer );
 	}
 
 	/**
@@ -246,39 +312,39 @@ class SpecialPageFactory {
 	 */
 	private function getPageList() : array {
 		if ( !is_array( $this->list ) ) {
-			$this->list = self::$coreList;
+			$this->list = self::CORE_LIST;
 
-			if ( !$this->config->get( 'DisableInternalSearch' ) ) {
+			if ( !$this->options->get( 'DisableInternalSearch' ) ) {
 				$this->list['Search'] = \SpecialSearch::class;
 			}
 
-			if ( $this->config->get( 'EmailAuthentication' ) ) {
-				$this->list['Confirmemail'] = \EmailConfirmation::class;
-				$this->list['Invalidateemail'] = \EmailInvalidation::class;
+			if ( $this->options->get( 'EmailAuthentication' ) ) {
+				$this->list['Confirmemail'] = \SpecialConfirmEmail::class;
+				$this->list['Invalidateemail'] = \SpecialEmailInvalidate::class;
 			}
 
-			if ( $this->config->get( 'EnableEmail' ) ) {
+			if ( $this->options->get( 'EnableEmail' ) ) {
 				$this->list['ChangeEmail'] = \SpecialChangeEmail::class;
 			}
 
-			if ( $this->config->get( 'EnableJavaScriptTest' ) ) {
+			if ( $this->options->get( 'EnableJavaScriptTest' ) ) {
 				$this->list['JavaScriptTest'] = \SpecialJavaScriptTest::class;
 			}
 
-			if ( $this->config->get( 'PageLanguageUseDB' ) ) {
-				$this->list['PageLanguage'] = \SpecialPageLanguage::class;
+			if ( $this->options->get( 'EnableSpecialMute' ) ) {
+				$this->list['Mute'] = \SpecialMute::class;
 			}
-			if ( $this->config->get( 'ContentHandlerUseDB' ) ) {
-				$this->list['ChangeContentModel'] = \SpecialChangeContentModel::class;
+
+			if ( $this->options->get( 'PageLanguageUseDB' ) ) {
+				$this->list['PageLanguage'] = \SpecialPageLanguage::class;
 			}
 
 			// Add extension special pages
-			$this->list = array_merge( $this->list, $this->config->get( 'SpecialPages' ) );
+			$this->list = array_merge( $this->list, $this->options->get( 'SpecialPages' ) );
 
 			// This hook can be used to disable unwanted core special pages
 			// or conditionally register special pages.
-			Hooks::run( 'SpecialPage_initList', [ &$this->list ] );
-
+			$this->hookRunner->onSpecialPage_initList( $this->list );
 		}
 
 		return $this->list;
@@ -291,7 +357,7 @@ class SpecialPageFactory {
 	 * @return array
 	 */
 	private function getAliasList() : array {
-		if ( is_null( $this->aliases ) ) {
+		if ( $this->aliases === null ) {
 			$aliases = $this->contLang->getSpecialPageAliases();
 			$pageList = $this->getPageList();
 
@@ -344,7 +410,7 @@ class SpecialPageFactory {
 	 * subpage.
 	 *
 	 * @param string $alias
-	 * @return array Array( String, String|null ), or array( null, null ) if the page is invalid
+	 * @return array [ String, String|null ], or [ null, null ] if the page is invalid
 	 */
 	public function resolveAlias( $alias ) {
 		$bits = explode( '/', $alias, 2 );
@@ -388,19 +454,29 @@ class SpecialPageFactory {
 		if ( isset( $specialPageList[$realName] ) ) {
 			$rec = $specialPageList[$realName];
 
-			if ( is_callable( $rec ) ) {
-				// Use callback to instantiate the special page
-				$page = $rec();
-			} elseif ( is_string( $rec ) ) {
-				$className = $rec;
-				$page = new $className;
-			} elseif ( $rec instanceof SpecialPage ) {
+			if ( $rec instanceof SpecialPage ) {
+				wfDeprecatedMsg(
+					"A SpecialPage instance for $realName was found in " .
+					'$wgSpecialPages or came from a SpecialPage_initList hook handler, ' .
+					'this was deprecated in MediaWiki 1.34',
+					'1.34'
+				);
+
 				$page = $rec; // XXX: we should deep clone here
+			} elseif ( is_array( $rec ) || is_string( $rec ) || is_callable( $rec ) ) {
+				$page = $this->objectFactory->createObject(
+					$rec,
+					[
+						'allowClassName' => true,
+						'allowCallable' => true
+					]
+				);
 			} else {
 				$page = null;
 			}
 
 			if ( $page instanceof SpecialPage ) {
+				$page->setHookContainer( $this->hookContainer );
 				return $page;
 			}
 
@@ -544,6 +620,7 @@ class SpecialPageFactory {
 				return $title;
 			}
 
+			// @phan-suppress-next-line PhanUndeclaredMethod
 			$context->setTitle( $page->getPageTitle( $par ) );
 		} elseif ( !$page->isIncludable() ) {
 			return false;
@@ -678,7 +755,7 @@ class SpecialPageFactory {
 				"Perhaps no aliases are defined for it?" );
 		}
 
-		if ( $subpage !== false && !is_null( $subpage ) ) {
+		if ( $subpage !== false && $subpage !== null ) {
 			// Make sure it's in dbkey form
 			$subpage = str_replace( ' ', '_', $subpage );
 			$name = "$name/$subpage";
@@ -702,3 +779,6 @@ class SpecialPageFactory {
 		return null;
 	}
 }
+
+/** @deprecated since 1.35, use MediaWiki\\SpecialPage\\SpecialPageFactory */
+class_alias( SpecialPageFactory::class, 'MediaWiki\\Special\\SpecialPageFactory' );

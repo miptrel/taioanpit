@@ -53,7 +53,7 @@
 	/**
 	 * Maximum number of restriction icons before default icon is used
 	 *
-	 * @property MAX_RESTRICT
+	 * @property {number} MAX_RESTRICT
 	 * @static
 	 */
 	MetadataPanel.MAX_RESTRICT = 4;
@@ -458,14 +458,14 @@
 
 	/**
 	 * Sets the upload or creation date and time in the panel
-	 *f
+	 *
 	 * @param {string} date The formatted date to set.
 	 * @param {boolean} created Whether this is the creation date
 	 */
 	MPP.setDateTime = function ( date, created ) {
 		this.$datetime.text(
 			mw.message(
-				'multimediaviewer-datetime-' + ( created ? 'created' : 'uploaded' ),
+				( created ? 'multimediaviewer-datetime-created' : 'multimediaviewer-datetime-uploaded' ),
 				date
 			).text()
 		);
@@ -631,6 +631,22 @@
 			validRestrictions = 0;
 
 		restrictions.forEach( function ( value, index ) {
+			// The following messages are used here:
+			// * multimediaviewer-restriction-2257
+			// * multimediaviewer-restriction-aus-reserve
+			// * multimediaviewer-restriction-communist
+			// * multimediaviewer-restriction-costume
+			// * multimediaviewer-restriction-currency
+			// * multimediaviewer-restriction-design
+			// * multimediaviewer-restriction-fan-art
+			// * multimediaviewer-restriction-ihl
+			// * multimediaviewer-restriction-insignia
+			// * multimediaviewer-restriction-ita-mibac
+			// * multimediaviewer-restriction-nazi
+			// * multimediaviewer-restriction-personality
+			// * multimediaviewer-restriction-trademarked
+			// * multimediaviewer-restriction-default
+			// * multimediaviewer-restriction-default-and-others
 			if ( !mw.message( 'multimediaviewer-restriction-' + value ).exists() || value === 'default' || index + 1 > MetadataPanel.MAX_RESTRICT ) {
 				showDefault = true; // If the restriction isn't defined or there are more than MAX_RESTRICT of them, show a generic symbol at the end
 				return;
@@ -663,6 +679,7 @@
 	MPP.createRestriction = function ( type ) {
 		var $label = $( '<span>' )
 			.addClass( 'mw-mmv-label mw-mmv-restriction-label' )
+			// Messages documented above
 			.prop( 'title', mw.message( 'multimediaviewer-restriction-' + type ).text() )
 			.tipsy( {
 				delay: mw.config.get( 'wgMultimediaViewer' ).tooltipDelay,
@@ -670,6 +687,21 @@
 			} );
 
 		$( '<span>' )
+			// The following classes are used here:
+			// * mw-mmv-restriction-2257
+			// * mw-mmv-restriction-aus-reserve
+			// * mw-mmv-restriction-communist
+			// * mw-mmv-restriction-costume
+			// * mw-mmv-restriction-currency
+			// * mw-mmv-restriction-design
+			// * mw-mmv-restriction-fan-art
+			// * mw-mmv-restriction-ihl
+			// * mw-mmv-restriction-insignia
+			// * mw-mmv-restriction-ita-mibac
+			// * mw-mmv-restriction-nazi
+			// * mw-mmv-restriction-personality
+			// * mw-mmv-restriction-trademarked:after
+			// * mw-mmv-restriction-default
 			.addClass( 'mw-mmv-restriction-label-inner mw-mmv-restriction-' +
 				( type === 'default-and-others' ? 'default' : type ) )
 			.text( mw.message( 'multimediaviewer-restriction-' + type ).text() )
@@ -718,6 +750,9 @@
 						mw.language.convertNumber( latdeg ),
 						mw.language.convertNumber( latmin ),
 						mw.language.convertNumber( latsec ),
+						// The following messages are used here:
+						// * multimediaviewer-geoloc-north
+						// * multimediaviewer-geoloc-south
 						mw.message( latmsg ).text()
 					).text(),
 
@@ -726,6 +761,9 @@
 						mw.language.convertNumber( longdeg ),
 						mw.language.convertNumber( longmin ),
 						mw.language.convertNumber( longsec ),
+						// The following messages are used here:
+						// * multimediaviewer-geoloc-east
+						// * multimediaviewer-geoloc-west
 						mw.message( longmsg ).text()
 					).text()
 				).text()
@@ -757,19 +795,9 @@
 		mw.mmv.attributionLogger.logAttribution( imageData );
 
 		if ( imageData.creationDateTime ) {
-			// Use the raw date until moment can try to interpret it
-			panel.setDateTime( imageData.creationDateTime );
-
-			this.formatDate( imageData.creationDateTime ).then( function ( formattedDate ) {
-				panel.setDateTime( formattedDate, true );
-			} );
+			panel.setDateTime( this.formatDate( imageData.creationDateTime ), true );
 		} else if ( imageData.uploadDateTime ) {
-			// Use the raw date until moment can try to interpret it
-			panel.setDateTime( imageData.uploadDateTime );
-
-			this.formatDate( imageData.uploadDateTime ).then( function ( formattedDate ) {
-				panel.setDateTime( formattedDate );
-			} );
+			panel.setDateTime( this.formatDate( imageData.uploadDateTime ) );
 		}
 
 		this.buttons.set( imageData, repoData );
@@ -814,29 +842,25 @@
 	 * Unrecognized strings are returned unchanged.
 	 *
 	 * @param {string} dateString
-	 * @return {jQuery.Deferred}
+	 * @return {string} formatted date
 	 */
 	MPP.formatDate = function ( dateString ) {
-		var deferred = $.Deferred(),
-			date;
-
-		mw.loader.using( 'moment', function () {
-			/* global moment */
-			date = moment( dateString );
-
-			if ( date.isValid() ) {
-				deferred.resolve( date.format( 'LL' ) );
-			} else {
-				deferred.resolve( dateString );
+		var date,
+			lang = mw.config.get( 'wgUserLanguage' );
+		if ( lang === 'en' ) { lang = 'en-GB'; } // for D MMMM YYYY format
+		date = new Date( dateString );
+		try {
+			if ( date instanceof Date && !isNaN( date ) ) {
+				return date.toLocaleString( lang, {
+					day: 'numeric',
+					month: 'long',
+					year: 'numeric',
+					timeZone: 'UTC'
+				} );
 			}
-		}, function ( error ) {
-			deferred.reject( error );
-			if ( window.console && window.console.error ) {
-				window.console.error( 'mw.loader.using error when trying to load moment', error );
-			}
-		} );
-
-		return deferred.promise();
+		} catch ( ignore ) {}
+		// fallback to original date string
+		return dateString;
 	};
 
 	/**

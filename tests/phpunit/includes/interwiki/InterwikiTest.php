@@ -1,4 +1,5 @@
 <?php
+
 use MediaWiki\MediaWikiServices;
 
 /**
@@ -7,7 +8,7 @@ use MediaWiki\MediaWikiServices;
  * @group MediaWiki
  * @group Database
  */
-class InterwikiTest extends MediaWikiTestCase {
+class InterwikiTest extends MediaWikiIntegrationTestCase {
 
 	public function testConstructor() {
 		$interwiki = new Interwiki(
@@ -50,7 +51,6 @@ class InterwikiTest extends MediaWikiTestCase {
 	}
 
 	private function setWgInterwikiCache( $interwikiCache ) {
-		$this->overrideMwServices();
 		MediaWikiServices::getInstance()->resetServiceForTesting( 'InterwikiLookup' );
 		$this->setMwGlobals( 'wgInterwikiCache', $interwikiCache );
 	}

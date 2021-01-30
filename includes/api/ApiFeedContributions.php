@@ -21,6 +21,7 @@
  */
 
 use MediaWiki\MediaWikiServices;
+use MediaWiki\ParamValidator\TypeDef\UserDef;
 use MediaWiki\Revision\RevisionAccessException;
 use MediaWiki\Revision\RevisionRecord;
 use MediaWiki\Revision\RevisionStore;
@@ -34,6 +35,9 @@ class ApiFeedContributions extends ApiBase {
 	/** @var RevisionStore */
 	private $revisionStore;
 
+	/** @var TitleParser */
+	private $titleParser;
+
 	/**
 	 * This module uses a custom feed wrapper printer.
 	 *
@@ -45,6 +49,7 @@ class ApiFeedContributions extends ApiBase {
 
 	public function execute() {
 		$this->revisionStore = MediaWikiServices::getInstance()->getRevisionStore();
+		$this->titleParser = MediaWikiServices::getInstance()->getTitleParser();
 
 		$params = $this->extractRequestParams();
 
@@ -65,11 +70,14 @@ class ApiFeedContributions extends ApiBase {
 		$msg = wfMessage( 'Contributions' )->inContentLanguage()->text();
 		$feedTitle = $config->get( 'Sitename' ) . ' - ' . $msg .
 			' [' . $config->get( 'LanguageCode' ) . ']';
-		$feedUrl = SpecialPage::getTitleFor( 'Contributions', $params['user'] )->getFullURL();
 
-		$target = $params['user'] == 'newbies'
-			? 'newbies'
-			: Title::makeTitleSafe( NS_USER, $params['user'] )->getText();
+		$target = $params['user'];
+		if ( ExternalUserNames::isExternal( $target ) ) {
+			// Interwiki names make invalid titles, so put the target in the query instead.
+			$feedUrl = SpecialPage::getTitleFor( 'Contributions' )->getFullURL( [ 'target' => $target ] );
+		} else {
+			$feedUrl = SpecialPage::getTitleFor( 'Contributions', $target )->getFullURL();
+		}
 
 		$feed = new $feedClasses[$params['feedformat']] (
 			$feedTitle,
@@ -124,10 +132,8 @@ class ApiFeedContributions extends ApiBase {
 		// ContributionsLineEnding hook. Hook implementers may cancel
 		// the hook to signal the user is not allowed to read this item.
 		$feedItem = null;
-		$hookResult = Hooks::run(
-			'ApiFeedContributions::feedItem',
-			[ $row, $this->getContext(), &$feedItem ]
-		);
+		$hookResult = $this->getHookRunner()->onApiFeedContributions__feedItem(
+			$row, $this->getContext(), $feedItem );
 		// Hook returned a valid feed item
 		if ( $feedItem instanceof FeedItem ) {
 			return $feedItem;
@@ -138,10 +144,12 @@ class ApiFeedContributions extends ApiBase {
 
 		// Hook completed and did not return a valid feed item
 		$title = Title::makeTitle( (int)$row->page_namespace, $row->page_title );
-		if ( $title && $title->userCan( 'read', $this->getUser() ) ) {
+		$user = $this->getUser();
+
+		if ( $title && $this->getPermissionManager()->userCan( 'read', $user, $title ) ) {
 			$date = $row->rev_timestamp;
 			$comments = $title->getTalkPage()->getFullURL();
-			$revision = $this->revisionStore->newRevisionFromRow( $row );
+			$revision = $this->revisionStore->newRevisionFromRow( $row, 0, $title );
 
 			return new FeedItem(
 				$title->getPrefixedText(),
@@ -207,6 +215,7 @@ class ApiFeedContributions extends ApiBase {
 			],
 			'user' => [
 				ApiBase::PARAM_TYPE => 'user',
+				UserDef::PARAM_ALLOWED_USER_TYPES => [ 'name', 'ip', 'cidr', 'id', 'interwiki' ],
 				ApiBase::PARAM_REQUIRED => true,
 			],
 			'namespace' => [

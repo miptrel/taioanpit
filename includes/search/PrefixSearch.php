@@ -27,24 +27,10 @@ use MediaWiki\MediaWikiServices;
  * names that match. Used largely by the OpenSearch implementation.
  * @deprecated Since 1.27, Use SearchEngine::defaultPrefixSearch or SearchEngine::completionSearch
  *
+ * @stable to extend
  * @ingroup Search
  */
 abstract class PrefixSearch {
-	/**
-	 * Do a prefix search of titles and return a list of matching page names.
-	 * @deprecated Since 1.23, use TitlePrefixSearch or StringPrefixSearch classes
-	 *
-	 * @param string $search
-	 * @param int $limit
-	 * @param array $namespaces Used if query is not explicitly prefixed
-	 * @param int $offset How many results to offset from the beginning
-	 * @return array Array of strings
-	 */
-	public static function titleSearch( $search, $limit, $namespaces = [], $offset = 0 ) {
-		$prefixSearch = new StringPrefixSearch;
-		return $prefixSearch->search( $search, $limit, $namespaces, $offset );
-	}
-
 	/**
 	 * Do a prefix search of titles and return a list of matching page names.
 	 *
@@ -113,7 +99,7 @@ abstract class PrefixSearch {
 	 * When implemented in a descendant class, receives an array of titles as strings and returns
 	 * either an unmodified array or an array of Title objects corresponding to strings received.
 	 *
-	 * @param array $strings
+	 * @param string[] $strings
 	 *
 	 * @return array
 	 */
@@ -137,10 +123,9 @@ abstract class PrefixSearch {
 			}
 		}
 		$srchres = [];
-		if ( Hooks::run(
-			'PrefixSearchBackend',
-			[ $namespaces, $search, $limit, &$srchres, $offset ]
-		) ) {
+		if ( Hooks::runner()->onPrefixSearchBackend(
+			$namespaces, $search, $limit, $srchres, $offset )
+		) {
 			return $this->titles( $this->defaultSearchBackend( $namespaces, $search, $limit, $offset ) );
 		}
 		return $this->strings(

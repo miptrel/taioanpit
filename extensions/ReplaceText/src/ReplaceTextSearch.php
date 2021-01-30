@@ -18,7 +18,7 @@
  * @file
  */
 
-use Wikimedia\Rdbms\Database;
+use Wikimedia\Rdbms\IDatabase;
 use Wikimedia\Rdbms\IResultWrapper;
 
 class ReplaceTextSearch {
@@ -26,16 +26,18 @@ class ReplaceTextSearch {
 	/**
 	 * @param string $search
 	 * @param array $namespaces
-	 * @param string $category
-	 * @param string $prefix
+	 * @param string|null $category
+	 * @param string|null $prefix
 	 * @param bool $use_regex
 	 * @return IResultWrapper Resulting rows
 	 */
 	public static function doSearchQuery(
 		$search, $namespaces, $category, $prefix, $use_regex = false
 	) {
+		global $wgReplaceTextResultsLimit;
+
 		$dbr = wfGetDB( DB_REPLICA );
-		$tables = [ 'page', 'revision', 'text' ];
+		$tables = [ 'page', 'revision', 'text', 'slots', 'content' ];
 		$vars = [ 'page_id', 'page_namespace', 'page_title', 'old_text' ];
 		if ( $use_regex ) {
 			$comparisonCond = self::regexCond( $dbr, 'old_text', $search );
@@ -47,23 +49,23 @@ class ReplaceTextSearch {
 			$comparisonCond,
 			'page_namespace' => $namespaces,
 			'rev_id = page_latest',
-			'rev_text_id = old_id'
+			'rev_id = slot_revision_id',
+			'slot_content_id = content_id',
+			'CAST(SUBSTRING(content_address, 4) AS INTEGER) = old_id'
 		];
 
 		self::categoryCondition( $category, $tables, $conds );
 		self::prefixCondition( $prefix, $conds );
 		$options = [
 			'ORDER BY' => 'page_namespace, page_title',
-			// 250 seems like a reasonable limit for one screen.
-			// @TODO - should probably be a setting.
-			'LIMIT' => 250
+			'LIMIT' => $wgReplaceTextResultsLimit
 		];
 
 		return $dbr->select( $tables, $vars, $conds, __METHOD__, $options );
 	}
 
 	/**
-	 * @param string $category
+	 * @param string|null $category
 	 * @param array &$tables
 	 * @param array &$conds
 	 */
@@ -77,7 +79,7 @@ class ReplaceTextSearch {
 	}
 
 	/**
-	 * @param string $prefix
+	 * @param string|null $prefix
 	 * @param array &$conds
 	 */
 	public static function prefixCondition( $prefix, &$conds ) {
@@ -87,15 +89,16 @@ class ReplaceTextSearch {
 
 		$dbr = wfGetDB( DB_REPLICA );
 		$title = Title::newFromText( $prefix );
-		if ( !is_null( $title ) ) {
+		if ( $title !== null ) {
 			$prefix = $title->getDbKey();
 		}
 		$any = $dbr->anyString();
+		// @phan-suppress-next-line PhanTypeMismatchArgumentNullable strval makes this non-null
 		$conds[] = 'page_title ' . $dbr->buildLike( $prefix, $any );
 	}
 
 	/**
-	 * @param Database $dbr
+	 * @param IDatabase $dbr
 	 * @param string $column
 	 * @param string $regex
 	 * @return string query condition for regex
@@ -112,8 +115,8 @@ class ReplaceTextSearch {
 	/**
 	 * @param string $str
 	 * @param array $namespaces
-	 * @param string $category
-	 * @param string $prefix
+	 * @param string|null $category
+	 * @param string|null $prefix
 	 * @param bool $use_regex
 	 * @return IResultWrapper Resulting rows
 	 */

@@ -20,6 +20,9 @@
  * @file
  */
 
+use MediaWiki\MediaWikiServices;
+use MediaWiki\User\UserGroupManager;
+use MediaWiki\User\UserIdentityValue;
 use Wikimedia\Rdbms\IDatabase;
 
 /**
@@ -30,51 +33,56 @@ class UserRightsProxy {
 	/** @var IDatabase */
 	private $db;
 	/** @var string */
-	private $wikiId;
+	private $dbDomain;
 	/** @var string */
 	private $name;
 	/** @var int */
 	private $id;
 	/** @var array */
 	private $newOptions;
+	/** @var UserGroupManager */
+	private $userGroupManager;
 
 	/**
 	 * @see newFromId()
 	 * @see newFromName()
 	 * @param IDatabase $db Db connection
-	 * @param string $wikiId Database name
+	 * @param string $dbDomain Database name
 	 * @param string $name User name
 	 * @param int $id User ID
 	 */
-	private function __construct( $db, $wikiId, $name, $id ) {
+	private function __construct( $db, $dbDomain, $name, $id ) {
 		$this->db = $db;
-		$this->wikiId = $wikiId;
+		$this->dbDomain = $dbDomain;
 		$this->name = $name;
 		$this->id = intval( $id );
 		$this->newOptions = [];
+		$this->userGroupManager = MediaWikiServices::getInstance()
+			->getUserGroupManagerFactory()
+			->getUserGroupManager( $dbDomain );
 	}
 
 	/**
 	 * Confirm the selected database name is a valid local interwiki database name.
 	 *
-	 * @param string $wikiId Database name
+	 * @param string $dbDomain Database name
 	 * @return bool
 	 */
-	public static function validDatabase( $wikiId ) {
+	public static function validDatabase( $dbDomain ) {
 		global $wgLocalDatabases;
-		return in_array( $wikiId, $wgLocalDatabases );
+		return in_array( $dbDomain, $wgLocalDatabases );
 	}
 
 	/**
 	 * Same as User::whoIs()
 	 *
-	 * @param string $wikiId Database name
+	 * @param string $dbDomain Database name
 	 * @param int $id User ID
-	 * @param bool $ignoreInvalidDB If true, don't check if $wikiId is in $wgLocalDatabases
+	 * @param bool $ignoreInvalidDB If true, don't check if $dbDomain is in $wgLocalDatabases
 	 * @return string User name or false if the user doesn't exist
 	 */
-	public static function whoIs( $wikiId, $id, $ignoreInvalidDB = false ) {
-		$user = self::newFromId( $wikiId, $id, $ignoreInvalidDB );
+	public static function whoIs( $dbDomain, $id, $ignoreInvalidDB = false ) {
+		$user = self::newFromId( $dbDomain, $id, $ignoreInvalidDB );
 		if ( $user ) {
 			return $user->name;
 		} else {
@@ -85,35 +93,35 @@ class UserRightsProxy {
 	/**
 	 * Factory function; get a remote user entry by ID number.
 	 *
-	 * @param string $wikiId Database name
+	 * @param string $dbDomain Database name
 	 * @param int $id User ID
-	 * @param bool $ignoreInvalidDB If true, don't check if $wikiId is in $wgLocalDatabases
+	 * @param bool $ignoreInvalidDB If true, don't check if $dbDomain is in $wgLocalDatabases
 	 * @return UserRightsProxy|null If doesn't exist
 	 */
-	public static function newFromId( $wikiId, $id, $ignoreInvalidDB = false ) {
-		return self::newFromLookup( $wikiId, 'user_id', intval( $id ), $ignoreInvalidDB );
+	public static function newFromId( $dbDomain, $id, $ignoreInvalidDB = false ) {
+		return self::newFromLookup( $dbDomain, 'user_id', intval( $id ), $ignoreInvalidDB );
 	}
 
 	/**
 	 * Factory function; get a remote user entry by name.
 	 *
-	 * @param string $wikiId Database name
+	 * @param string $dbDomain Database name
 	 * @param string $name User name
-	 * @param bool $ignoreInvalidDB If true, don't check if $wikiId is in $wgLocalDatabases
+	 * @param bool $ignoreInvalidDB If true, don't check if $dbDomain is in $wgLocalDatabases
 	 * @return UserRightsProxy|null If doesn't exist
 	 */
-	public static function newFromName( $wikiId, $name, $ignoreInvalidDB = false ) {
-		return self::newFromLookup( $wikiId, 'user_name', $name, $ignoreInvalidDB );
+	public static function newFromName( $dbDomain, $name, $ignoreInvalidDB = false ) {
+		return self::newFromLookup( $dbDomain, 'user_name', $name, $ignoreInvalidDB );
 	}
 
 	/**
-	 * @param string $wikiId
+	 * @param string $dbDomain
 	 * @param string $field
 	 * @param string $value
 	 * @param bool $ignoreInvalidDB
 	 * @return null|UserRightsProxy
 	 */
-	private static function newFromLookup( $wikiId, $field, $value, $ignoreInvalidDB = false ) {
+	private static function newFromLookup( $dbDomain, $field, $value, $ignoreInvalidDB = false ) {
 		global $wgSharedDB, $wgSharedTables;
 		// If the user table is shared, perform the user query on it,
 		// but don't pass it to the UserRightsProxy,
@@ -121,10 +129,10 @@ class UserRightsProxy {
 		if ( $wgSharedDB && in_array( 'user', $wgSharedTables ) ) {
 			$userdb = self::getDB( $wgSharedDB, $ignoreInvalidDB );
 		} else {
-			$userdb = self::getDB( $wikiId, $ignoreInvalidDB );
+			$userdb = self::getDB( $dbDomain, $ignoreInvalidDB );
 		}
 
-		$db = self::getDB( $wikiId, $ignoreInvalidDB );
+		$db = self::getDB( $dbDomain, $ignoreInvalidDB );
 
 		if ( $db && $userdb ) {
 			$row = $userdb->selectRow( 'user',
@@ -134,7 +142,7 @@ class UserRightsProxy {
 
 			if ( $row !== false ) {
 				return new UserRightsProxy(
-					$db, $wikiId, $row->user_name, intval( $row->user_id ) );
+					$db, $dbDomain, $row->user_name, intval( $row->user_id ) );
 			}
 		}
 		return null;
@@ -144,17 +152,17 @@ class UserRightsProxy {
 	 * Open a database connection to work on for the requested user.
 	 * This may be a new connection to another database for remote users.
 	 *
-	 * @param string $wikiId
-	 * @param bool $ignoreInvalidDB If true, don't check if $wikiId is in $wgLocalDatabases
+	 * @param string $dbDomain
+	 * @param bool $ignoreInvalidDB If true, don't check if $dbDomain is in $wgLocalDatabases
 	 * @return IDatabase|null If invalid selection
 	 */
-	public static function getDB( $wikiId, $ignoreInvalidDB = false ) {
-		if ( $ignoreInvalidDB || self::validDatabase( $wikiId ) ) {
-			if ( WikiMap::isCurrentWikiId( $wikiId ) ) {
+	public static function getDB( $dbDomain, $ignoreInvalidDB = false ) {
+		if ( $ignoreInvalidDB || self::validDatabase( $dbDomain ) ) {
+			if ( WikiMap::isCurrentWikiId( $dbDomain ) ) {
 				// Hmm... this shouldn't happen though. :)
 				return wfGetDB( DB_MASTER );
 			} else {
-				return wfGetDB( DB_MASTER, [], $wikiId );
+				return wfGetDB( DB_MASTER, [], $dbDomain );
 			}
 		}
 		return null;
@@ -180,7 +188,7 @@ class UserRightsProxy {
 	 * @return string
 	 */
 	public function getName() {
-		return $this->name . '@' . $this->wikiId;
+		return $this->name . '@' . $this->dbDomain;
 	}
 
 	/**
@@ -196,7 +204,7 @@ class UserRightsProxy {
 	 * Replaces User::getUserGroups()
 	 * @return array
 	 */
-	function getGroups() {
+	public function getGroups() {
 		return array_keys( self::getGroupMemberships() );
 	}
 
@@ -206,8 +214,13 @@ class UserRightsProxy {
 	 * @return array
 	 * @since 1.29
 	 */
-	function getGroupMemberships() {
-		return UserGroupMembership::getMembershipsForUser( $this->id, $this->db );
+	public function getGroupMemberships() {
+		// TODO: We are creating an artificial UserIdentity to pass on to the user group manager.
+		// After all the relevant UserGroupMemberships methods are ported into UserGroupManager,
+		// the usages of this class will be changed into usages of the UserGroupManager,
+		// thus the need of this class and the need of this artificial UserIdentityValue will parish.
+		$user = new UserIdentityValue( $this->getId(), $this->getName(), 0 );
+		return $this->userGroupManager->getUserGroupMemberships( $user, IDBAccessObject::READ_LATEST );
 	}
 
 	/**
@@ -217,13 +230,14 @@ class UserRightsProxy {
 	 * @param string|null $expiry
 	 * @return bool
 	 */
-	function addGroup( $group, $expiry = null ) {
-		if ( $expiry ) {
-			$expiry = wfTimestamp( TS_MW, $expiry );
-		}
-
-		$ugm = new UserGroupMembership( $this->id, $group, $expiry );
-		return $ugm->insert( true, $this->db );
+	public function addGroup( $group, $expiry = null ) {
+		return $this->userGroupManager->addUserToGroup(
+			// TODO: Artificial UserIdentity just for passing the id and name.
+			// see comment in getGroupMemberships.
+			new UserIdentityValue( $this->getId(), $this->getName(), 0 ),
+			$group,
+			$expiry
+		);
 	}
 
 	/**
@@ -232,12 +246,13 @@ class UserRightsProxy {
 	 * @param string $group
 	 * @return bool
 	 */
-	function removeGroup( $group ) {
-		$ugm = UserGroupMembership::getMembership( $this->id, $group, $this->db );
-		if ( !$ugm ) {
-			return false;
-		}
-		return $ugm->delete( $this->db );
+	public function removeGroup( $group ) {
+		return $this->userGroupManager->removeUserFromGroup(
+			// TODO: Artificial UserIdentity just for passing the id and name.
+			// see comment in getGroupMemberships.
+			new UserIdentityValue( $this->getId(), $this->getName(), 0 ),
+			$group
+		);
 	}
 
 	/**
@@ -258,9 +273,11 @@ class UserRightsProxy {
 				'up_value' => $value,
 			];
 		}
-		$this->db->replace( 'user_properties',
+		$this->db->replace(
+			'user_properties',
 			[ [ 'up_user', 'up_property' ] ],
-			$rows, __METHOD__
+			$rows,
+			__METHOD__
 		);
 		$this->invalidateCache();
 	}
@@ -268,7 +285,7 @@ class UserRightsProxy {
 	/**
 	 * Replaces User::touchUser()
 	 */
-	function invalidateCache() {
+	public function invalidateCache() {
 		$this->db->update(
 			'user',
 			[ 'user_touched' => $this->db->timestamp() ],

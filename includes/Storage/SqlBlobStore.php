@@ -26,17 +26,19 @@
 
 namespace MediaWiki\Storage;
 
+use AppendIterator;
 use DBAccessObjectUtils;
-use ExternalStore;
+use ExternalStoreAccess;
 use IDBAccessObject;
 use IExpiringStore;
 use InvalidArgumentException;
-use Language;
 use MWException;
+use StatusValue;
 use WANObjectCache;
 use Wikimedia\Assert\Assert;
+use Wikimedia\AtEase\AtEase;
 use Wikimedia\Rdbms\IDatabase;
-use Wikimedia\Rdbms\LoadBalancer;
+use Wikimedia\Rdbms\ILoadBalancer;
 
 /**
  * Service for storing and loading Content objects.
@@ -49,12 +51,17 @@ use Wikimedia\Rdbms\LoadBalancer;
 class SqlBlobStore implements IDBAccessObject, BlobStore {
 
 	// Note: the name has been taken unchanged from the Revision class.
-	const TEXT_CACHE_GROUP = 'revisiontext:10';
+	public const TEXT_CACHE_GROUP = 'revisiontext:10';
 
 	/**
-	 * @var LoadBalancer
+	 * @var ILoadBalancer
 	 */
 	private $dbLoadBalancer;
+
+	/**
+	 * @var ExternalStoreAccess
+	 */
+	private $extStoreAccess;
 
 	/**
 	 * @var WANObjectCache
@@ -62,9 +69,9 @@ class SqlBlobStore implements IDBAccessObject, BlobStore {
 	private $cache;
 
 	/**
-	 * @var bool|string Wiki ID
+	 * @var string|bool DB domain ID of a wiki or false for the local one
 	 */
-	private $wikiId;
+	private $dbDomain;
 
 	/**
 	 * @var int
@@ -82,33 +89,31 @@ class SqlBlobStore implements IDBAccessObject, BlobStore {
 	private $legacyEncoding = false;
 
 	/**
-	 * @var Language|null
-	 */
-	private $legacyEncodingConversionLang = null;
-
-	/**
 	 * @var boolean
 	 */
 	private $useExternalStore = false;
 
 	/**
-	 * @param LoadBalancer $dbLoadBalancer A load balancer for acquiring database connections
+	 * @param ILoadBalancer $dbLoadBalancer A load balancer for acquiring database connections
+	 * @param ExternalStoreAccess $extStoreAccess Access layer for external storage
 	 * @param WANObjectCache $cache A cache manager for caching blobs. This can be the local
-	 *        wiki's default instance even if $wikiId refers to a different wiki, since
-	 *        makeGlobalKey() is used to constructed a key that allows cached blobs from the
-	 *        same database to be re-used between wikis. For example, enwiki and frwiki will
-	 *        use the same cache keys for blobs from the wikidatawiki database, regardless of
-	 *        the cache's default key space.
-	 * @param bool|string $wikiId The ID of the target wiki database. Use false for the local wiki.
+	 *        wiki's default instance even if $dbDomain refers to a different wiki, since
+	 *        makeGlobalKey() is used to construct a key that allows cached blobs from the
+	 *        same database to be re-used between wikis. For example, wiki A and wiki B will
+	 *        use the same cache keys for blobs fetched from wiki C, regardless of the
+	 *        wiki-specific default key space.
+	 * @param bool|string $dbDomain The ID of the target wiki database. Use false for the local wiki.
 	 */
 	public function __construct(
-		LoadBalancer $dbLoadBalancer,
+		ILoadBalancer $dbLoadBalancer,
+		ExternalStoreAccess $extStoreAccess,
 		WANObjectCache $cache,
-		$wikiId = false
+		$dbDomain = false
 	) {
 		$this->dbLoadBalancer = $dbLoadBalancer;
+		$this->extStoreAccess = $extStoreAccess;
 		$this->cache = $cache;
-		$this->wikiId = $wikiId;
+		$this->dbDomain = $dbDomain;
 	}
 
 	/**
@@ -150,23 +155,26 @@ class SqlBlobStore implements IDBAccessObject, BlobStore {
 	}
 
 	/**
-	 * @return Language|null The locale to use when decoding from a legacy encoding, or null
-	 *         if handling of legacy encoding is disabled.
+	 * @deprecated since 1.34 No longer needed
+	 * @return null
 	 */
 	public function getLegacyEncodingConversionLang() {
-		return $this->legacyEncodingConversionLang;
+		wfDeprecated( __METHOD__ );
+		return null;
 	}
 
 	/**
+	 * Set the legacy encoding to assume for blobs that do not have the utf-8 flag set.
+	 *
+	 * @note The second parameter, Language $language, was removed in 1.34.
+	 *
 	 * @param string $legacyEncoding The legacy encoding to assume for blobs that are
 	 *        not marked as utf8.
-	 * @param Language $language The locale to use when decoding from a legacy encoding.
 	 */
-	public function setLegacyEncoding( $legacyEncoding, Language $language ) {
+	public function setLegacyEncoding( $legacyEncoding ) {
 		Assert::parameterType( 'string', $legacyEncoding, '$legacyEncoding' );
 
 		$this->legacyEncoding = $legacyEncoding;
-		$this->legacyEncodingConversionLang = $language;
 	}
 
 	/**
@@ -186,7 +194,7 @@ class SqlBlobStore implements IDBAccessObject, BlobStore {
 	}
 
 	/**
-	 * @return LoadBalancer
+	 * @return ILoadBalancer
 	 */
 	private function getDBLoadBalancer() {
 		return $this->dbLoadBalancer;
@@ -199,7 +207,7 @@ class SqlBlobStore implements IDBAccessObject, BlobStore {
 	 */
 	private function getDBConnection( $index ) {
 		$lb = $this->getDBLoadBalancer();
-		return $lb->getConnection( $index, [], $this->wikiId );
+		return $lb->getConnectionRef( $index, [], $this->dbDomain );
 	}
 
 	/**
@@ -219,7 +227,7 @@ class SqlBlobStore implements IDBAccessObject, BlobStore {
 			# Write to external storage if required
 			if ( $this->useExternalStore ) {
 				// Store and get the URL
-				$data = ExternalStore::insertToDefault( $data );
+				$data = $this->extStoreAccess->insert( $data, [ 'domain' => $this->dbDomain ] );
 				if ( !$data ) {
 					throw new BlobAccessException( "Failed to store text to external storage" );
 				}
@@ -269,109 +277,183 @@ class SqlBlobStore implements IDBAccessObject, BlobStore {
 	public function getBlob( $blobAddress, $queryFlags = 0 ) {
 		Assert::parameterType( 'string', $blobAddress, '$blobAddress' );
 
-		// No negative caching; negative hits on text rows may be due to corrupted replica DBs
+		$error = null;
 		$blob = $this->cache->getWithSetCallback(
 			$this->getCacheKey( $blobAddress ),
 			$this->getCacheTTL(),
-			function ( $unused, &$ttl, &$setOpts ) use ( $blobAddress, $queryFlags ) {
+			function ( $unused, &$ttl, &$setOpts ) use ( $blobAddress, $queryFlags, &$error ) {
 				// Ignore $setOpts; blobs are immutable and negatives are not cached
-				return $this->fetchBlob( $blobAddress, $queryFlags );
+				list( $result, $errors ) = $this->fetchBlobs( [ $blobAddress ], $queryFlags );
+				// No negative caching; negative hits on text rows may be due to corrupted replica DBs
+				$error = $errors[$blobAddress] ?? null;
+				return $result[$blobAddress];
 			},
 			[ 'pcGroup' => self::TEXT_CACHE_GROUP, 'pcTTL' => IExpiringStore::TTL_PROC_LONG ]
 		);
 
-		if ( $blob === false ) {
-			throw new BlobAccessException( 'Failed to load blob from address ' . $blobAddress );
+		if ( $error ) {
+			throw new BlobAccessException( $error );
 		}
 
+		Assert::postcondition( is_string( $blob ), 'Blob must not be null' );
 		return $blob;
+	}
+
+	/**
+	 * A batched version of BlobStore::getBlob.
+	 *
+	 * @param string[] $blobAddresses An array of blob addresses.
+	 * @param int $queryFlags See IDBAccessObject.
+	 * @throws BlobAccessException
+	 * @return StatusValue A status with a map of blobAddress => binary blob data or null
+	 *         if fetching the blob has failed. Fetch failures errors are the
+	 *         warnings in the status object.
+	 * @since 1.34
+	 */
+	public function getBlobBatch( $blobAddresses, $queryFlags = 0 ) {
+		// FIXME: All caching has temporarily been removed in I94c6f9ba7b9caeeb due to T235188.
+		//        Caching behavior should be restored by reverting I94c6f9ba7b9caeeb as soon as
+		//        the root cause of T235188 has been resolved.
+
+		list( $blobsByAddress, $errors ) = $this->fetchBlobs( $blobAddresses, $queryFlags );
+
+		$blobsByAddress = array_map( function ( $blob ) {
+			return $blob === false ? null : $blob;
+		}, $blobsByAddress );
+
+		$result = StatusValue::newGood( $blobsByAddress );
+		if ( $errors ) {
+			foreach ( $errors as $error ) {
+				$result->warning( 'internalerror', $error );
+			}
+		}
+		return $result;
 	}
 
 	/**
 	 * MCR migration note: this corresponds to Revision::fetchText
 	 *
-	 * @param string $blobAddress
+	 * @param string[] $blobAddresses
 	 * @param int $queryFlags
 	 *
 	 * @throws BlobAccessException
-	 * @return string|false
+	 * @return array [ $result, $errors ] A map of blob addresses to successfully fetched blobs
+	 *         or false if fetch failed, plus and array of errors
 	 */
-	private function fetchBlob( $blobAddress, $queryFlags ) {
-		list( $schema, $id, ) = self::splitBlobAddress( $blobAddress );
+	private function fetchBlobs( $blobAddresses, $queryFlags ) {
+		$textIdToBlobAddress = [];
+		$result = [];
+		$errors = [];
+		foreach ( $blobAddresses as $blobAddress ) {
+			try {
+				list( $schema, $id ) = self::splitBlobAddress( $blobAddress );
+			} catch ( InvalidArgumentException $ex ) {
+				throw new BlobAccessException( $ex->getMessage(), 0, $ex );
+			}
 
-		//TODO: MCR: also support 'ex' schema with ExternalStore URLs, plus flags encoded in the URL!
-		if ( $schema === 'tt' ) {
-			$textId = intval( $id );
-		} else {
-			// XXX: change to better exceptions! That makes migration more difficult, though.
-			throw new BlobAccessException( "Unknown blob address schema: $schema" );
+			// TODO: MCR: also support 'ex' schema with ExternalStore URLs, plus flags encoded in the URL!
+			if ( $schema === 'bad' ) {
+				// Database row was marked as "known bad", no need to trigger an error.
+				wfDebug(
+					__METHOD__
+					. ": loading known-bad content ($blobAddress), returning empty string"
+				);
+				$result[$blobAddress] = '';
+				continue;
+			} elseif ( $schema === 'tt' ) {
+				$textId = intval( $id );
+
+				if ( $textId < 1 || $id !== (string)$textId ) {
+					$errors[$blobAddress] = "Bad blob address: $blobAddress";
+					$result[$blobAddress] = false;
+				}
+
+				$textIdToBlobAddress[$textId] = $blobAddress;
+			} else {
+				$errors[$blobAddress] = "Unknown blob address schema: $schema";
+				$result[$blobAddress] = false;
+				continue;
+			}
 		}
 
-		if ( !$textId || $id !== (string)$textId ) {
-			// XXX: change to better exceptions! That makes migration more difficult, though.
-			throw new BlobAccessException( "Bad blob address: $blobAddress" );
+		$textIds = array_keys( $textIdToBlobAddress );
+		if ( !$textIds ) {
+			return [ $result, $errors ];
 		}
-
 		// Callers doing updates will pass in READ_LATEST as usual. Since the text/blob tables
 		// do not normally get rows changed around, set READ_LATEST_IMMUTABLE in those cases.
 		$queryFlags |= DBAccessObjectUtils::hasFlags( $queryFlags, self::READ_LATEST )
 			? self::READ_LATEST_IMMUTABLE
 			: 0;
-
 		list( $index, $options, $fallbackIndex, $fallbackOptions ) =
 			DBAccessObjectUtils::getDBOptions( $queryFlags );
-
 		// Text data is immutable; check replica DBs first.
-		$row = $this->getDBConnection( $index )->selectRow(
+		$dbConnection = $this->getDBConnection( $index );
+		$rows = $dbConnection->select(
 			'text',
-			[ 'old_text', 'old_flags' ],
-			[ 'old_id' => $textId ],
+			[ 'old_id', 'old_text', 'old_flags' ],
+			[ 'old_id' => $textIds ],
 			__METHOD__,
 			$options
 		);
 
-		// Fallback to DB_MASTER in some cases if the row was not found, using the appropriate
+		// Fallback to DB_MASTER in some cases if not all the rows were found, using the appropriate
 		// options, such as FOR UPDATE to avoid missing rows due to REPEATABLE-READ.
-		if ( !$row && $fallbackIndex !== null ) {
-			$row = $this->getDBConnection( $fallbackIndex )->selectRow(
+		if ( $dbConnection->numRows( $rows ) !== count( $textIds ) && $fallbackIndex !== null ) {
+			$fetchedTextIds = [];
+			foreach ( $rows as $row ) {
+				$fetchedTextIds[] = $row->old_id;
+			}
+			$missingTextIds = array_diff( $textIds, $fetchedTextIds );
+			$dbConnection = $this->getDBConnection( $fallbackIndex );
+			$rowsFromFallback = $dbConnection->select(
 				'text',
-				[ 'old_text', 'old_flags' ],
-				[ 'old_id' => $textId ],
+				[ 'old_id', 'old_text', 'old_flags' ],
+				[ 'old_id' => $missingTextIds ],
 				__METHOD__,
 				$fallbackOptions
 			);
+			$appendIterator = new AppendIterator();
+			$appendIterator->append( $rows );
+			$appendIterator->append( $rowsFromFallback );
+			$rows = $appendIterator;
 		}
 
-		if ( !$row ) {
-			wfWarn( __METHOD__ . ": No text row with ID $textId." );
-			return false;
+		foreach ( $rows as $row ) {
+			$blobAddress = $textIdToBlobAddress[$row->old_id];
+			$blob = $this->expandBlob( $row->old_text, $row->old_flags, $blobAddress );
+			if ( $blob === false ) {
+				$errors[$blobAddress] = "Bad data in text row {$row->old_id}.";
+			}
+			$result[$blobAddress] = $blob;
 		}
 
-		$blob = $this->expandBlob( $row->old_text, $row->old_flags, $blobAddress );
-
-		if ( $blob === false ) {
-			wfLogWarning( __METHOD__ . ": Bad data in text row $textId." );
-			return false;
+		// If we're still missing some of the rows, set errors for missing blobs.
+		if ( count( $result ) !== count( $blobAddresses ) ) {
+			foreach ( $blobAddresses as $blobAddress ) {
+				if ( !isset( $result[$blobAddress ] ) ) {
+					$errors[$blobAddress] = "Unable to fetch blob at $blobAddress";
+					$result[$blobAddress] = false;
+				}
+			}
 		}
-
-		return $blob;
+		return [ $result, $errors ];
 	}
 
 	/**
 	 * Get a cache key for a given Blob address.
 	 *
 	 * The cache key is constructed in a way that allows cached blobs from the same database
-	 * to be re-used between wikis. For example, enwiki and frwiki will use the same cache keys
-	 * for blobs from the wikidatawiki database.
+	 * to be re-used between wikis. For example, wiki A and wiki B will use the same cache keys
+	 * for blobs fetched from wiki C.
 	 *
 	 * @param string $blobAddress
 	 * @return string
 	 */
 	private function getCacheKey( $blobAddress ) {
 		return $this->cache->makeGlobalKey(
-			'BlobStore',
-			'address',
-			$this->dbLoadBalancer->resolveDomainID( $this->wikiId ),
+			'SqlBlobStore-blob',
+			$this->dbLoadBalancer->resolveDomainID( $this->dbDomain ),
 			$blobAddress
 		);
 	}
@@ -415,14 +497,15 @@ class SqlBlobStore implements IDBAccessObject, BlobStore {
 					$this->getCacheTTL(),
 					function () use ( $url, $flags ) {
 						// Ignore $setOpts; blobs are immutable and negatives are not cached
-						$blob = ExternalStore::fetchFromURL( $url, [ 'wiki' => $this->wikiId ] );
+						$blob = $this->extStoreAccess
+							->fetchFromURL( $url, [ 'domain' => $this->dbDomain ] );
 
 						return $blob === false ? false : $this->decompressData( $blob, $flags );
 					},
 					[ 'pcGroup' => self::TEXT_CACHE_GROUP, 'pcTTL' => WANObjectCache::TTL_PROC_LONG ]
 				);
 			} else {
-				$blob = ExternalStore::fetchFromURL( $url, [ 'wiki' => $this->wikiId ] );
+				$blob = $this->extStoreAccess->fetchFromURL( $url, [ 'domain' => $this->dbDomain ] );
 				return $blob === false ? false : $this->decompressData( $blob, $flags );
 			}
 		} else {
@@ -442,7 +525,7 @@ class SqlBlobStore implements IDBAccessObject, BlobStore {
 	 * @note direct use is deprecated!
 	 * @todo make this private, there should be no need to use this method outside this class.
 	 *
-	 * @param mixed &$blob Reference to a text
+	 * @param string &$blob
 	 *
 	 * @return string
 	 */
@@ -465,7 +548,7 @@ class SqlBlobStore implements IDBAccessObject, BlobStore {
 					$blobFlags[] = 'gzip';
 				}
 			} else {
-				wfDebug( __METHOD__ . " -- no zlib support, not compressing\n" );
+				wfDebug( __METHOD__ . " -- no zlib support, not compressing" );
 			}
 		}
 		return implode( ',', $blobFlags );
@@ -518,14 +601,20 @@ class SqlBlobStore implements IDBAccessObject, BlobStore {
 		}
 
 		// Needed to support old revisions left over from from the 1.4 / 1.5 migration.
-		if ( $blob !== false && $this->legacyEncoding && $this->legacyEncodingConversionLang
+		if ( $blob !== false && $this->legacyEncoding
 			&& !in_array( 'utf-8', $blobFlags ) && !in_array( 'utf8', $blobFlags )
 		) {
 			# Old revisions kept around in a legacy encoding?
 			# Upconvert on demand.
 			# ("utf8" checked for compatibility with some broken
 			#  conversion scripts 2008-12-30)
-			$blob = $this->legacyEncodingConversionLang->iconv( $this->legacyEncoding, 'UTF-8', $blob );
+			# Even with //IGNORE iconv can whine about illegal characters in
+			# *input* string. We just ignore those too.
+			# REF: https://bugs.php.net/bug.php?id=37166
+			# REF: https://phabricator.wikimedia.org/T18885
+			AtEase::suppressWarnings();
+			$blob = iconv( $this->legacyEncoding, 'UTF-8//IGNORE', $blob );
+			AtEase::restoreWarnings();
 		}
 
 		return $blob;
@@ -592,8 +681,9 @@ class SqlBlobStore implements IDBAccessObject, BlobStore {
 	 * The address schema for blobs stored in the text table is "tt:" followed by an integer
 	 * that corresponds to a value of the old_id field.
 	 *
-	 * @deprecated since 1.31. This method should become private once the relevant refactoring
-	 * in WikiPage is complete.
+	 * @internal
+	 * @note This method should not be used by regular application logic. It is public so
+	 *       maintenance scripts can use it for bulk operations on the text table.
 	 *
 	 * @param int $id
 	 *
@@ -614,7 +704,7 @@ class SqlBlobStore implements IDBAccessObject, BlobStore {
 	 * @return array [ $schema, $id, $parameters ], with $parameters being an assoc array.
 	 */
 	public static function splitBlobAddress( $address ) {
-		if ( !preg_match( '/^(\w+):(\w+)(\?(.*))?$/', $address, $m ) ) {
+		if ( !preg_match( '/^([-+.\w]+):([^\s?]+)(\?([^\s]*))?$/', $address, $m ) ) {
 			throw new InvalidArgumentException( "Bad blob address: $address" );
 		}
 
@@ -626,7 +716,7 @@ class SqlBlobStore implements IDBAccessObject, BlobStore {
 	}
 
 	public function isReadOnly() {
-		if ( $this->useExternalStore && ExternalStore::defaultStoresAreReadOnly() ) {
+		if ( $this->useExternalStore && $this->extStoreAccess->isReadOnly() ) {
 			return true;
 		}
 

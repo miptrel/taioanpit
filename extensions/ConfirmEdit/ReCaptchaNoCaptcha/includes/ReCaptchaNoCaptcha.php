@@ -1,6 +1,7 @@
 <?php
 
 use MediaWiki\Auth\AuthenticationRequest;
+use MediaWiki\MediaWikiServices;
 
 class ReCaptchaNoCaptcha extends SimpleCaptcha {
 	// used for renocaptcha-edit, renocaptcha-addurl, renocaptcha-badlogin, renocaptcha-createaccount,
@@ -8,6 +9,7 @@ class ReCaptchaNoCaptcha extends SimpleCaptcha {
 	protected static $messagePrefix = 'renocaptcha-';
 
 	private $error = null;
+
 	/**
 	 * Get the captcha form.
 	 * @param int $tabIndex
@@ -30,9 +32,10 @@ class ReCaptchaNoCaptcha extends SimpleCaptcha {
   <div>
     <div style="width: 302px; height: 422px; position: relative;">
       <div style="width: 302px; height: 422px; position: absolute;">
-        <iframe src="https://www.google.com/recaptcha/api/fallback?k={$htmlUrlencoded}&hl={$lang}"
-                frameborder="0" scrolling="no"
-                style="width: 302px; height:422px; border-style: none;">
+        <iframe
+        	src="https://www.recaptcha.net/recaptcha/api/fallback?k={$htmlUrlencoded}&hl={$lang}"
+            frameborder="0" scrolling="no"
+            style="width: 302px; height:422px; border-style: none;">
         </iframe>
       </div>
     </div>
@@ -54,9 +57,16 @@ HTML;
 				// Insert reCAPTCHA script, in display language, if available.
 				// Language falls back to the browser's display language.
 				// See https://developers.google.com/recaptcha/docs/faq
-				"<script src=\"https://www.google.com/recaptcha/api.js?hl={$lang}\" async defer></script>"
+				"<script src=\"https://www.recaptcha.net/recaptcha/api.js?hl={$lang}\" async defer></script>"
 			]
 		];
+	}
+
+	/**
+	 * @return string[]
+	 */
+	public static function getCSPUrls() {
+		return [ 'https://www.recaptcha.net/recaptcha/api.js' ];
 	}
 
 	/**
@@ -84,10 +94,10 @@ HTML;
 		// API is hardwired to return captchaWord, so use that if the standard isempty
 		// "captchaWord" is sent as "captchaword" by visual editor
 		$index = 'not used';
-		$response = $request->getVal( 'g-recaptcha-response',
-						$request->getVal( 'captchaWord',
-							$request->getVal( 'captchaword' )
-						) );
+		$response = $request->getVal(
+			'g-recaptcha-response',
+			$request->getVal( 'captchaWord', $request->getVal( 'captchaword' ) )
+		);
 		return [ $index, $response ];
 	}
 
@@ -104,7 +114,7 @@ HTML;
 	protected function passCaptcha( $_, $word ) {
 		global $wgRequest, $wgReCaptchaSecretKey, $wgReCaptchaSendRemoteIP;
 
-		$url = 'https://www.google.com/recaptcha/api/siteverify';
+		$url = 'https://www.recaptcha.net/recaptcha/api/siteverify';
 		// Build data to append to request
 		$data = [
 			'secret' => $wgReCaptchaSecretKey,
@@ -114,7 +124,8 @@ HTML;
 			$data['remoteip'] = $wgRequest->getIP();
 		}
 		$url = wfAppendQuery( $url, $data );
-		$request = MWHttpRequest::factory( $url, [ 'method' => 'GET' ] );
+		$request = MediaWikiServices::getInstance()->getHttpRequestFactory()
+			->create( $url, [ 'method' => 'POST' ], __METHOD__ );
 		$status = $request->execute();
 		if ( !$status->isOK() ) {
 			$this->error = 'http';
@@ -161,7 +172,7 @@ HTML;
 	 * The result will be treated as wiki text
 	 *
 	 * @param string $action Action being performed
-	 * @return string Wikitext
+	 * @return Message
 	 */
 	public function getMessage( $action ) {
 		$msg = parent::getMessage( $action );
@@ -172,12 +183,12 @@ HTML;
 	}
 
 	/**
-	 * @param ApiBase &$module
+	 * @param ApiBase $module
 	 * @param array &$params
 	 * @param int $flags
 	 * @return bool
 	 */
-	public function apiGetAllowedParams( &$module, &$params, $flags ) {
+	public function apiGetAllowedParams( ApiBase $module, &$params, $flags ) {
 		if ( $flags && $this->isAPICaptchaModule( $module ) ) {
 			$params['g-recaptcha-response'] = [
 				ApiBase::PARAM_HELP_MSG => 'renocaptcha-apihelp-param-g-recaptcha-response',
@@ -187,33 +198,36 @@ HTML;
 		return true;
 	}
 
+	/**
+	 * @inheritDoc
+	 */
 	public function getError() {
 		return $this->error;
 	}
 
+	/**
+	 * @inheritDoc
+	 */
 	public function storeCaptcha( $info ) {
 		// ReCaptcha is stored by Google; the ID will be generated at that time as well, and
 		// the one returned here won't be used. Just pretend this worked.
 		return 'not used';
 	}
 
+	/**
+	 * @inheritDoc
+	 */
 	public function retrieveCaptcha( $index ) {
 		// just pretend it worked
 		return [ 'index' => $index ];
 	}
 
+	/**
+	 * @inheritDoc
+	 */
 	public function getCaptcha() {
 		// ReCaptcha is handled by frontend code + an external provider; nothing to do here.
 		return [];
-	}
-
-	/**
-	 * @param array $captchaData
-	 * @param string $id
-	 * @return Message
-	 */
-	public function getCaptchaInfo( $captchaData, $id ) {
-		return wfMessage( 'renocaptcha-info' );
 	}
 
 	/**

@@ -14,7 +14,8 @@ trait FlaggedElement {
 	/**
 	 * Flags.
 	 *
-	 * @var string[]
+	 * @var bool[]
+	 * @phan-var array<string,bool>
 	 */
 	protected $flags = [];
 
@@ -70,7 +71,7 @@ trait FlaggedElement {
 		$remove = [];
 		$classPrefix = 'oo-ui-flaggedElement-';
 
-		foreach ( $this->flags as $flag ) {
+		foreach ( $this->flags as $flag => $value ) {
 			$remove[] = $classPrefix . $flag;
 		}
 

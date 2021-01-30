@@ -67,6 +67,7 @@ class SpecialActiveUsers extends SpecialPage {
 				Html::rawElement( 'ul', [], $usersBody ) .
 				$pager->getNavigationBar()
 			);
+			$out->addModuleStyles( 'mediawiki.interface.helpers.styles' );
 		} else {
 			$out->addWikiMsg( 'activeusers-noresult' );
 		}
@@ -83,7 +84,7 @@ class SpecialActiveUsers extends SpecialPage {
 			$msg = htmlspecialchars( UserGroupMembership::getGroupName( $group ) );
 			$options[$msg] = $group;
 		}
-		asort( $options );
+		ksort( $options );
 
 		// Backwards-compatibility with old URLs
 		$req = $this->getRequest();
@@ -154,7 +155,7 @@ class SpecialActiveUsers extends SpecialPage {
 			if ( $cTime ) {
 				$secondsOld = wfTimestamp( TS_UNIX, $rcMax ) - wfTimestamp( TS_UNIX, $cTime );
 			} else {
-				$rcMin = $dbr->selectField( 'recentchanges', 'MIN(rc_timestamp)' );
+				$rcMin = $dbr->selectField( 'recentchanges', 'MIN(rc_timestamp)', '', __METHOD__ );
 				$secondsOld = time() - wfTimestamp( TS_UNIX, $rcMin );
 			}
 			if ( $secondsOld > 0 ) {

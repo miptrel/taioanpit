@@ -2,6 +2,7 @@
 
 use Wikimedia\Rdbms\DBQueryError;
 use Wikimedia\TestingAccessWrapper;
+use Wikimedia\Timestamp\ConvertibleTimestamp;
 
 /**
  * @group API
@@ -21,7 +22,7 @@ class ApiMainTest extends ApiTestCase {
 		);
 		$api->execute();
 		$data = $api->getResult()->getResultData();
-		$this->assertInternalType( 'array', $data );
+		$this->assertIsArray( $data );
 		$this->assertArrayHasKey( 'query', $data );
 	}
 
@@ -29,7 +30,7 @@ class ApiMainTest extends ApiTestCase {
 		$api = new ApiMain();
 		$api->execute();
 		$data = $api->getResult()->getResultData();
-		$this->assertInternalType( 'array', $data );
+		$this->assertIsArray( $data );
 	}
 
 	/**
@@ -78,27 +79,6 @@ class ApiMainTest extends ApiTestCase {
 		$this->assertSame( 'fr', $wgLang->getCode() );
 	}
 
-	public function testNonWhitelistedCorsWithCookies() {
-		$logFile = $this->getNewTempFile();
-
-		$this->mergeMwGlobalArrayValue( '_COOKIE', [ 'forceHTTPS' => '1' ] );
-		$logger = new TestLogger( true );
-		$this->setLogger( 'cors', $logger );
-
-		$api = $this->getNonInternalApiMain( [
-			'action' => 'query',
-			'meta' => 'siteinfo',
-		// For some reason multiple origins (which are not allowed in the
-		// WHATWG Fetch spec that supersedes the RFC) are always considered to
-		// be problematic.
-		], [ 'ORIGIN' => 'https://www.example.com https://www.com.example' ] );
-
-		$this->assertSame(
-			[ [ Psr\Log\LogLevel::WARNING, 'Non-whitelisted CORS request with session cookies' ] ],
-			$logger->getBuffer()
-		);
-	}
-
 	public function testSuppressedLogin() {
 		global $wgUser;
 		$origUser = $wgUser;
@@ -130,9 +110,11 @@ class ApiMainTest extends ApiTestCase {
 	 * @depends testSetContinuationManager
 	 */
 	public function testSetContinuationManagerTwice( $args ) {
-		$this->setExpectedException( UnexpectedValueException::class,
+		$this->expectException( UnexpectedValueException::class );
+		$this->expectExceptionMessage(
 			'ApiMain::setContinuationManager: tried to set manager from  ' .
-			'when a manager is already set from ' );
+				'when a manager is already set from '
+		);
 
 		list( $api, $manager ) = $args;
 		$api->setContinuationManager( $manager );
@@ -150,7 +132,6 @@ class ApiMainTest extends ApiTestCase {
 
 	public function testSetCacheModePrivateWiki() {
 		$this->setGroupPermissions( '*', 'read', false );
-
 		$wrappedApi = TestingAccessWrapper::newFromObject( new ApiMain() );
 		$wrappedApi->setCacheMode( 'public' );
 		$this->assertSame( 'private', $wrappedApi->mCacheMode );
@@ -170,6 +151,10 @@ class ApiMainTest extends ApiTestCase {
 	}
 
 	public function testAddRequestedFieldsCurTimestamp() {
+		// Fake timestamp for better testability, CI can sometimes take
+		// unreasonably long to run the simple test request here.
+		$reset = ConvertibleTimestamp::setFakeTime( '20190102030405' );
+
 		$req = new FauxRequest( [
 			'action' => 'query',
 			'meta' => 'siteinfo',
@@ -178,7 +163,7 @@ class ApiMainTest extends ApiTestCase {
 		$api = new ApiMain( $req );
 		$api->execute();
 		$timestamp = $api->getResult()->getResultData()['curtimestamp'];
-		$this->assertLessThanOrEqual( 1, abs( strtotime( $timestamp ) - time() ) );
+		$this->assertSame( '2019-01-02T03:04:05Z', $timestamp );
 	}
 
 	public function testAddRequestedFieldsResponseLangInfo() {
@@ -199,8 +184,8 @@ class ApiMainTest extends ApiTestCase {
 	}
 
 	public function testSetupModuleUnknown() {
-		$this->setExpectedException( ApiUsageException::class,
-			'Unrecognized value for parameter "action": unknownaction.' );
+		$this->expectException( ApiUsageException::class );
+		$this->expectExceptionMessage( 'Unrecognized value for parameter "action": unknownaction.' );
 
 		$req = new FauxRequest( [ 'action' => 'unknownaction' ] );
 		$api = new ApiMain( $req );
@@ -208,8 +193,8 @@ class ApiMainTest extends ApiTestCase {
 	}
 
 	public function testSetupModuleNoTokenProvided() {
-		$this->setExpectedException( ApiUsageException::class,
-			'The "token" parameter must be set.' );
+		$this->expectException( ApiUsageException::class );
+		$this->expectExceptionMessage( 'The "token" parameter must be set.' );
 
 		$req = new FauxRequest( [
 			'action' => 'edit',
@@ -221,7 +206,8 @@ class ApiMainTest extends ApiTestCase {
 	}
 
 	public function testSetupModuleInvalidTokenProvided() {
-		$this->setExpectedException( ApiUsageException::class, 'Invalid CSRF token.' );
+		$this->expectException( ApiUsageException::class );
+		$this->expectExceptionMessage( 'Invalid CSRF token.' );
 
 		$req = new FauxRequest( [
 			'action' => 'edit',
@@ -234,26 +220,29 @@ class ApiMainTest extends ApiTestCase {
 	}
 
 	public function testSetupModuleNeedsTokenTrue() {
-		$this->setExpectedException( MWException::class,
+		$this->expectException( MWException::class );
+		$this->expectExceptionMessage(
 			"Module 'testmodule' must be updated for the new token handling. " .
-			"See documentation for ApiBase::needsToken for details." );
+				"See documentation for ApiBase::needsToken for details."
+		);
 
 		$mock = $this->createMock( ApiBase::class );
 		$mock->method( 'getModuleName' )->willReturn( 'testmodule' );
 		$mock->method( 'needsToken' )->willReturn( true );
 
 		$api = new ApiMain( new FauxRequest( [ 'action' => 'testmodule' ] ) );
-		$api->getModuleManager()->addModule( 'testmodule', 'action', get_class( $mock ),
-			function () use ( $mock ) {
+		$api->getModuleManager()->addModule( 'testmodule', 'action', [
+			'class' => get_class( $mock ),
+			'factory' => function () use ( $mock ) {
 				return $mock;
 			}
-		);
+		] );
 		$api->execute();
 	}
 
 	public function testSetupModuleNeedsTokenNeedntBePosted() {
-		$this->setExpectedException( MWException::class,
-			"Module 'testmodule' must require POST to use tokens." );
+		$this->expectException( MWException::class );
+		$this->expectExceptionMessage( "Module 'testmodule' must require POST to use tokens." );
 
 		$mock = $this->createMock( ApiBase::class );
 		$mock->method( 'getModuleName' )->willReturn( 'testmodule' );
@@ -261,11 +250,12 @@ class ApiMainTest extends ApiTestCase {
 		$mock->method( 'mustBePosted' )->willReturn( false );
 
 		$api = new ApiMain( new FauxRequest( [ 'action' => 'testmodule' ] ) );
-		$api->getModuleManager()->addModule( 'testmodule', 'action', get_class( $mock ),
-			function () use ( $mock ) {
+		$api->getModuleManager()->addModule( 'testmodule', 'action', [
+			'class' => get_class( $mock ),
+			'factory' => function () use ( $mock ) {
 				return $mock;
 			}
-		);
+		] );
 		$api->execute();
 	}
 
@@ -310,11 +300,12 @@ class ApiMainTest extends ApiTestCase {
 		$req->setRequestURL( "http://localhost" );
 
 		$api = new ApiMain( $req );
-		$api->getModuleManager()->addModule( 'testmodule', 'action', get_class( $mock ),
-			function () use ( $mock ) {
+		$api->getModuleManager()->addModule( 'testmodule', 'action', [
+			'class' => get_class( $mock ),
+			'factory' => function () use ( $mock ) {
 				return $mock;
 			}
-		);
+		] );
 
 		$wrapper = TestingAccessWrapper::newFromObject( $api );
 		$wrapper->mInternalMode = false;
@@ -327,9 +318,10 @@ class ApiMainTest extends ApiTestCase {
 	private function doTestCheckMaxLag( $lag ) {
 		$mockLB = $this->getMockBuilder( LoadBalancer::class )
 			->disableOriginalConstructor()
-			->setMethods( [ 'getMaxLag', '__destruct' ] )
+			->setMethods( [ 'getMaxLag', 'getConnectionRef', '__destruct' ] )
 			->getMock();
 		$mockLB->method( 'getMaxLag' )->willReturn( [ 'somehost', $lag ] );
+		$mockLB->method( 'getConnectionRef' )->willReturn( $this->db );
 		$this->setService( 'DBLoadBalancer', $mockLB );
 
 		$req = new FauxRequest();
@@ -358,8 +350,8 @@ class ApiMainTest extends ApiTestCase {
 	}
 
 	public function testCheckMaxLagExceeded() {
-		$this->setExpectedException( ApiUsageException::class,
-			'Waiting for a database server: 4 seconds lagged.' );
+		$this->expectException( ApiUsageException::class );
+		$this->expectExceptionMessage( 'Waiting for a database server: 4 seconds lagged.' );
 
 		$this->setMwGlobals( 'wgShowHostnames', false );
 
@@ -367,8 +359,8 @@ class ApiMainTest extends ApiTestCase {
 	}
 
 	public function testCheckMaxLagExceededWithHostNames() {
-		$this->setExpectedException( ApiUsageException::class,
-			'Waiting for somehost: 4 seconds lagged.' );
+		$this->expectException( ApiUsageException::class );
+		$this->expectExceptionMessage( 'Waiting for somehost: 4 seconds lagged.' );
 
 		$this->setMwGlobals( 'wgShowHostnames', true );
 
@@ -379,6 +371,8 @@ class ApiMainTest extends ApiTestCase {
 		return [
 			[ false, [], 'user', 'assertuserfailed' ],
 			[ true, [], 'user', false ],
+			[ false, [], 'anon', false ],
+			[ true, [], 'anon', 'assertanonfailed' ],
 			[ true, [], 'bot', 'assertbotfailed' ],
 			[ true, [ 'bot' ], 'user', false ],
 			[ true, [ 'bot' ], 'bot', false ],
@@ -401,7 +395,7 @@ class ApiMainTest extends ApiTestCase {
 		} else {
 			$user = new User();
 		}
-		$user->mRights = $rights;
+		$this->overrideUserPermissions( $user, $rights );
 		try {
 			$this->doApiRequest( [
 				'action' => 'query',
@@ -447,7 +441,7 @@ class ApiMainTest extends ApiTestCase {
 			], null, null, new User );
 			$this->fail( 'Expected exception not thrown' );
 		} catch ( ApiUsageException $e ) {
-			$this->assertTrue( self::apiExceptionHasCode( $e, 'too-many-titles' ), 'sanity check' );
+			$this->assertTrue( self::apiExceptionHasCode( $e, 'toomanyvalues' ), 'sanity check' );
 		}
 
 		// Now test that the assert happens first
@@ -490,7 +484,7 @@ class ApiMainTest extends ApiTestCase {
 	 * @param int $status Expected response status
 	 * @param array $options Array of options:
 	 *   post => true Request is a POST
-	 *   cdn => true CDN is enabled ($wgUseSquid)
+	 *   cdn => true CDN is enabled ($wgUseCdn)
 	 */
 	public function testCheckConditionalRequestHeaders(
 		$headers, $conditions, $status, $options = []
@@ -508,7 +502,7 @@ class ApiMainTest extends ApiTestCase {
 		$priv->mInternalMode = false;
 
 		if ( !empty( $options['cdn'] ) ) {
-			$this->setMwGlobals( 'wgUseSquid', true );
+			$this->setMwGlobals( 'wgUseCdn', true );
 		}
 
 		// Can't do this in TestSetup.php because Setup.php will override it
@@ -531,7 +525,7 @@ class ApiMainTest extends ApiTestCase {
 	}
 
 	public static function provideCheckConditionalRequestHeaders() {
-		global $wgSquidMaxage;
+		global $wgCdnMaxAge;
 		$now = time();
 
 		return [
@@ -614,15 +608,15 @@ class ApiMainTest extends ApiTestCase {
 				[ [ 'If-Modified-Since' => 'a potato' ],
 					[ 'last-modified' => wfTimestamp( TS_MW, $now - 1 ) ], 200 ],
 
-			// Anything before $wgSquidMaxage seconds ago should be considered
+			// Anything before $wgCdnMaxAge seconds ago should be considered
 			// expired.
 			'If-Modified-Since with CDN post-expiry' =>
-				[ [ 'If-Modified-Since' => wfTimestamp( TS_RFC2822, $now - $wgSquidMaxage * 2 ) ],
-					[ 'last-modified' => wfTimestamp( TS_MW, $now - $wgSquidMaxage * 3 ) ],
+				[ [ 'If-Modified-Since' => wfTimestamp( TS_RFC2822, $now - $wgCdnMaxAge * 2 ) ],
+					[ 'last-modified' => wfTimestamp( TS_MW, $now - $wgCdnMaxAge * 3 ) ],
 					200, [ 'cdn' => true ] ],
 			'If-Modified-Since with CDN pre-expiry' =>
-				[ [ 'If-Modified-Since' => wfTimestamp( TS_RFC2822, $now - $wgSquidMaxage / 2 ) ],
-					[ 'last-modified' => wfTimestamp( TS_MW, $now - $wgSquidMaxage * 3 ) ],
+				[ [ 'If-Modified-Since' => wfTimestamp( TS_RFC2822, $now - $wgCdnMaxAge / 2 ) ],
+					[ 'last-modified' => wfTimestamp( TS_MW, $now - $wgCdnMaxAge * 3 ) ],
 					304, [ 'cdn' => true ] ],
 		];
 	}
@@ -700,8 +694,8 @@ class ApiMainTest extends ApiTestCase {
 	}
 
 	public function testCheckExecutePermissionsReadProhibited() {
-		$this->setExpectedException( ApiUsageException::class,
-			'You need read permission to use this module.' );
+		$this->expectException( ApiUsageException::class );
+		$this->expectExceptionMessage( 'You need read permission to use this module.' );
 
 		$this->setGroupPermissions( '*', 'read', false );
 
@@ -710,10 +704,12 @@ class ApiMainTest extends ApiTestCase {
 	}
 
 	public function testCheckExecutePermissionWriteDisabled() {
-		$this->setExpectedException( ApiUsageException::class,
+		$this->expectException( ApiUsageException::class );
+		$this->expectExceptionMessage(
 			'Editing of this wiki through the API is disabled. Make sure the ' .
-			'"$wgEnableWriteAPI=true;" statement is included in the wiki\'s ' .
-			'"LocalSettings.php" file.' );
+				'"$wgEnableWriteAPI=true;" statement is included in the wiki\'s ' .
+				'"LocalSettings.php" file.'
+		);
 		$main = new ApiMain( new FauxRequest( [
 			'action' => 'edit',
 			'title' => 'Some page',
@@ -724,8 +720,8 @@ class ApiMainTest extends ApiTestCase {
 	}
 
 	public function testCheckExecutePermissionWriteApiProhibited() {
-		$this->setExpectedException( ApiUsageException::class,
-			"You're not allowed to edit this wiki through the API." );
+		$this->expectException( ApiUsageException::class );
+		$this->expectExceptionMessage( "You're not allowed to edit this wiki through the API." );
 		$this->setGroupPermissions( '*', 'writeapi', false );
 
 		$main = new ApiMain( new FauxRequest( [
@@ -738,9 +734,11 @@ class ApiMainTest extends ApiTestCase {
 	}
 
 	public function testCheckExecutePermissionPromiseNonWrite() {
-		$this->setExpectedException( ApiUsageException::class,
+		$this->expectException( ApiUsageException::class );
+		$this->expectExceptionMessage(
 			'The "Promise-Non-Write-API-Action" HTTP header cannot be sent ' .
-			'to write-mode API modules.' );
+				'to write-mode API modules.'
+		);
 
 		$req = new FauxRequest( [
 			'action' => 'edit',
@@ -754,7 +752,8 @@ class ApiMainTest extends ApiTestCase {
 	}
 
 	public function testCheckExecutePermissionHookAbort() {
-		$this->setExpectedException( ApiUsageException::class, 'Main Page' );
+		$this->expectException( ApiUsageException::class );
+		$this->expectExceptionMessage( 'Main Page' );
 
 		$this->setTemporaryHook( 'ApiCheckCanExecute', function ( $unused1, $unused2, &$message ) {
 			$message = 'mainpage';
@@ -1150,9 +1149,20 @@ class ApiMainTest extends ApiTestCase {
 
 		// Test that the actual output is valid JSON, not just the format of the ApiResult.
 		$data = FormatJson::decode( $txt, true );
-		$this->assertInternalType( 'array', $data );
+		$this->assertIsArray( $data );
 		$this->assertArrayHasKey( 'error', $data );
 		$this->assertArrayHasKey( 'code', $data['error'] );
-		$this->assertSame( 'unknown_formatversion', $data['error']['code'] );
+		$this->assertSame( 'badvalue', $data['error']['code'] );
+	}
+
+	public function testMatchRequestedHeaders() {
+		$api = Wikimedia\TestingAccessWrapper::newFromClass( 'ApiMain' );
+		$allowedHeaders = [ 'Accept', 'Origin', 'User-Agent' ];
+
+		$this->assertTrue( $api->matchRequestedHeaders( 'Accept', $allowedHeaders ) );
+		$this->assertTrue( $api->matchRequestedHeaders( 'Accept,Origin', $allowedHeaders ) );
+		$this->assertTrue( $api->matchRequestedHeaders( 'accEpt, oRIGIN', $allowedHeaders ) );
+		$this->assertFalse( $api->matchRequestedHeaders( 'Accept,Foo', $allowedHeaders ) );
+		$this->assertFalse( $api->matchRequestedHeaders( 'Accept, fOO', $allowedHeaders ) );
 	}
 }

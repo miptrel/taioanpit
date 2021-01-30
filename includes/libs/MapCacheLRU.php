@@ -21,6 +21,7 @@
  * @ingroup Cache
  */
 use Wikimedia\Assert\Assert;
+use Wikimedia\LightweightObjectStore\ExpirationAwareness;
 
 /**
  * Handles a simple LRU key/value map with a maximum number of entries
@@ -34,7 +35,7 @@ use Wikimedia\Assert\Assert;
  * @ingroup Cache
  * @since 1.23
  */
-class MapCacheLRU implements IExpiringStore, Serializable {
+class MapCacheLRU implements ExpirationAwareness, Serializable {
 	/** @var array Map of (key => value) */
 	private $cache = [];
 	/** @var array Map of (key => (UNIX timestamp, (field => UNIX timestamp))) */
@@ -48,12 +49,13 @@ class MapCacheLRU implements IExpiringStore, Serializable {
 	/** @var float|null */
 	private $wallClockOverride;
 
-	const RANK_TOP = 1.0;
+	/** @var float */
+	private const RANK_TOP = 1.0;
 
 	/** @var int Array key that holds the entry's main timestamp (flat key use) */
-	const SIMPLE = 0;
+	private const SIMPLE = 0;
 	/** @var int Array key that holds the entry's field timestamps (nested key use) */
-	const FIELDS = 1;
+	private const FIELDS = 1;
 
 	/**
 	 * @param int $maxKeys Maximum number of entries allowed (min 1)
@@ -103,7 +105,7 @@ class MapCacheLRU implements IExpiringStore, Serializable {
 	 *
 	 * @param string $key
 	 * @param mixed $value
-	 * @param float $rank Bottom fraction of the list where keys start off [Default: 1.0]
+	 * @param float $rank Bottom fraction of the list where keys start off [default: 1.0]
 	 * @return void
 	 */
 	public function set( $key, $value, $rank = self::RANK_TOP ) {
@@ -135,10 +137,11 @@ class MapCacheLRU implements IExpiringStore, Serializable {
 	 * Check if a key exists
 	 *
 	 * @param string $key
-	 * @param float $maxAge Ignore items older than this many seconds [optional] (since 1.32)
+	 * @param float $maxAge Ignore items older than this many seconds [default: INF]
 	 * @return bool
+	 * @since 1.32 Added $maxAge
 	 */
-	public function has( $key, $maxAge = 0.0 ) {
+	public function has( $key, $maxAge = INF ) {
 		if ( !is_int( $key ) && !is_string( $key ) ) {
 			throw new UnexpectedValueException(
 				__METHOD__ . ': invalid key; must be string or integer.' );
@@ -157,12 +160,15 @@ class MapCacheLRU implements IExpiringStore, Serializable {
 	 * If the item is already set, it will be pushed to the top of the cache.
 	 *
 	 * @param string $key
-	 * @param float $maxAge Ignore items older than this many seconds [optional] (since 1.32)
-	 * @return mixed Returns null if the key was not found or is older than $maxAge
+	 * @param float $maxAge Ignore items older than this many seconds [default: INF]
+	 * @param mixed|null $default Value to return if no key is found [default: null]
+	 * @return mixed Returns $default if the key was not found or is older than $maxAge
+	 * @since 1.32 Added $maxAge
+	 * @since 1.34 Added $default
 	 */
-	public function get( $key, $maxAge = 0.0 ) {
+	public function get( $key, $maxAge = INF, $default = null ) {
 		if ( !$this->has( $key, $maxAge ) ) {
-			return null;
+			return $default;
 		}
 
 		$this->ping( $key );
@@ -201,10 +207,11 @@ class MapCacheLRU implements IExpiringStore, Serializable {
 	/**
 	 * @param string|int $key
 	 * @param string|int $field
-	 * @param float $maxAge Ignore items older than this many seconds [optional] (since 1.32)
+	 * @param float $maxAge Ignore items older than this many seconds [default: INF]
 	 * @return bool
+	 * @since 1.32 Added $maxAge
 	 */
-	public function hasField( $key, $field, $maxAge = 0.0 ) {
+	public function hasField( $key, $field, $maxAge = INF ) {
 		$value = $this->get( $key );
 
 		if ( !is_int( $field ) && !is_string( $field ) ) {
@@ -222,10 +229,11 @@ class MapCacheLRU implements IExpiringStore, Serializable {
 	/**
 	 * @param string|int $key
 	 * @param string|int $field
-	 * @param float $maxAge Ignore items older than this many seconds [optional] (since 1.32)
+	 * @param float $maxAge Ignore items older than this many seconds [default: INF]
 	 * @return mixed Returns null if the key was not found or is older than $maxAge
+	 * @since 1.32 Added $maxAge
 	 */
-	public function getField( $key, $field, $maxAge = 0.0 ) {
+	public function getField( $key, $field, $maxAge = INF ) {
 		if ( !$this->hasField( $key, $field, $maxAge ) ) {
 			return null;
 		}
@@ -249,12 +257,13 @@ class MapCacheLRU implements IExpiringStore, Serializable {
 	 * @since 1.28
 	 * @param string $key
 	 * @param callable $callback Callback that will produce the value
-	 * @param float $rank Bottom fraction of the list where keys start off [Default: 1.0]
-	 * @param float $maxAge Ignore items older than this many seconds [Default: 0.0] (since 1.32)
+	 * @param float $rank Bottom fraction of the list where keys start off [default: 1.0]
+	 * @param float $maxAge Ignore items older than this many seconds [default: INF]
 	 * @return mixed The cached value if found or the result of $callback otherwise
+	 * @since 1.32 Added $maxAge
 	 */
 	public function getWithSetCallback(
-		$key, callable $callback, $rank = self::RANK_TOP, $maxAge = 0.0
+		$key, callable $callback, $rank = self::RANK_TOP, $maxAge = INF
 	) {
 		if ( $this->has( $key, $maxAge ) ) {
 			$value = $this->get( $key );
@@ -346,7 +355,8 @@ class MapCacheLRU implements IExpiringStore, Serializable {
 	public function serialize() {
 		return serialize( [
 			'entries' => $this->cache,
-			'timestamps' => $this->timestamps
+			'timestamps' => $this->timestamps,
+			'maxCacheKeys' => $this->maxCacheKeys,
 		] );
 	}
 
@@ -354,6 +364,8 @@ class MapCacheLRU implements IExpiringStore, Serializable {
 		$data = unserialize( $serialized );
 		$this->cache = $data['entries'] ?? [];
 		$this->timestamps = $data['timestamps'] ?? [];
+		// Fallback needed for serializations prior to T218511
+		$this->maxCacheKeys = $data['maxCacheKeys'] ?? ( count( $this->cache ) + 1 );
 		$this->epoch = $this->getCurrentTime();
 	}
 

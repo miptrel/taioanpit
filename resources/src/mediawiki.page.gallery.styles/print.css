@@ -1,12 +1,7 @@
+/* stylelint-disable selector-class-pattern */
 li.gallerybox {
 	vertical-align: top;
 	display: inline-block;
-}
-
-ul.gallery,
-li.gallerybox {
-	zoom: 1;
-	*display: inline;
 }
 
 ul.gallery {

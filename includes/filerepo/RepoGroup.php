@@ -35,6 +35,9 @@ class RepoGroup {
 	/** @var FileRepo[] */
 	protected $foreignRepos;
 
+	/** @var WANObjectCache */
+	protected $wanCache;
+
 	/** @var bool */
 	protected $reposInitialised = false;
 
@@ -44,69 +47,63 @@ class RepoGroup {
 	/** @var array */
 	protected $foreignInfo;
 
-	/** @var ProcessCacheLRU */
+	/** @var MapCacheLRU */
 	protected $cache;
 
-	/** @var RepoGroup */
-	protected static $instance;
-
 	/** Maximum number of cache items */
-	const MAX_CACHE_SIZE = 500;
+	private const MAX_CACHE_SIZE = 500;
 
 	/**
-	 * Get a RepoGroup instance. At present only one instance of RepoGroup is
-	 * needed in a MediaWiki invocation, this may change in the future.
+	 * @deprecated since 1.34, use MediaWikiServices::getRepoGroup
 	 * @return RepoGroup
 	 */
-	static function singleton() {
-		if ( self::$instance ) {
-			return self::$instance;
-		}
-		global $wgLocalFileRepo, $wgForeignFileRepos;
-		/** @var array $wgLocalFileRepo */
-		self::$instance = new RepoGroup( $wgLocalFileRepo, $wgForeignFileRepos );
-
-		return self::$instance;
+	public static function singleton() {
+		return MediaWikiServices::getInstance()->getRepoGroup();
 	}
 
 	/**
-	 * Destroy the singleton instance, so that a new one will be created next
-	 * time singleton() is called.
+	 * @deprecated since 1.34, use MediaWikiTestCase::overrideMwServices() or similar. This will
+	 * cause bugs if you don't reset all other services that depend on this one at the same time.
 	 */
-	static function destroySingleton() {
-		self::$instance = null;
+	public static function destroySingleton() {
+		MediaWikiServices::getInstance()->resetServiceForTesting( 'RepoGroup' );
 	}
 
 	/**
-	 * Set the singleton instance to a given object
-	 * Used by extensions which hook into the Repo chain.
-	 * It's not enough to just create a superclass ... you have
-	 * to get people to call into it even though all they know is RepoGroup::singleton()
-	 *
+	 * @deprecated since 1.34, use MediaWikiTestCase::setService, this can mess up state of other
+	 *   tests
 	 * @param RepoGroup $instance
 	 */
-	static function setSingleton( $instance ) {
-		self::$instance = $instance;
+	public static function setSingleton( $instance ) {
+		$services = MediaWikiServices::getInstance();
+		$services->disableService( 'RepoGroup' );
+		$services->redefineService( 'RepoGroup',
+			function () use ( $instance ) {
+				return $instance;
+			}
+		);
 	}
 
 	/**
-	 * Construct a group of file repositories.
+	 * Construct a group of file repositories. Do not call this -- use
+	 * MediaWikiServices::getRepoGroup.
 	 *
 	 * @param array $localInfo Associative array for local repo's info
 	 * @param array $foreignInfo Array of repository info arrays.
 	 *   Each info array is an associative array with the 'class' member
 	 *   giving the class name. The entire array is passed to the repository
 	 *   constructor as the first parameter.
+	 * @param WANObjectCache $wanCache
 	 */
-	function __construct( $localInfo, $foreignInfo ) {
+	public function __construct( $localInfo, $foreignInfo, $wanCache ) {
 		$this->localInfo = $localInfo;
 		$this->foreignInfo = $foreignInfo;
 		$this->cache = new MapCacheLRU( self::MAX_CACHE_SIZE );
+		$this->wanCache = $wanCache;
 	}
 
 	/**
 	 * Search repositories for an image.
-	 * You can also use wfFindFile() to do this.
 	 *
 	 * @param Title|string $title Title object or string
 	 * @param array $options Associative array of options:
@@ -118,9 +115,10 @@ class RepoGroup {
 	 *                   user is allowed to view them. Otherwise, such files will not
 	 *                   be found.
 	 *   latest:         If true, load from the latest available data into File objects
+	 * @phan-param array{time?:mixed,ignoreRedirect?:bool,private?:bool,latest?:bool} $options
 	 * @return File|bool False if title is not found
 	 */
-	function findFile( $title, $options = [] ) {
+	public function findFile( $title, $options = [] ) {
 		if ( !is_array( $options ) ) {
 			// MW 1.15 compat
 			$options = [ 'time' => $options ];
@@ -193,7 +191,7 @@ class RepoGroup {
 	 *       All titles are returned as string DB keys and the inner array is associative.
 	 * @return array Map of (file name => File objects) for matches
 	 */
-	function findFiles( array $inputItems, $flags = 0 ) {
+	public function findFiles( array $inputItems, $flags = 0 ) {
 		if ( !$this->reposInitialised ) {
 			$this->initialiseRepos();
 		}
@@ -228,7 +226,7 @@ class RepoGroup {
 	 * @param Title $title
 	 * @return bool|Title
 	 */
-	function checkRedirect( Title $title ) {
+	public function checkRedirect( Title $title ) {
 		if ( !$this->reposInitialised ) {
 			$this->initialiseRepos();
 		}
@@ -256,7 +254,7 @@ class RepoGroup {
 	 * @param array $options Option array, same as findFile()
 	 * @return File|bool File object or false if it is not found
 	 */
-	function findFileFromKey( $hash, $options = [] ) {
+	public function findFileFromKey( $hash, $options = [] ) {
 		if ( !$this->reposInitialised ) {
 			$this->initialiseRepos();
 		}
@@ -280,7 +278,7 @@ class RepoGroup {
 	 * @param string $hash Base 36 SHA-1 hash
 	 * @return File[]
 	 */
-	function findBySha1( $hash ) {
+	public function findBySha1( $hash ) {
 		if ( !$this->reposInitialised ) {
 			$this->initialiseRepos();
 		}
@@ -300,7 +298,7 @@ class RepoGroup {
 	 * @param array $hashes Base 36 SHA-1 hashes
 	 * @return array Array of array of File objects
 	 */
-	function findBySha1s( array $hashes ) {
+	public function findBySha1s( array $hashes ) {
 		if ( !$this->reposInitialised ) {
 			$this->initialiseRepos();
 		}
@@ -322,7 +320,7 @@ class RepoGroup {
 	 * @param string|int $index
 	 * @return bool|FileRepo
 	 */
-	function getRepo( $index ) {
+	public function getRepo( $index ) {
 		if ( !$this->reposInitialised ) {
 			$this->initialiseRepos();
 		}
@@ -337,7 +335,7 @@ class RepoGroup {
 	 * @param string $name
 	 * @return FileRepo|bool
 	 */
-	function getRepoByName( $name ) {
+	public function getRepoByName( $name ) {
 		if ( !$this->reposInitialised ) {
 			$this->initialiseRepos();
 		}
@@ -356,7 +354,7 @@ class RepoGroup {
 	 *
 	 * @return LocalRepo
 	 */
-	function getLocalRepo() {
+	public function getLocalRepo() {
 		/** @var LocalRepo $repo */
 		$repo = $this->getRepo( 'local' );
 
@@ -371,7 +369,7 @@ class RepoGroup {
 	 * @param array $params Optional additional parameters to pass to the function
 	 * @return bool
 	 */
-	function forEachForeignRepo( $callback, $params = [] ) {
+	public function forEachForeignRepo( $callback, $params = [] ) {
 		if ( !$this->reposInitialised ) {
 			$this->initialiseRepos();
 		}
@@ -388,7 +386,7 @@ class RepoGroup {
 	 * Does the installation have any foreign repos set up?
 	 * @return bool
 	 */
-	function hasForeignRepos() {
+	public function hasForeignRepos() {
 		if ( !$this->reposInitialised ) {
 			$this->initialiseRepos();
 		}
@@ -398,7 +396,7 @@ class RepoGroup {
 	/**
 	 * Initialise the $repos array
 	 */
-	function initialiseRepos() {
+	public function initialiseRepos() {
 		if ( $this->reposInitialised ) {
 			return;
 		}
@@ -419,8 +417,7 @@ class RepoGroup {
 	protected function newRepo( $info ) {
 		$class = $info['class'];
 
-		$cache = MediaWikiServices::getInstance()->getMainWANObjectCache();
-		$info['wanCache'] = $cache;
+		$info['wanCache'] = $this->wanCache;
 
 		return new $class( $info );
 	}
@@ -431,7 +428,7 @@ class RepoGroup {
 	 * @throws MWException
 	 * @return string[] Containing repo, zone and rel
 	 */
-	function splitVirtualUrl( $url ) {
+	private function splitVirtualUrl( $url ) {
 		if ( substr( $url, 0, 9 ) != 'mwrepo://' ) {
 			throw new MWException( __METHOD__ . ': unknown protocol' );
 		}
@@ -448,7 +445,7 @@ class RepoGroup {
 	 * @param string $fileName
 	 * @return array
 	 */
-	function getFileProps( $fileName ) {
+	public function getFileProps( $fileName ) {
 		if ( FileRepo::isVirtualUrl( $fileName ) ) {
 			list( $repoName, /* $zone */, /* $rel */ ) = $this->splitVirtualUrl( $fileName );
 			if ( $repoName === '' ) {

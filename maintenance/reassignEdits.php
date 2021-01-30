@@ -23,8 +23,6 @@
  * @license GPL-2.0-or-later
  */
 
-use Wikimedia\Rdbms\IDatabase;
-
 require_once __DIR__ . '/Maintenance.php';
 
 /**
@@ -69,15 +67,13 @@ class ReassignEdits extends Maintenance {
 	/**
 	 * Reassign edits from one user to another
 	 *
-	 * @param User $from User to take edits from
-	 * @param User $to User to assign edits to
+	 * @param User &$from User to take edits from
+	 * @param User &$to User to assign edits to
 	 * @param bool $rc Update the recent changes table
 	 * @param bool $report Don't change things; just echo numbers
 	 * @return int Number of entries changed, or that would be changed
 	 */
 	private function doReassignEdits( &$from, &$to, $rc = false, $report = false ) {
-		global $wgActorTableSchemaMigrationStage;
-
 		$dbw = $this->getDB( DB_MASTER );
 		$this->beginTransaction( $dbw, __METHOD__ );
 
@@ -136,36 +132,23 @@ class ReassignEdits extends Maintenance {
 			if ( $total ) {
 				# Reassign edits
 				$this->output( "\nReassigning current edits..." );
-				if ( $wgActorTableSchemaMigrationStage & SCHEMA_COMPAT_WRITE_OLD ) {
-					$dbw->update(
-						'revision',
-						[
-							'rev_user' => $to->getId(),
-							'rev_user_text' => $to->getName(),
-						],
-						$from->isLoggedIn()
-							? [ 'rev_user' => $from->getId() ] : [ 'rev_user_text' => $from->getName() ],
-						__METHOD__
-					);
-				}
-				if ( $wgActorTableSchemaMigrationStage & SCHEMA_COMPAT_WRITE_NEW ) {
-					$dbw->update(
-						'revision_actor_temp',
-						[ 'revactor_actor' => $to->getActorId( $dbw ) ],
-						[ 'revactor_actor' => $from->getActorId() ],
-						__METHOD__
-					);
-				}
+				$dbw->update(
+					'revision_actor_temp',
+					[ 'revactor_actor' => $to->getActorId( $dbw ) ],
+					[ 'revactor_actor' => $from->getActorId() ],
+					__METHOD__
+				);
 				$this->output( "done.\nReassigning deleted edits..." );
 				$dbw->update( 'archive',
-					$this->userSpecification( $dbw, $to, 'ar_user', 'ar_user_text', 'ar_actor' ),
+					[ 'ar_actor' => $to->getActorId( $dbw ) ],
 					[ $arQueryInfo['conds'] ], __METHOD__ );
 				$this->output( "done.\n" );
 				# Update recent changes if required
 				if ( $rc ) {
 					$this->output( "Updating recent changes..." );
 					$dbw->update( 'recentchanges',
-						$this->userSpecification( $dbw, $to, 'rc_user', 'rc_user_text', 'rc_actor' ),
+						[ 'rc_actor' => $to->getActorId( $dbw ) ],
+						// @phan-suppress-next-line PhanTypeArraySuspiciousNullable False positive
 						[ $rcQueryInfo['conds'] ], __METHOD__ );
 					$this->output( "done.\n" );
 				}
@@ -178,33 +161,6 @@ class ReassignEdits extends Maintenance {
 	}
 
 	/**
-	 * Return user specifications for an UPDATE
-	 * i.e. user => id, user_text => text
-	 *
-	 * @param IDatabase $dbw Database handle
-	 * @param User $user User for the spec
-	 * @param string $idfield Field name containing the identifier
-	 * @param string $utfield Field name containing the user text
-	 * @param string $acfield Field name containing the actor ID
-	 * @return array
-	 */
-	private function userSpecification( IDatabase $dbw, &$user, $idfield, $utfield, $acfield ) {
-		global $wgActorTableSchemaMigrationStage;
-
-		$ret = [];
-		if ( $wgActorTableSchemaMigrationStage & SCHEMA_COMPAT_WRITE_OLD ) {
-			$ret += [
-				$idfield => $user->getId(),
-				$utfield => $user->getName(),
-			];
-		}
-		if ( $wgActorTableSchemaMigrationStage & SCHEMA_COMPAT_WRITE_NEW ) {
-			$ret += [ $acfield => $user->getActorId( $dbw ) ];
-		}
-		return $ret;
-	}
-
-	/**
 	 * Initialise the user object
 	 *
 	 * @param string $username Username or IP address
@@ -212,9 +168,8 @@ class ReassignEdits extends Maintenance {
 	 */
 	private function initialiseUser( $username ) {
 		if ( User::isIP( $username ) ) {
-			$user = new User();
-			$user->setId( 0 );
-			$user->setName( $username );
+			$user = User::newFromName( $username, false );
+			$user->getActorId();
 		} else {
 			$user = User::newFromName( $username );
 			if ( !$user ) {

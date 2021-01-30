@@ -21,6 +21,8 @@
  * @ingroup SpecialPage
  */
 
+use MediaWiki\MediaWikiServices;
+
 /**
  * Special page to allow managing user group membership
  *
@@ -31,7 +33,7 @@ class UserrightsPage extends SpecialPage {
 	 * The target of the local right-adjuster's interest.  Can be gotten from
 	 * either a GET parameter or a subpage-style parameter, so have a member
 	 * variable for it.
-	 * @var null|string $mTarget
+	 * @var null|string
 	 */
 	protected $mTarget;
 	/*
@@ -61,15 +63,23 @@ class UserrightsPage extends SpecialPage {
 		$isself = $this->getUser()->equals( $targetUser );
 
 		$available = $this->changeableGroups();
-		if ( $targetUser->getId() == 0 ) {
+		if ( $targetUser->getId() === 0 ) {
 			return false;
 		}
 
-		return !empty( $available['add'] )
-			|| !empty( $available['remove'] )
-			|| ( ( $isself || !$checkIfSelf ) &&
-				( !empty( $available['add-self'] )
-					|| !empty( $available['remove-self'] ) ) );
+		if ( $available['add'] || $available['remove'] ) {
+			// can change some rights for any user
+			return true;
+		}
+
+		if ( ( $available['add-self'] || $available['remove-self'] )
+			&& ( $isself || !$checkIfSelf )
+		) {
+			// can change some rights for self
+			return true;
+		}
+
+		return false;
 	}
 
 	/**
@@ -78,6 +88,7 @@ class UserrightsPage extends SpecialPage {
 	 *
 	 * @param string|null $par String if any subpage provided, else null
 	 * @throws UserBlockedError|PermissionsError
+	 * @suppress PhanUndeclaredMethod
 	 */
 	public function execute( $par ) {
 		$user = $this->getUser();
@@ -148,19 +159,32 @@ class UserrightsPage extends SpecialPage {
 			$user->matchEditToken( $request->getVal( 'wpEditToken' ), $this->mTarget )
 		) {
 			/*
-			* If the user is blocked and they only have "partial" access
-			* (e.g. they don't have the userrights permission), then don't
-			* allow them to change any user rights.
-			*/
-			if ( $user->isBlocked() && !$user->isAllowed( 'userrights' ) ) {
-				throw new UserBlockedError( $user->getBlock() );
+			 * If the user is blocked and they only have "partial" access
+			 * (e.g. they don't have the userrights permission), then don't
+			 * allow them to change any user rights.
+			 */
+			if ( !MediaWikiServices::getInstance()
+					->getPermissionManager()
+					->userHasRight( $user, 'userrights' )
+			) {
+				$block = $user->getBlock();
+				if ( $block && $block->isSitewide() ) {
+					throw new UserBlockedError(
+						$block,
+						$user,
+						$this->getLanguage(),
+						$request->getIP()
+					);
+				}
 			}
 
 			$this->checkReadOnly();
 
 			// save settings
 			if ( !$fetchedStatus->isOK() ) {
-				$this->getOutput()->addWikiTextAsInterface( $fetchedStatus->getWikiText() );
+				$this->getOutput()->addWikiTextAsInterface(
+					$fetchedStatus->getWikiText( false, false, $this->getLanguage() )
+				);
 
 				return;
 			}
@@ -191,7 +215,9 @@ class UserrightsPage extends SpecialPage {
 					return;
 				} else {
 					// Print an error message and redisplay the form
-					$out->wrapWikiTextAsInterface( 'error', $status->getWikiText() );
+					$out->wrapWikiTextAsInterface(
+						'error', $status->getWikiText( false, false, $this->getLanguage() )
+					);
 				}
 			}
 		}
@@ -202,7 +228,7 @@ class UserrightsPage extends SpecialPage {
 		}
 	}
 
-	function getSuccessURL() {
+	private function getSuccessURL() {
 		return $this->getPageTitle( $this->mTarget )->getFullURL();
 	}
 
@@ -323,7 +349,7 @@ class UserrightsPage extends SpecialPage {
 	 *   containing only those groups that are to have new expiry values set
 	 * @return array Tuple of added, then removed groups
 	 */
-	function doSaveUserGroups( $user, array $add, array $remove, $reason = '',
+	public function doSaveUserGroups( $user, array $add, array $remove, $reason = '',
 		array $tags = [], array $groupExpiries = []
 	) {
 		// Validate input set...
@@ -334,9 +360,8 @@ class UserrightsPage extends SpecialPage {
 		$addable = array_merge( $changeable['add'], $isself ? $changeable['add-self'] : [] );
 		$removable = array_merge( $changeable['remove'], $isself ? $changeable['remove-self'] : [] );
 
-		$remove = array_unique(
-			array_intersect( (array)$remove, $removable, $groups ) );
-		$add = array_intersect( (array)$add, $addable );
+		$remove = array_unique( array_intersect( $remove, $removable, $groups ) );
+		$add = array_intersect( $add, $addable );
 
 		// add only groups that are not already present or that need their expiry updated,
 		// UNLESS the user can only add this group (not remove it) and the expiry time
@@ -354,7 +379,7 @@ class UserrightsPage extends SpecialPage {
 				return !in_array( $group, $groups ) || array_key_exists( $group, $groupExpiries );
 			} );
 
-		Hooks::run( 'ChangeUserGroups', [ $this->getUser(), $user, &$add, &$remove ] );
+		$this->getHookRunner()->onChangeUserGroups( $this->getUser(), $user, $add, $remove );
 
 		$oldGroups = $groups;
 		$oldUGMs = $user->getGroupMemberships();
@@ -385,15 +410,13 @@ class UserrightsPage extends SpecialPage {
 		$user->invalidateCache();
 
 		// update groups in external authentication database
-		Hooks::run( 'UserGroupsChanged', [ $user, $add, $remove, $this->getUser(),
-			$reason, $oldUGMs, $newUGMs ] );
+		$this->getHookRunner()->onUserGroupsChanged( $user, $add, $remove,
+			$this->getUser(), $reason, $oldUGMs, $newUGMs );
 
-		wfDebug( 'oldGroups: ' . print_r( $oldGroups, true ) . "\n" );
-		wfDebug( 'newGroups: ' . print_r( $newGroups, true ) . "\n" );
-		wfDebug( 'oldUGMs: ' . print_r( $oldUGMs, true ) . "\n" );
-		wfDebug( 'newUGMs: ' . print_r( $newUGMs, true ) . "\n" );
-		// Deprecated in favor of UserGroupsChanged hook
-		Hooks::run( 'UserRights', [ &$user, $add, $remove ], '1.26' );
+		wfDebug( 'oldGroups: ' . print_r( $oldGroups, true ) );
+		wfDebug( 'newGroups: ' . print_r( $newGroups, true ) );
+		wfDebug( 'oldUGMs: ' . print_r( $oldUGMs, true ) );
+		wfDebug( 'newUGMs: ' . print_r( $newUGMs, true ) );
 
 		// Only add a log entry if something actually changed
 		if ( $newGroups != $oldGroups || $newUGMs != $oldUGMs ) {
@@ -455,7 +478,7 @@ class UserrightsPage extends SpecialPage {
 		] );
 		$logid = $logEntry->insert();
 		if ( count( $tags ) ) {
-			$logEntry->setTags( $tags );
+			$logEntry->addTags( $tags );
 		}
 		$logEntry->publish( $logid );
 	}
@@ -464,15 +487,19 @@ class UserrightsPage extends SpecialPage {
 	 * Edit user groups membership
 	 * @param string $username Name of the user.
 	 */
-	function editUserGroupsForm( $username ) {
+	private function editUserGroupsForm( $username ) {
 		$status = $this->fetchUser( $username, true );
 		if ( !$status->isOK() ) {
-			$this->getOutput()->addWikiTextAsInterface( $status->getWikiText() );
+			$this->getOutput()->addWikiTextAsInterface(
+				$status->getWikiText( false, false, $this->getLanguage() )
+			);
 
 			return;
-		} else {
-			$user = $status->value;
 		}
+
+		/** @var User $user */
+		$user = $status->value;
+		'@phan-var User $user';
 
 		$groups = $user->getGroups();
 		$groupMemberships = $user->getGroupMemberships();
@@ -496,18 +523,21 @@ class UserrightsPage extends SpecialPage {
 		$parts = explode( $this->getConfig()->get( 'UserrightsInterwikiDelimiter' ), $username );
 		if ( count( $parts ) < 2 ) {
 			$name = trim( $username );
-			$wikiId = '';
+			$dbDomain = '';
 		} else {
-			list( $name, $wikiId ) = array_map( 'trim', $parts );
+			list( $name, $dbDomain ) = array_map( 'trim', $parts );
 
-			if ( WikiMap::isCurrentWikiId( $wikiId ) ) {
-				$wikiId = '';
+			if ( WikiMap::isCurrentWikiId( $dbDomain ) ) {
+				$dbDomain = '';
 			} else {
-				if ( $writing && !$this->getUser()->isAllowed( 'userrights-interwiki' ) ) {
+				if ( $writing && !MediaWikiServices::getInstance()
+						->getPermissionManager()
+						->userHasRight( $this->getUser(), 'userrights-interwiki' )
+				) {
 					return Status::newFatal( 'userrights-no-interwiki' );
 				}
-				if ( !UserRightsProxy::validDatabase( $wikiId ) ) {
-					return Status::newFatal( 'userrights-nodatabase', $wikiId );
+				if ( !UserRightsProxy::validDatabase( $dbDomain ) ) {
+					return Status::newFatal( 'userrights-nodatabase', $dbDomain );
 				}
 			}
 		}
@@ -521,10 +551,10 @@ class UserrightsPage extends SpecialPage {
 			// We'll do a lookup for the name internally.
 			$id = intval( substr( $name, 1 ) );
 
-			if ( $wikiId == '' ) {
+			if ( $dbDomain == '' ) {
 				$name = User::whoIs( $id );
 			} else {
-				$name = UserRightsProxy::whoIs( $wikiId, $id );
+				$name = UserRightsProxy::whoIs( $dbDomain, $id );
 			}
 
 			if ( !$name ) {
@@ -538,13 +568,23 @@ class UserrightsPage extends SpecialPage {
 			}
 		}
 
-		if ( $wikiId == '' ) {
+		if ( $dbDomain == '' ) {
 			$user = User::newFromName( $name );
 		} else {
-			$user = UserRightsProxy::newFromName( $wikiId, $name );
+			$user = UserRightsProxy::newFromName( $dbDomain, $name );
 		}
 
 		if ( !$user || $user->isAnon() ) {
+			return Status::newFatal( 'nosuchusershort', $username );
+		}
+
+		if ( $user instanceof User &&
+			$user->isHidden() &&
+			!MediaWikiServices::getInstance()
+				->getPermissionManager()
+				->userHasRight( $this->getUser(), 'hideuser' )
+		) {
+			// Cannot see hidden users, pretend they don't exist
 			return Status::newFatal( 'nosuchusershort', $username );
 		}
 
@@ -569,7 +609,7 @@ class UserrightsPage extends SpecialPage {
 	/**
 	 * Output a form to allow searching for a user
 	 */
-	function switchForm() {
+	protected function switchForm() {
 		$this->getOutput()->addModules( 'mediawiki.userSuggest' );
 
 		$this->getOutput()->addHTML(
@@ -632,7 +672,10 @@ class UserrightsPage extends SpecialPage {
 
 		$autoList = [];
 		$autoMembersList = [];
-		if ( $user instanceof User ) {
+
+		$isUserInstance = $user instanceof User;
+
+		if ( $isUserInstance ) {
 			foreach ( Autopromote::getAutopromoteGroups( $user ) as $group ) {
 				$autoList[] = UserGroupMembership::getLink( $group, $this->getContext(), 'html' );
 				$autoMembersList[] = UserGroupMembership::getLink( $group, $this->getContext(),
@@ -671,11 +714,21 @@ class UserrightsPage extends SpecialPage {
 			$grouplist .= '<p>' . $autogrouplistintro . ' ' . $displayedAutolist . "</p>\n";
 		}
 
+		$systemUser = $isUserInstance && $user->isSystemUser();
+		if ( $systemUser ) {
+			$systemusernote = $this->msg( 'userrights-systemuser' )
+				->params( $user->getName() )
+				->parse();
+			$grouplist .= '<p>' . $systemusernote . "</p>\n";
+		}
+
+		// Only add an email link if the user is not a system user
+		$flags = $systemUser ? 0 : Linker::TOOL_LINKS_EMAIL;
 		$userToolLinks = Linker::userToolLinks(
 			$user->getId(),
 			$user->getName(),
 			false, /* default for redContribsWhenNoEdits */
-			Linker::TOOL_LINKS_EMAIL /* Add "send e-mail" link */
+			$flags
 		);
 
 		list( $groupCheckboxes, $canChangeAny ) =
@@ -773,9 +826,9 @@ class UserrightsPage extends SpecialPage {
 
 		// Get the list of preset expiry times from the system message
 		$expiryOptionsMsg = $this->msg( 'userrights-expiry-options' )->inContentLanguage();
-		$expiryOptions = $expiryOptionsMsg->isDisabled() ?
-			[] :
-			explode( ',', $expiryOptionsMsg->text() );
+		$expiryOptions = $expiryOptionsMsg->isDisabled()
+			? []
+			: XmlSelect::parseOptionsMessage( $expiryOptionsMsg->text() );
 
 		// Put all column info into an associative array so that extensions can
 		// more easily manage it.
@@ -868,10 +921,12 @@ class UserrightsPage extends SpecialPage {
 							$expiryFormatted = $uiLanguage->userTimeAndDate( $currentExpiry, $uiUser );
 							$expiryFormattedD = $uiLanguage->userDate( $currentExpiry, $uiUser );
 							$expiryFormattedT = $uiLanguage->userTime( $currentExpiry, $uiUser );
-							$expiryHtml = $this->msg( 'userrights-expiry-current' )->params(
-								$expiryFormatted, $expiryFormattedD, $expiryFormattedT )->text();
+							$expiryHtml = Xml::element( 'span', null,
+								$this->msg( 'userrights-expiry-current' )->params(
+								$expiryFormatted, $expiryFormattedD, $expiryFormattedT )->text() );
 						} else {
-							$expiryHtml = $this->msg( 'userrights-expiry-none' )->text();
+							$expiryHtml = Xml::element( 'span', null,
+								$this->msg( 'userrights-expiry-none' )->text() );
 						}
 						// T171345: Add a hidden form element so that other groups can still be manipulated,
 						// otherwise saving errors out with an invalid expiry time for this group.
@@ -910,14 +965,8 @@ class UserrightsPage extends SpecialPage {
 							$this->msg( 'userrights-expiry-othertime' )->text(),
 							'other'
 						);
-						foreach ( $expiryOptions as $option ) {
-							if ( strpos( $option, ":" ) === false ) {
-								$displayText = $value = $option;
-							} else {
-								list( $displayText, $value ) = explode( ":", $option );
-							}
-							$expiryFormOptions->addOption( $displayText, htmlspecialchars( $value ) );
-						}
+
+						$expiryFormOptions->addOptions( $expiryOptions );
 
 						// Add expiry dropdown
 						$expiryHtml .= $expiryFormOptions->getHTML() . '<br />';
@@ -988,14 +1037,14 @@ class UserrightsPage extends SpecialPage {
 	/**
 	 * Returns $this->getUser()->changeableGroups()
 	 *
-	 * @return array Array(
-	 *   'add' => array( addablegroups ),
-	 *   'remove' => array( removablegroups ),
-	 *   'add-self' => array( addablegroups to self ),
-	 *   'remove-self' => array( removable groups from self )
-	 *  )
+	 * @return array [
+	 *   'add' => [ addablegroups ],
+	 *   'remove' => [ removablegroups ],
+	 *   'add-self' => [ addablegroups to self ],
+	 *   'remove-self' => [ removable groups from self ]
+	 *  ]
 	 */
-	function changeableGroups() {
+	protected function changeableGroups() {
 		return $this->getUser()->changeableGroups();
 	}
 

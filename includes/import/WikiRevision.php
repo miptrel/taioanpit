@@ -25,6 +25,8 @@
  */
 use MediaWiki\Logger\LoggerFactory;
 use MediaWiki\MediaWikiServices;
+use MediaWiki\Revision\MutableRevisionSlots;
+use MediaWiki\Revision\SlotRecord;
 
 /**
  * Represents a revision, log entry or upload during the import process.
@@ -56,14 +58,6 @@ class WikiRevision implements ImportableUploadRevision, ImportableOldRevision {
 
 	/**
 	 * @since 1.2
-	 * @var int
-	 * @deprecated in 1.29. Unused.
-	 * @note Introduced in 436a028086fb3f01c4605c5ad2964d56f9306aca, unused there, unused now.
-	 */
-	public $user = 0;
-
-	/**
-	 * @since 1.2
 	 * @var string
 	 */
 	public $user_text = "";
@@ -76,18 +70,21 @@ class WikiRevision implements ImportableUploadRevision, ImportableOldRevision {
 
 	/**
 	 * @since 1.21
+	 * @deprecated since 1.35, use getContent
 	 * @var string
 	 */
 	public $model = null;
 
 	/**
 	 * @since 1.21
+	 * @deprecated since 1.35, use getContent
 	 * @var string
 	 */
 	public $format = null;
 
 	/**
 	 * @since 1.2
+	 * @deprecated since 1.35, use getContent
 	 * @var string
 	 */
 	public $text = "";
@@ -100,6 +97,7 @@ class WikiRevision implements ImportableUploadRevision, ImportableOldRevision {
 
 	/**
 	 * @since 1.21
+	 * @deprecated since 1.35, use getContent
 	 * @var Content
 	 */
 	public $content = null;
@@ -115,6 +113,11 @@ class WikiRevision implements ImportableUploadRevision, ImportableOldRevision {
 	 * @var string
 	 */
 	public $comment = "";
+
+	/**
+	 * @var MutableRevisionSlots
+	 */
+	private $slots;
 
 	/**
 	 * @since 1.5.7
@@ -153,6 +156,12 @@ class WikiRevision implements ImportableUploadRevision, ImportableOldRevision {
 	public $sha1base36 = false;
 
 	/**
+	 * @since 1.34
+	 * @var string[]
+	 */
+	protected $tags = [];
+
+	/**
 	 * @since 1.17
 	 * @var string
 	 */
@@ -187,11 +196,19 @@ class WikiRevision implements ImportableUploadRevision, ImportableOldRevision {
 	/** @var bool */
 	private $mNoUpdates = false;
 
-	/** @var Config $config */
+	/**
+	 * @deprecated since 1.31, along with self::downloadSource()
+	 * @var Config
+	 */
 	private $config;
 
+	/**
+	 * @param Config $config Deprecated since 1.31, along with self::downloadSource(). Just pass an
+	 *  empty HashConfig.
+	 */
 	public function __construct( Config $config ) {
 		$this->config = $config;
+		$this->slots = new MutableRevisionSlots();
 	}
 
 	/**
@@ -202,7 +219,7 @@ class WikiRevision implements ImportableUploadRevision, ImportableOldRevision {
 	public function setTitle( $title ) {
 		if ( is_object( $title ) ) {
 			$this->title = $title;
-		} elseif ( is_null( $title ) ) {
+		} elseif ( $title === null ) {
 			throw new MWException( "WikiRevision given a null title in import. "
 				. "You may need to adjust \$wgLegalTitleChars." );
 		} else {
@@ -253,6 +270,7 @@ class WikiRevision implements ImportableUploadRevision, ImportableOldRevision {
 
 	/**
 	 * @since 1.21
+	 * @deprecated since 1.35, use setContent instead.
 	 * @param string $model
 	 */
 	public function setModel( $model ) {
@@ -261,6 +279,7 @@ class WikiRevision implements ImportableUploadRevision, ImportableOldRevision {
 
 	/**
 	 * @since 1.21
+	 * @deprecated since 1.35, use setContent instead.
 	 * @param string $format
 	 */
 	public function setFormat( $format ) {
@@ -269,10 +288,30 @@ class WikiRevision implements ImportableUploadRevision, ImportableOldRevision {
 
 	/**
 	 * @since 1.2
+	 * @deprecated since 1.35, use setContent instead.
 	 * @param string $text
 	 */
 	public function setText( $text ) {
-		$this->text = $text;
+		$handler = ContentHandler::getForModelID( $this->model );
+		$content = $handler->unserializeContent( $text );
+		$this->setContent( SlotRecord::MAIN, $content );
+	}
+
+	/**
+	 * @since 1.35
+	 * @param string $role
+	 * @param Content $content
+	 */
+	public function setContent( $role, $content ) {
+		$this->slots->setContent( $role, $content );
+
+		// backwards compat
+		if ( $role === SlotRecord::MAIN ) {
+			$this->content = $content;
+			$this->model = $content->getModel();
+			$this->format = $content->getDefaultFormat();
+			$this->text = $content->serialize();
+		}
 	}
 
 	/**
@@ -319,6 +358,14 @@ class WikiRevision implements ImportableUploadRevision, ImportableOldRevision {
 	}
 
 	/**
+	 * @since 1.34
+	 * @param string[] $tags
+	 */
+	public function setTags( array $tags ) {
+		$this->tags = $tags;
+	}
+
+	/**
 	 * @since 1.12.2
 	 * @param string $filename
 	 */
@@ -360,7 +407,7 @@ class WikiRevision implements ImportableUploadRevision, ImportableOldRevision {
 
 	/**
 	 * @since 1.12.2
-	 * @param array $params
+	 * @param string $params
 	 */
 	public function setParams( $params ) {
 		$this->params = $params;
@@ -424,11 +471,15 @@ class WikiRevision implements ImportableUploadRevision, ImportableOldRevision {
 
 	/**
 	 * @since 1.24
+	 * @deprecated since 1.35, use getContent
 	 * @return ContentHandler
+	 * @throws MWUnknownContentModelException
 	 */
 	public function getContentHandler() {
-		if ( is_null( $this->contentHandler ) ) {
-			$this->contentHandler = ContentHandler::getForModelID( $this->getModel() );
+		if ( $this->contentHandler === null ) {
+			$this->contentHandler = MediaWikiServices::getInstance()
+				->getContentHandlerFactory()
+				->getContentHandler( $this->getModel() );
 		}
 
 		return $this->contentHandler;
@@ -436,23 +487,37 @@ class WikiRevision implements ImportableUploadRevision, ImportableOldRevision {
 
 	/**
 	 * @since 1.21
+	 * @param string $role added in 1.35
 	 * @return Content
 	 */
-	public function getContent() {
-		if ( is_null( $this->content ) ) {
-			$handler = $this->getContentHandler();
-			$this->content = $handler->unserializeContent( $this->text, $this->getFormat() );
-		}
+	public function getContent( $role = SlotRecord::MAIN ) {
+		return $this->slots->getContent( $role );
+	}
 
-		return $this->content;
+	/**
+	 * @since 1.35
+	 * @param string $role
+	 * @return SlotRecord
+	 */
+	public function getSlot( $role ) {
+		return $this->slots->getSlot( $role );
+	}
+
+	/**
+	 * @since 1.35
+	 * @return string[]
+	 */
+	public function getSlotRoles() {
+		return $this->slots->getSlotRoles();
 	}
 
 	/**
 	 * @since 1.21
+	 * @deprecated since 1.35, use getContent
 	 * @return string
 	 */
 	public function getModel() {
-		if ( is_null( $this->model ) ) {
+		if ( $this->model === null ) {
 			$this->model = $this->getTitle()->getContentModel();
 		}
 
@@ -461,10 +526,11 @@ class WikiRevision implements ImportableUploadRevision, ImportableOldRevision {
 
 	/**
 	 * @since 1.21
+	 * @deprecated since 1.35, use getContent
 	 * @return string
 	 */
 	public function getFormat() {
-		if ( is_null( $this->format ) ) {
+		if ( $this->format === null ) {
 			$this->format = $this->getContentHandler()->getDefaultFormat();
 		}
 
@@ -515,6 +581,14 @@ class WikiRevision implements ImportableUploadRevision, ImportableOldRevision {
 			return $this->sha1base36;
 		}
 		return false;
+	}
+
+	/**
+	 * @since 1.34
+	 * @return string[]
+	 */
+	public function getTags() {
+		return $this->tags;
 	}
 
 	/**
@@ -607,7 +681,7 @@ class WikiRevision implements ImportableUploadRevision, ImportableOldRevision {
 		# @todo FIXME: This will not record autoblocks
 		if ( !$this->getTitle() ) {
 			wfDebug( __METHOD__ . ": skipping invalid {$this->type}/{$this->action} log time, timestamp " .
-				$this->timestamp . "\n" );
+				$this->timestamp );
 			return false;
 		}
 		# Check if it exists already
@@ -625,7 +699,7 @@ class WikiRevision implements ImportableUploadRevision, ImportableOldRevision {
 		if ( $prior ) {
 			wfDebug( __METHOD__
 				. ": skipping existing item for Log:{$this->type}/{$this->action}, timestamp "
-				. $this->timestamp . "\n" );
+				. $this->timestamp );
 			return false;
 		}
 		$data = [
@@ -644,7 +718,7 @@ class WikiRevision implements ImportableUploadRevision, ImportableOldRevision {
 
 	/**
 	 * @since 1.12.2
-	 * @deprecated in 1.31. Use UploadImporter::import
+	 * @deprecated in 1.31. Use UploadRevisionImporter::import
 	 * @return bool
 	 */
 	public function importUpload() {
@@ -655,7 +729,7 @@ class WikiRevision implements ImportableUploadRevision, ImportableOldRevision {
 
 	/**
 	 * @since 1.12.2
-	 * @deprecated in 1.31. Use UploadImporter::downloadSource
+	 * @deprecated in 1.31. No replacement
 	 * @return bool|string
 	 */
 	public function downloadSource() {

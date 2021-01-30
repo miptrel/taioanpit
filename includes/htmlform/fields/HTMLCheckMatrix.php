@@ -21,6 +21,8 @@
  *   - tooltip-class
  *     - Optional CSS class used on tooltip container span. Defaults to mw-icon-question.
  *       Not used by OOUI form fields.
+ *
+ * @stable to extend
  */
 class HTMLCheckMatrix extends HTMLFormField implements HTMLNestedFilterable {
 	private static $requiredParams = [
@@ -31,6 +33,9 @@ class HTMLCheckMatrix extends HTMLFormField implements HTMLNestedFilterable {
 		'columns'
 	];
 
+	/*
+	 * @stable to call
+	 */
 	public function __construct( $params ) {
 		$missing = array_diff( self::$requiredParams, array_keys( $params ) );
 		if ( $missing ) {
@@ -196,7 +201,7 @@ class HTMLCheckMatrix extends HTMLFormField implements HTMLNestedFilterable {
 	 * line above the options in the case of a checkbox matrix, i.e. it's always
 	 * a "vertical-label".
 	 *
-	 * @param string $value The value to set the input to
+	 * @param string|array $value The value to set the input to
 	 *
 	 * @return string Complete HTML table row
 	 */

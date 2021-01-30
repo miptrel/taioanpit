@@ -21,6 +21,7 @@
  * @ingroup Maintenance
  */
 
+use MediaWiki\MediaWikiServices;
 use Wikimedia\Rdbms\IDatabase;
 
 require_once __DIR__ . '/../Maintenance.php';
@@ -51,15 +52,6 @@ class MigrateActors extends LoggedUpdateMaintenance {
 	}
 
 	protected function doDBUpdates() {
-		global $wgActorTableSchemaMigrationStage;
-
-		if ( !( $wgActorTableSchemaMigrationStage & SCHEMA_COMPAT_WRITE_NEW ) ) {
-			$this->output(
-				"...cannot update while \$wgActorTableSchemaMigrationStage lacks SCHEMA_COMPAT_WRITE_NEW\n"
-			);
-			return false;
-		}
-
 		$tables = $this->getOption( 'tables' );
 		if ( $tables !== null ) {
 			$this->tables = explode( ',', $tables );
@@ -71,6 +63,7 @@ class MigrateActors extends LoggedUpdateMaintenance {
 			$dbw = $this->getDB( DB_MASTER );
 			$max = $dbw->selectField( 'user', 'MAX(user_id)', '', __METHOD__ );
 			$count = 0;
+			$lbFactory = MediaWikiServices::getInstance()->getDBLoadBalancerFactory();
 			while ( $end < $max ) {
 				$start = $end + 1;
 				$end = min( $start + $this->mBatchSize, $max );
@@ -85,7 +78,7 @@ class MigrateActors extends LoggedUpdateMaintenance {
 					[ 'ORDER BY' => [ 'user_id' ] ]
 				);
 				$count += $dbw->affectedRows();
-				wfWaitForSlaves();
+				$lbFactory->waitForReplication();
 			}
 			$this->output( "Completed actor creation, added $count new actor(s)\n" );
 		} else {
@@ -230,7 +223,7 @@ class MigrateActors extends LoggedUpdateMaintenance {
 			$res = $dbw->select(
 				'actor',
 				[ 'actor_id', 'actor_name' ],
-				[ 'actor_name' => array_keys( $needActors ) ],
+				[ 'actor_name' => array_map( 'strval', array_keys( $needActors ) ) ],
 				__METHOD__
 			);
 			foreach ( $res as $row ) {
@@ -265,6 +258,12 @@ class MigrateActors extends LoggedUpdateMaintenance {
 			return 0;
 		}
 
+		$dbw = $this->getDB( DB_MASTER );
+		if ( !$dbw->fieldExists( $table, $userField, __METHOD__ ) ) {
+			$this->output( "No need to migrate $table.$userField, field does not exist\n" );
+			return 0;
+		}
+
 		$complainedAboutUsers = [];
 
 		$primaryKey = (array)$primaryKey;
@@ -272,9 +271,9 @@ class MigrateActors extends LoggedUpdateMaintenance {
 		$this->output(
 			"Beginning migration of $table.$userField and $table.$nameField to $table.$actorField\n"
 		);
-		wfWaitForSlaves();
+		$lbFactory = MediaWikiServices::getInstance()->getDBLoadBalancerFactory();
+		$lbFactory->waitForReplication();
 
-		$dbw = $this->getDB( DB_MASTER );
 		$actorIdSubquery = $this->makeActorIdSubquery( $dbw, $userField, $nameField );
 		$next = '1=1';
 		$countUpdated = 0;
@@ -332,7 +331,7 @@ class MigrateActors extends LoggedUpdateMaintenance {
 
 			list( $next, $display ) = $this->makeNextCond( $dbw, $primaryKey, $lastRow );
 			$this->output( "... $display\n" );
-			wfWaitForSlaves();
+			$lbFactory->waitForReplication();
 		}
 
 		$this->output(
@@ -357,6 +356,7 @@ class MigrateActors extends LoggedUpdateMaintenance {
 	 * @param string $nameField User name field name
 	 * @param string $newPrimaryKey Primary key of the new table.
 	 * @param string $actorField Actor field name
+	 * @return int Number of errors
 	 */
 	protected function migrateToTemp(
 		$table, $primaryKey, $extra, $userField, $nameField, $newPrimaryKey, $actorField
@@ -366,15 +366,20 @@ class MigrateActors extends LoggedUpdateMaintenance {
 			return 0;
 		}
 
+		$dbw = $this->getDB( DB_MASTER );
+		if ( !$dbw->fieldExists( $table, $userField, __METHOD__ ) ) {
+			$this->output( "No need to migrate $table.$userField, field does not exist\n" );
+			return 0;
+		}
+
 		$complainedAboutUsers = [];
 
 		$newTable = $table . '_actor_temp';
 		$this->output(
 			"Beginning migration of $table.$userField and $table.$nameField to $newTable.$actorField\n"
 		);
-		wfWaitForSlaves();
+		MediaWikiServices::getInstance()->getDBLoadBalancerFactory()->waitForReplication();
 
-		$dbw = $this->getDB( DB_MASTER );
 		$actorIdSubquery = $this->makeActorIdSubquery( $dbw, $userField, $nameField );
 		$next = [];
 		$countUpdated = 0;
@@ -385,6 +390,7 @@ class MigrateActors extends LoggedUpdateMaintenance {
 			$res = $dbw->select(
 				[ $table, $newTable ],
 				[ $primaryKey, $userField, $nameField, 'actor_id' => $actorIdSubquery ] + $extra,
+				// @phan-suppress-next-line PhanSuspiciousBinaryAddLists
 				[ $newPrimaryKey => null ] + $next,
 				__METHOD__,
 				[
@@ -409,7 +415,6 @@ class MigrateActors extends LoggedUpdateMaintenance {
 			// Update rows
 			if ( $rows ) {
 				$inserts = [];
-				$updates = [];
 				foreach ( $rows as $row ) {
 					if ( !$row->actor_id ) {
 						list( , $display ) = $this->makeNextCond( $dbw, [ $primaryKey ], $row );
@@ -425,10 +430,10 @@ class MigrateActors extends LoggedUpdateMaintenance {
 						$actorField => $row->actor_id,
 					];
 					foreach ( $extra as $to => $from ) {
-						$ins[$to] = $row->$to; // It's aliased
+						// It's aliased
+						$ins[$to] = $row->$to;
 					}
 					$inserts[] = $ins;
-					$updates[] = $row->$primaryKey;
 				}
 				$this->beginTransaction( $dbw, __METHOD__ );
 				$dbw->insert( $newTable, $inserts, __METHOD__ );
@@ -463,7 +468,8 @@ class MigrateActors extends LoggedUpdateMaintenance {
 
 		$primaryKey = [ 'ls_value', 'ls_log_id' ];
 		$this->output( "Beginning migration of log_search\n" );
-		wfWaitForSlaves();
+		$lbFactory = MediaWikiServices::getInstance()->getDBLoadBalancerFactory();
+		$lbFactory->waitForReplication();
 
 		$dbw = $this->getDB( DB_MASTER );
 		$countInserted = 0;
@@ -472,7 +478,7 @@ class MigrateActors extends LoggedUpdateMaintenance {
 
 		$anyBad = $dbw->selectField(
 			'log_search',
-			1,
+			'1',
 			[ 'ls_field' => 'target_author_actor', 'ls_value' => '' ],
 			__METHOD__,
 			[ 'LIMIT' => 1 ]
@@ -486,7 +492,7 @@ class MigrateActors extends LoggedUpdateMaintenance {
 			);
 			$ct = $dbw->affectedRows();
 			$this->output( "... Deleted $ct bogus row(s) from T215525\n" );
-			wfWaitForSlaves();
+			$lbFactory->waitForReplication();
 		}
 
 		$next = '1=1';
@@ -531,7 +537,7 @@ class MigrateActors extends LoggedUpdateMaintenance {
 
 			list( $next, $display ) = $this->makeNextCond( $dbw, $primaryKey, $lastRow );
 			$this->output( "... target_author_id, $display\n" );
-			wfWaitForSlaves();
+			$lbFactory->waitForReplication();
 		}
 
 		$next = '1=1';
@@ -582,7 +588,7 @@ class MigrateActors extends LoggedUpdateMaintenance {
 
 			list( $next, $display ) = $this->makeNextCond( $dbw, $primaryKey, $lastRow );
 			$this->output( "... target_author_ip, $display\n" );
-			wfWaitForSlaves();
+			$lbFactory->waitForReplication();
 		}
 
 		$this->output(

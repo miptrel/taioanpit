@@ -29,7 +29,7 @@ use MediaWiki\MediaWikiServices;
  * @ingroup SpecialPage
  */
 class SpecialPreferences extends SpecialPage {
-	function __construct() {
+	public function __construct() {
 		parent::__construct( 'Preferences' );
 	}
 
@@ -106,7 +106,7 @@ class SpecialPreferences extends SpecialPage {
 	 * Get the preferences form to use.
 	 * @param User $user The user.
 	 * @param IContextSource $context The context.
-	 * @return PreferencesFormLegacy|HTMLForm
+	 * @return PreferencesFormOOUI|HTMLForm
 	 */
 	protected function getFormObject( $user, IContextSource $context ) {
 		$preferencesFactory = MediaWikiServices::getInstance()->getPreferencesFactory();
@@ -115,7 +115,10 @@ class SpecialPreferences extends SpecialPage {
 	}
 
 	protected function showResetForm() {
-		if ( !$this->getUser()->isAllowed( 'editmyoptions' ) ) {
+		if ( !MediaWikiServices::getInstance()
+				->getPermissionManager()
+				->userHasRight( $this->getUser(), 'editmyoptions' )
+		) {
 			throw new PermissionsError( 'editmyoptions' );
 		}
 
@@ -134,7 +137,10 @@ class SpecialPreferences extends SpecialPage {
 	}
 
 	public function submitReset( $formData ) {
-		if ( !$this->getUser()->isAllowed( 'editmyoptions' ) ) {
+		if ( !MediaWikiServices::getInstance()
+				->getPermissionManager()
+				->userHasRight( $this->getUser(), 'editmyoptions' )
+		) {
 			throw new PermissionsError( 'editmyoptions' );
 		}
 

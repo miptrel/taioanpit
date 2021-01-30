@@ -85,7 +85,7 @@
 	/**
 	 * Returns a viewer object with all the appropriate placeholder functions.
 	 *
-	 * @return {mv.mmv.MultiMediaViewer} [description]
+	 * @return {mw.mmv.MultimediaViewer}
 	 */
 	MTH.getMultimediaViewer = function () {
 		return new mw.mmv.MultimediaViewer( {
@@ -150,7 +150,7 @@
 	 * were created in functions upon which `asyncMethod` was called have
 	 * resolved.
 	 *
-	 * @return {$.Promise}
+	 * @return {jQuery.Promise}
 	 */
 	MTH.waitForAsync = function () {
 		var deferred = $.Deferred();

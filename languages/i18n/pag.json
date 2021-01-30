@@ -2,8 +2,8 @@
 	"@metadata": {
 		"authors": [
 			"Arikasikis",
-			"Spacebirdy",
-			"Lam-ang"
+			"Lam-ang",
+			"Spacebirdy"
 		]
 	},
 	"tog-enotifwatchlistpages": "Manpa-awit na e-mail ed siak no abalo may sakey ya bolong ya babantayan ko",
@@ -193,7 +193,6 @@
 	"botpasswords-label-delete": "Buralen",
 	"resetpass-submit-cancel": "I-tonda",
 	"changeemail-none": "(anggapo)",
-	"link_tip": "Gawing ed loob",
 	"summary": "Sumaryo:",
 	"subject": "Suheto:",
 	"minoredit": "Melag yan dinuma",
@@ -446,7 +445,6 @@
 	"mycontris": "Saray entolong",
 	"anoncontribs": "Saray entolong",
 	"year": "Taon:",
-	"sp-contributions-newbies-sub": "Para balo ran account",
 	"sp-contributions-blocklog": "log na aper",
 	"sp-contributions-talk": "tongtongan",
 	"sp-contributions-submit": "Anapen",

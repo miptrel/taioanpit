@@ -163,7 +163,8 @@ class JsonContent extends TextContent {
 	 * @return string HTML.
 	 */
 	protected function objectRow( $key, $val ) {
-		$th = Html::element( 'th', [], $key );
+		$thContent = Html::element( 'span', [], $key );
+		$th = Html::rawElement( 'th', [], $thContent );
 		$td = $this->valueCell( $val );
 		return Html::rawElement( 'tr', [], $th . $td );
 	}
@@ -220,7 +221,7 @@ class JsonContent extends TextContent {
 			return Html::rawElement( 'td', [], $this->arrayTable( $val ) );
 		}
 
-		return Html::element( 'td', [ 'class' => 'value' ], $this->primitiveValue( $val ) );
+		return Html::element( 'td', [ 'class' => 'mw-json-value' ], $this->primitiveValue( $val ) );
 	}
 
 	/**

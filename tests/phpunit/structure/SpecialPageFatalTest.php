@@ -11,9 +11,18 @@ use MediaWiki\MediaWikiServices;
  *
  * @since 1.32
  * @author Addshore
- * @coversNothing
  */
-class SpecialPageFatalTest extends MediaWikiTestCase {
+class SpecialPageFatalTest extends MediaWikiIntegrationTestCase {
+
+	protected function setUp() : void {
+		parent::setUp();
+		// FIXME: Acknowledge known non-fatal query (T248191)
+		$this->setMwGlobals( 'wgDBerrorLog', false );
+		// Deprecations don't matter for what this test cares about. This made browser tests fail
+		// on many occasions already. (T236809)
+		$this->filterDeprecated( '//' );
+	}
+
 	public function provideSpecialPages() {
 		$specialPages = [];
 		$spf = MediaWikiServices::getInstance()->getSpecialPageFactory();
@@ -31,7 +40,10 @@ class SpecialPageFatalTest extends MediaWikiTestCase {
 		$user = User::newFromName( 'UTSysop' );
 
 		try {
-			$executor->executeSpecialPage( $page, '', null, null, $user );
+			$executor->executeSpecialPage( $page, '', null, 'qqx', $user );
+		} catch ( \PHPUnit\Framework\Error\Deprecated $deprecated ) {
+			// Allow deprecation,
+			// this test want to check fatals or other things breaking the extension
 		} catch ( \PHPUnit\Framework\Error\Error $error ) {
 			// Let phpunit settings working:
 			// - convertErrorsToExceptions="true"

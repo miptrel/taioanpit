@@ -7,13 +7,12 @@ use LogicException;
 use MediaWiki\Revision\IncompleteRevisionException;
 use MediaWiki\Revision\SlotRecord;
 use MediaWiki\Revision\SuppressedDataException;
-use MediaWikiTestCase;
 use WikitextContent;
 
 /**
  * @covers \MediaWiki\Revision\SlotRecord
  */
-class SlotRecordTest extends MediaWikiTestCase {
+class SlotRecordTest extends \MediaWikiIntegrationTestCase {
 
 	private function makeRow( $data = [] ) {
 		$data = $data + [
@@ -77,7 +76,7 @@ class SlotRecordTest extends MediaWikiTestCase {
 		$this->assertFalse( $record->isInherited() );
 		$this->assertSame( 'A', $record->getContent()->getText() );
 		$this->assertSame( 1, $record->getSize() );
-		$this->assertNotNull( $record->getSha1() );
+		$this->assertNotEmpty( $record->getSha1() );
 		$this->assertSame( CONTENT_MODEL_WIKITEXT, $record->getModel() );
 		$this->assertSame( 2, $record->getRevision() );
 		$this->assertSame( 2, $record->getRevision() );
@@ -96,7 +95,7 @@ class SlotRecordTest extends MediaWikiTestCase {
 		$this->assertFalse( $record->hasOrigin() );
 		$this->assertSame( 'A', $record->getContent()->getText() );
 		$this->assertSame( 1, $record->getSize() );
-		$this->assertNotNull( $record->getSha1() );
+		$this->assertNotEmpty( $record->getSha1() );
 		$this->assertSame( CONTENT_MODEL_WIKITEXT, $record->getModel() );
 		$this->assertSame( 'myRole', $record->getRole() );
 	}
@@ -113,20 +112,20 @@ class SlotRecordTest extends MediaWikiTestCase {
 	 * @dataProvider provideInvalidConstruction
 	 */
 	public function testInvalidConstruction( $row, $content ) {
-		$this->setExpectedException( InvalidArgumentException::class );
+		$this->expectException( InvalidArgumentException::class );
 		new SlotRecord( $row, $content );
 	}
 
 	public function testGetContentId_fails() {
 		$record = SlotRecord::newUnsaved( SlotRecord::MAIN, new WikitextContent( 'A' ) );
-		$this->setExpectedException( IncompleteRevisionException::class );
+		$this->expectException( IncompleteRevisionException::class );
 
 		$record->getContentId();
 	}
 
 	public function testGetAddress_fails() {
 		$record = SlotRecord::newUnsaved( SlotRecord::MAIN, new WikitextContent( 'A' ) );
-		$this->setExpectedException( IncompleteRevisionException::class );
+		$this->expectException( IncompleteRevisionException::class );
 
 		$record->getAddress();
 	}
@@ -145,7 +144,7 @@ class SlotRecordTest extends MediaWikiTestCase {
 	 */
 	public function testGetRevision_fails( SlotRecord $record ) {
 		$record = SlotRecord::newUnsaved( SlotRecord::MAIN, new WikitextContent( 'A' ) );
-		$this->setExpectedException( IncompleteRevisionException::class );
+		$this->expectException( IncompleteRevisionException::class );
 
 		$record->getRevision();
 	}
@@ -155,7 +154,7 @@ class SlotRecordTest extends MediaWikiTestCase {
 	 */
 	public function testGetOrigin_fails( SlotRecord $record ) {
 		$record = SlotRecord::newUnsaved( SlotRecord::MAIN, new WikitextContent( 'A' ) );
-		$this->setExpectedException( IncompleteRevisionException::class );
+		$this->expectException( IncompleteRevisionException::class );
 
 		$record->getOrigin();
 	}
@@ -177,11 +176,19 @@ class SlotRecordTest extends MediaWikiTestCase {
 		$this->assertSame( $hash, $record->getSha1() );
 	}
 
+	public function testHashComputed() {
+		$row = $this->makeRow();
+		$row->content_sha1 = '';
+
+		$rec = new SlotRecord( $row, new WikitextContent( 'A' ) );
+		$this->assertNotEmpty( $rec->getSha1() );
+	}
+
 	public function testNewWithSuppressedContent() {
 		$input = new SlotRecord( $this->makeRow(), new WikitextContent( 'A' ) );
 		$output = SlotRecord::newWithSuppressedContent( $input );
 
-		$this->setExpectedException( SuppressedDataException::class );
+		$this->expectException( SuppressedDataException::class );
 		$output->getContent();
 	}
 
@@ -280,7 +287,7 @@ class SlotRecordTest extends MediaWikiTestCase {
 		$contentAddress,
 		SlotRecord $protoSlot
 	) {
-		$this->setExpectedException( LogicException::class );
+		$this->expectException( LogicException::class );
 		SlotRecord::newSaved( $revisionId, $contentId, $contentAddress, $protoSlot );
 	}
 
@@ -301,7 +308,7 @@ class SlotRecordTest extends MediaWikiTestCase {
 		$contentAddress,
 		SlotRecord $protoSlot
 	) {
-		$this->setExpectedException( InvalidArgumentException::class );
+		$this->expectException( InvalidArgumentException::class );
 		SlotRecord::newSaved( $revisionId, $contentId, $contentAddress, $protoSlot );
 	}
 

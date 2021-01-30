@@ -6,7 +6,7 @@
  */
 
 /* stylelint-disable no-duplicate-selectors */
-@import 'mediawiki.mixins';
+@import 'mediawiki.mixins.less';
 
 @calendarWidth: 21em;
 @calendarHeight: 14em;
@@ -39,7 +39,9 @@
 
 .mw-widget-calendarWidget-upButton {
 	position: absolute;
+	top: 0;
 	right: 3em;
+	pointer-events: none;
 }
 
 .mw-widget-calendarWidget-prevButton {
@@ -245,7 +247,7 @@
 	}
 
 	&-day {
-		color: #222;
+		color: #202122;
 		border-radius: 2px;
 	}
 
@@ -258,7 +260,7 @@
 		color: #a2a9b1;
 
 		&:hover {
-			color: #222;
+			color: #202122;
 		}
 	}
 

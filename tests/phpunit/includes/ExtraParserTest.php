@@ -1,36 +1,41 @@
 <?php
 
 use MediaWiki\MediaWikiServices;
+use Wikimedia\TestingAccessWrapper;
 
 /**
  * Parser-related tests that don't suit for parserTests.txt
  *
  * @group Database
  */
-class ExtraParserTest extends MediaWikiTestCase {
+class ExtraParserTest extends MediaWikiIntegrationTestCase {
 
 	/** @var ParserOptions */
 	protected $options;
 	/** @var Parser */
 	protected $parser;
 
-	protected function setUp() {
+	protected function setUp() : void {
 		parent::setUp();
 
-		$contLang = Language::factory( 'en' );
 		$this->setMwGlobals( [
 			'wgShowExceptionDetails' => true,
 			'wgCleanSignatures' => true,
 		] );
 		$this->setUserLang( 'en' );
-		$this->setContentLang( $contLang );
+		$this->setContentLang( 'en' );
+
+		$services = MediaWikiServices::getInstance();
+
+		$contLang = $services->getContentLanguage();
 
 		// FIXME: This test should pass without setting global content language
 		$this->options = ParserOptions::newFromUserAndLang( new User, $contLang );
 		$this->options->setTemplateCallback( [ __CLASS__, 'statelessFetchTemplate' ] );
-		$this->parser = new Parser;
+		$services->resetServiceForTesting( 'MagicWordFactory' );
+		$services->resetServiceForTesting( 'ParserFactory' );
 
-		MediaWikiServices::getInstance()->resetServiceForTesting( 'MagicWordFactory' );
+		$this->parser = $services->getParserFactory()->create();
 	}
 
 	/**
@@ -59,7 +64,7 @@ class ExtraParserTest extends MediaWikiTestCase {
 		RequestContext::getMain()->getWikiPage()->CustomTestProp = true;
 
 		$parsed = $this->parser->parse( $text, $title, $options )->getText();
-		$this->assertContains( 'apihelp-header', $parsed );
+		$this->assertStringContainsString( 'apihelp-header', $parsed );
 
 		// Verify that this property wasn't wiped out by the parse
 		$this->assertTrue( RequestContext::getMain()->getWikiPage()->CustomTestProp );
@@ -201,7 +206,7 @@ class ExtraParserTest extends MediaWikiTestCase {
 	 *
 	 * @return array
 	 */
-	static function statelessFetchTemplate( $title, $parser = false ) {
+	public static function statelessFetchTemplate( $title, $parser = false ) {
 		$text = "Content of ''" . $title->getFullText() . "''";
 		$deps = [];
 
@@ -232,7 +237,7 @@ class ExtraParserTest extends MediaWikiTestCase {
 		$title = SpecialPage::getTitleFor( 'Contributions' );
 		$parserOutput = $this->parser->parse( "[[file:nonexistent]]", $title, $this->options );
 		$result = $parserOutput->getCategoryLinks();
-		$this->assertEmpty( $result );
+		$this->assertSame( [], $result );
 	}
 
 	/**
@@ -240,14 +245,45 @@ class ExtraParserTest extends MediaWikiTestCase {
 	 * @dataProvider provideParseLinkParameter
 	 */
 	public function testParseLinkParameter( $input, $expected, $expectedLinks, $desc ) {
-		$this->parser->startExternalParse( Title::newFromText( __FUNCTION__ ),
-			$this->options, Parser::OT_HTML );
-		$output = $this->parser->parseLinkParameter( $input );
+		$this->setTemporaryHook( 'InterwikiLoadPrefix', function ( $prefix, &$iwData ) {
+			static $testInterwikis = [
+				'local' => [
+					'iw_url' => 'http://doesnt.matter.invalid/$1',
+					'iw_api' => '',
+					'iw_wikiid' => '',
+					'iw_local' => 0
+				],
+				'mw' => [
+					'iw_url' => 'https://www.mediawiki.org/wiki/$1',
+					'iw_api' => 'https://www.mediawiki.org/w/api.php',
+					'iw_wikiid' => '',
+					'iw_local' => 0
+				]
+			];
+			if ( array_key_exists( $prefix, $testInterwikis ) ) {
+				$iwData = $testInterwikis[$prefix];
+			}
+
+			// We only want to rely on the above fixtures
+			return false;
+		} );
+
+		Title::clearCaches();
+		$this->parser->startExternalParse(
+			Title::newFromText( __FUNCTION__ ),
+			$this->options,
+			Parser::OT_HTML
+		);
+		$output = TestingAccessWrapper::newFromObject( $this->parser )
+			->parseLinkParameter( $input );
 
 		$this->assertEquals( $expected[0], $output[0], "$desc (type)" );
 
 		if ( $expected[0] === 'link-title' ) {
-			$this->assertTrue( $expected[1]->equals( $output[1] ), "$desc (target)" );
+			$this->assertTrue(
+				$output[1]->equals( Title::newFromText( $expected[1] ) ),
+				"$desc (target); link list title instance matches new title instance"
+			);
 		} else {
 			$this->assertEquals( $expected[1], $output[1], "$desc (target)" );
 		}
@@ -280,13 +316,13 @@ class ExtraParserTest extends MediaWikiTestCase {
 			],
 			[
 				'Test',
-				[ 'link-title', Title::newFromText( 'Test' ) ],
+				[ 'link-title', 'Test' ],
 				[ 'getLinks' => [ 0 => [ 'Test' => 0 ] ] ],
 				'Internal link',
 			],
 			[
 				'mw:Test',
-				[ 'link-title', Title::newFromText( 'mw:Test' ) ],
+				[ 'link-title', 'mw:Test' ],
 				[ 'getInterwikiLinks' => [ 'mw' => [ 'Test' => 1 ] ] ],
 				'Internal link (interwiki)',
 			],

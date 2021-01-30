@@ -21,10 +21,12 @@
  */
 
 /**
- * Module for user customizations scripts
+ * Module for user customizations scripts.
+ *
+ * @ingroup ResourceLoader
+ * @internal
  */
 class ResourceLoaderUserModule extends ResourceLoaderWikiModule {
-
 	protected $origin = self::ORIGIN_USER_INDIVIDUAL;
 	protected $targets = [ 'desktop', 'mobile' ];
 

@@ -64,9 +64,11 @@ class ExternalUserNames {
 		if ( $pos !== false ) {
 			$iw = explode( ':', substr( $userName, 0, $pos ) );
 			$firstIw = array_shift( $iw );
-			$interwikiLookup = MediaWikiServices::getInstance()->getInterwikiLookup();
+			$services = MediaWikiServices::getInstance();
+			$interwikiLookup = $services->getInterwikiLookup();
 			if ( $interwikiLookup->isValidInterwiki( $firstIw ) ) {
-				$title = MWNamespace::getCanonicalName( NS_USER ) . ':' . substr( $userName, $pos + 1 );
+				$title = $services->getNamespaceInfo()->getCanonicalName( NS_USER ) .
+					':' . substr( $userName, $pos + 1 );
 				if ( $iw ) {
 					$title = implode( ':', $iw ) . ':' . $title;
 				}
@@ -93,7 +95,7 @@ class ExternalUserNames {
 	 *  username), otherwise the name with the prefix prepended.
 	 */
 	public function applyPrefix( $name ) {
-		if ( !User::isUsableName( $name ) ) {
+		if ( User::getCanonicalName( $name, 'usable' ) === false ) {
 			return $name;
 		}
 
@@ -105,7 +107,7 @@ class ExternalUserNames {
 			// See if any extension wants to create it.
 			if ( !isset( $this->triedCreations[$name] ) ) {
 				$this->triedCreations[$name] = true;
-				if ( !Hooks::run( 'ImportHandleUnknownUser', [ $name ] ) &&
+				if ( !Hooks::runner()->onImportHandleUnknownUser( $name ) &&
 					User::idFromName( $name, User::READ_LATEST )
 				) {
 					return $name;

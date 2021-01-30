@@ -21,8 +21,9 @@
  * @ingroup SpecialPage
  */
 
-use Wikimedia\Rdbms\IResultWrapper;
+use MediaWiki\MediaWikiServices;
 use Wikimedia\Rdbms\IDatabase;
+use Wikimedia\Rdbms\IResultWrapper;
 
 /**
  * SpecialShortpages extends QueryPage. It is used to return the shortest
@@ -30,13 +31,13 @@ use Wikimedia\Rdbms\IDatabase;
  *
  * @ingroup SpecialPage
  */
-class ShortPagesPage extends QueryPage {
+class SpecialShortPages extends QueryPage {
 
-	function __construct( $name = 'Shortpages' ) {
+	public function __construct( $name = 'Shortpages' ) {
 		parent::__construct( $name );
 	}
 
-	function isSyndicated() {
+	public function isSyndicated() {
 		return false;
 	}
 
@@ -45,14 +46,17 @@ class ShortPagesPage extends QueryPage {
 		$blacklist = $config->get( 'ShortPagesNamespaceBlacklist' );
 		$tables = [ 'page' ];
 		$conds = [
-			'page_namespace' => array_diff( MWNamespace::getContentNamespaces(), $blacklist ),
+			'page_namespace' => array_diff(
+				MediaWikiServices::getInstance()->getNamespaceInfo()->getContentNamespaces(),
+				$blacklist
+			),
 			'page_is_redirect' => 0
 		];
 		$joinConds = [];
 		$options = [ 'USE INDEX' => [ 'page' => 'page_redirect_namespace_len' ] ];
 
 		// Allow extensions to modify the query
-		Hooks::run( 'ShortPagesQuery', [ &$tables, &$conds, &$joinConds, &$options ] );
+		$this->getHookRunner()->onShortPagesQuery( $tables, $conds, $joinConds, $options );
 
 		return [
 			'tables' => $tables,
@@ -118,7 +122,7 @@ class ShortPagesPage extends QueryPage {
 		return $res;
 	}
 
-	function getOrderFields() {
+	protected function getOrderFields() {
 		return [ 'page_len' ];
 	}
 
@@ -126,11 +130,11 @@ class ShortPagesPage extends QueryPage {
 	 * @param IDatabase $db
 	 * @param IResultWrapper $res
 	 */
-	function preprocessResults( $db, $res ) {
+	public function preprocessResults( $db, $res ) {
 		$this->executeLBFromResultWrapper( $res );
 	}
 
-	function sortDescending() {
+	protected function sortDescending() {
 		return false;
 	}
 
@@ -139,7 +143,7 @@ class ShortPagesPage extends QueryPage {
 	 * @param object $result Result row
 	 * @return string
 	 */
-	function formatResult( $skin, $result ) {
+	public function formatResult( $skin, $result ) {
 		$dm = $this->getLanguage()->getDirMark();
 
 		$title = Title::makeTitleSafe( $result->namespace, $result->title );

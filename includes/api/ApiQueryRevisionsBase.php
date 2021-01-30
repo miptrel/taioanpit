@@ -20,14 +20,19 @@
  * @file
  */
 
+use MediaWiki\Content\IContentHandlerFactory;
 use MediaWiki\Logger\LoggerFactory;
+use MediaWiki\MediaWikiServices;
 use MediaWiki\Revision\RevisionAccessException;
 use MediaWiki\Revision\RevisionRecord;
 use MediaWiki\Revision\SlotRecord;
-use MediaWiki\MediaWikiServices;
+use Wikimedia\ParamValidator\ParamValidator;
+use Wikimedia\ParamValidator\TypeDef\IntegerDef;
 
 /**
  * A base class for functions common to producing a list of revisions.
+ *
+ * @stable to extend
  *
  * @ingroup API
  */
@@ -40,10 +45,10 @@ abstract class ApiQueryRevisionsBase extends ApiQueryGeneratorBase {
 
 	// Bits to indicate the results of the revdel permission check on a revision,
 	// see self::checkRevDel()
-	const IS_DELETED = 1; // Whether the field is revision-deleted
-	const CANNOT_VIEW = 2; // Whether the user cannot view the field due to revdel
+	private const IS_DELETED = 1; // Whether the field is revision-deleted
+	private const CANNOT_VIEW = 2; // Whether the user cannot view the field due to revdel
 
-	/**@}*/
+	/** @} */
 
 	protected $limit, $diffto, $difftotext, $difftotextpst, $expandTemplates, $generateXML,
 		$section, $parseContent, $fetchContent, $contentFormat, $setParsedLimit = true,
@@ -124,10 +129,10 @@ abstract class ApiQueryRevisionsBase extends ApiQueryGeneratorBase {
 
 		$this->limit = $params['limit'];
 
-		if ( !is_null( $params['difftotext'] ) ) {
+		if ( $params['difftotext'] !== null ) {
 			$this->difftotext = $params['difftotext'];
 			$this->difftotextpst = $params['difftotextpst'];
-		} elseif ( !is_null( $params['diffto'] ) ) {
+		} elseif ( $params['diffto'] !== null ) {
 			if ( $params['diffto'] == 'cur' ) {
 				$params['diffto'] = 0;
 			}
@@ -155,8 +160,8 @@ abstract class ApiQueryRevisionsBase extends ApiQueryGeneratorBase {
 			$this->diffto = $params['diffto'];
 		}
 
-		$this->fetchContent = $this->fld_content || !is_null( $this->diffto )
-			|| !is_null( $this->difftotext ) || $this->fld_parsetree;
+		$this->fetchContent = $this->fld_content || $this->diffto !== null
+			|| $this->difftotext !== null || $this->fld_parsetree;
 
 		$smallLimit = false;
 		if ( $this->fetchContent ) {
@@ -166,7 +171,7 @@ abstract class ApiQueryRevisionsBase extends ApiQueryGeneratorBase {
 			$this->parseContent = $params['parse'];
 			if ( $this->parseContent ) {
 				// Must manually initialize unset limit
-				if ( is_null( $this->limit ) ) {
+				if ( $this->limit === null ) {
 					$this->limit = 1;
 				}
 			}
@@ -182,10 +187,15 @@ abstract class ApiQueryRevisionsBase extends ApiQueryGeneratorBase {
 			}
 		}
 
-		if ( is_null( $this->limit ) ) {
-			$this->limit = 10;
-		}
-		$this->validateLimit( 'limit', $this->limit, 1, $userMax, $botMax );
+		$this->limit = $this->getMain()->getParamValidator()->validateValue(
+			$this, 'limit', $this->limit ?? 10, [
+				ParamValidator::PARAM_TYPE => 'limit',
+				IntegerDef::PARAM_MIN => 1,
+				IntegerDef::PARAM_MAX => $userMax,
+				IntegerDef::PARAM_MAX2 => $botMax,
+				IntegerDef::PARAM_IGNORE_RANGE => true,
+			]
+		);
 
 		$this->needSlots = $this->fetchContent || $this->fld_contentmodel ||
 			$this->fld_slotsize || $this->fld_slotsha1;
@@ -231,7 +241,7 @@ abstract class ApiQueryRevisionsBase extends ApiQueryGeneratorBase {
 
 		if ( $this->fld_ids ) {
 			$vals['revid'] = (int)$revision->getId();
-			if ( !is_null( $revision->getParentId() ) ) {
+			if ( $revision->getParentId() !== null ) {
 				$vals['parentid'] = (int)$revision->getParentId();
 			}
 		}
@@ -413,6 +423,7 @@ abstract class ApiQueryRevisionsBase extends ApiQueryGeneratorBase {
 				// @todo Move this into extractSlotInfo() (and remove its $content parameter)
 				// when extractDeprecatedContent() is no more.
 				if ( $content ) {
+					/** @var Content $content */
 					$vals['slots'][$role]['contentmodel'] = $content->getModel();
 					$vals['slots'][$role]['contentformat'] = $content->getDefaultFormat();
 					ApiResult::setContentValue(
@@ -478,7 +489,7 @@ abstract class ApiQueryRevisionsBase extends ApiQueryGeneratorBase {
 				// template-added sections don't count and Parser::preprocess()
 				// will have less input
 				if ( $content && $this->section !== false ) {
-					$content = $content->getSection( $this->section, false );
+					$content = $content->getSection( $this->section );
 					if ( !$content ) {
 						$vals['nosuchsection'] = true;
 					}
@@ -496,24 +507,27 @@ abstract class ApiQueryRevisionsBase extends ApiQueryGeneratorBase {
 	 * @return array
 	 */
 	private function extractDeprecatedContent( Content $content, RevisionRecord $revision ) {
-		global $wgParser;
-
 		$vals = [];
 		$title = Title::newFromLinkTarget( $revision->getPageAsLinkTarget() );
 
 		if ( $this->fld_parsetree || ( $this->fld_content && $this->generateXML ) ) {
 			if ( $content->getModel() === CONTENT_MODEL_WIKITEXT ) {
+				/** @var WikitextContent $content */
+				'@phan-var WikitextContent $content';
 				$t = $content->getText(); # note: don't set $text
 
-				$wgParser->startExternalParse(
+				$parser = MediaWikiServices::getInstance()->getParser();
+				$parser->startExternalParse(
 					$title,
 					ParserOptions::newFromContext( $this->getContext() ),
 					Parser::OT_PREPROCESS
 				);
-				$dom = $wgParser->preprocessToDom( $t );
+				$dom = $parser->preprocessToDom( $t );
 				if ( is_callable( [ $dom, 'saveXML' ] ) ) {
+					// @phan-suppress-next-line PhanUndeclaredMethod
 					$xml = $dom->saveXML();
 				} else {
+					// @phan-suppress-next-line PhanUndeclaredMethod
 					$xml = $dom->__toString();
 				}
 				$vals['parsetree'] = $xml;
@@ -535,9 +549,11 @@ abstract class ApiQueryRevisionsBase extends ApiQueryGeneratorBase {
 
 			if ( $this->expandTemplates && !$this->parseContent ) {
 				if ( $content->getModel() === CONTENT_MODEL_WIKITEXT ) {
+					/** @var WikitextContent $content */
+					'@phan-var WikitextContent $content';
 					$text = $content->getText();
 
-					$text = $wgParser->preprocess(
+					$text = MediaWikiServices::getInstance()->getParser()->preprocess(
 						$text,
 						$title,
 						ParserOptions::newFromContext( $this->getContext() )
@@ -584,7 +600,7 @@ abstract class ApiQueryRevisionsBase extends ApiQueryGeneratorBase {
 			}
 		}
 
-		if ( $content && ( !is_null( $this->diffto ) || !is_null( $this->difftotext ) ) ) {
+		if ( $content && ( $this->diffto !== null || $this->difftotext !== null ) ) {
 			static $n = 0; // Number of uncached diffs we've had
 
 			if ( $n < $this->getConfig()->get( 'APIMaxUncachedDiffs' ) ) {
@@ -593,11 +609,13 @@ abstract class ApiQueryRevisionsBase extends ApiQueryGeneratorBase {
 				$context->setTitle( $title );
 				$handler = $content->getContentHandler();
 
-				if ( !is_null( $this->difftotext ) ) {
+				if ( $this->difftotext !== null ) {
 					$model = $title->getContentModel();
 
 					if ( $this->contentFormat
-						&& !ContentHandler::getForModelID( $model )->isSupportedFormat( $this->contentFormat )
+						&& !$this->getContentHandlerFactory()
+							->getContentHandler( $model )
+							->isSupportedFormat( $this->contentFormat )
 					) {
 						$name = wfEscapeWikiText( $title->getPrefixedText() );
 						$this->addWarning( [ 'apierror-badformat', $this->contentFormat, $model, $name ] );
@@ -639,6 +657,12 @@ abstract class ApiQueryRevisionsBase extends ApiQueryGeneratorBase {
 		return $vals;
 	}
 
+	/**
+	 * @stable to override
+	 * @param array $params
+	 *
+	 * @return string
+	 */
 	public function getCacheMode( $params ) {
 		if ( $this->userCanSeeRevDel() ) {
 			return 'private';
@@ -647,6 +671,11 @@ abstract class ApiQueryRevisionsBase extends ApiQueryGeneratorBase {
 		return 'public';
 	}
 
+	/**
+	 * @stable to override
+	 * @return array
+	 * @throws MWException
+	 */
 	public function getAllowedParams() {
 		$slotRoles = MediaWikiServices::getInstance()->getSlotRoleRegistry()->getKnownRoles();
 		sort( $slotRoles, SORT_STRING );
@@ -742,11 +771,14 @@ abstract class ApiQueryRevisionsBase extends ApiQueryGeneratorBase {
 				ApiBase::PARAM_DEPRECATED => true,
 			],
 			'contentformat' => [
-				ApiBase::PARAM_TYPE => ContentHandler::getAllContentFormats(),
+				ApiBase::PARAM_TYPE => $this->getContentHandlerFactory()->getAllContentFormats(),
 				ApiBase::PARAM_HELP_MSG => 'apihelp-query+revisions+base-param-contentformat',
 				ApiBase::PARAM_DEPRECATED => true,
 			],
 		];
 	}
 
+	private function getContentHandlerFactory(): IContentHandlerFactory {
+		return MediaWikiServices::getInstance()->getContentHandlerFactory();
+	}
 }

@@ -19,6 +19,7 @@
  * @ingroup Change tagging
  */
 
+use MediaWiki\MediaWikiServices;
 use Wikimedia\Rdbms\IDatabase;
 
 /**
@@ -36,7 +37,9 @@ class ChangeTagsRevisionList extends ChangeTagsList {
 	 */
 	public function doQuery( $db ) {
 		$ids = array_map( 'intval', $this->ids );
-		$revQuery = Revision::getQueryInfo( [ 'user' ] );
+		$revQuery = MediaWikiServices::getInstance()
+			->getRevisionStore()
+			->getQueryInfo( [ 'user' ] );
 		$queryInfo = [
 			'tables' => $revQuery['tables'],
 			'fields' => $revQuery['fields'],
@@ -74,7 +77,7 @@ class ChangeTagsRevisionList extends ChangeTagsList {
 	 *
 	 * @param array $tagsToAdd
 	 * @param array $tagsToRemove
-	 * @param array $params
+	 * @param string|null $params
 	 * @param string $reason
 	 * @param User $user
 	 * @return Status
