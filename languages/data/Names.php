@@ -439,6 +439,7 @@ class Names {
 		'tn' => 'Setswana', # Setswana
 		'to' => 'lea faka-Tonga', # Tonga (Tonga Islands)
 		'top' => 'Tâi-gí (Tâi-oân-pit)',
+		'toph' => '台語（台員筆）',
 		'tpi' => 'Tok Pisin', # Tok Pisin
 		'tr' => 'Türkçe', # Turkish
 		'tru' => 'Ṫuroyo', # Turoyo
