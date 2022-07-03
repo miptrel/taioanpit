@@ -7,7 +7,7 @@
 		]
 	},
 	"minerva-last-modified-date": "Fir d'lescht geännert den $1 ëm $2",
-	"minerva-talk-add-topic": "Diskussioun dobäisetzen",
+	"minerva-talk-add-topic": "Thema derbäisetzen",
 	"mobile-frontend-editor-edit": "Änneren",
 	"minerva-download": "PDF eroflueden",
 	"mobile-frontend-editor-redlink-create": "Säit uleeën",
@@ -17,7 +17,6 @@
 	"mobile-frontend-home-button": "Haaptsäit",
 	"mobile-frontend-language-article-heading": "Sprooch",
 	"mobile-frontend-languages-not-available": "Dës Säit ass net an anere Sproochen disponibel.",
-	"mobile-frontend-logged-in-homepage-notification": "{{GENDER:$1|Wëllkomm}} $1!",
 	"mobile-frontend-main-menu-button-tooltip": "Haaptmenü opmaachen",
 	"mobile-frontend-main-menu-contributions": "Kontributiounen",
 	"mobile-frontend-main-menu-login": "Aloggen",
@@ -49,6 +48,9 @@
 	"minerva-page-actions-permalink": "Permanente Link",
 	"minerva-page-actions-backlinks": "Linken op dës Säit",
 	"minerva-page-actions-cite": "Säit zitéieren",
+	"minerva-page-actions-move": "Réckelen",
+	"minerva-page-actions-delete": "Läschen",
+	"minerva-page-actions-protect": "Spären",
 	"minerva-page-actions-user-groups": "Benotzergruppen",
 	"minerva-page-actions-logs": "Logbicher",
 	"minerva-page-actions-language-switcher": "Sproochen",
@@ -59,6 +61,6 @@
 	"minerva-talk-topic-feedback": "Neie Sujet op d'Diskussiounssäit derbäigesat!",
 	"minerva-talk-reply-success": "Är Äntwert gouf op der Diskussiounssäit gespäichert.",
 	"skin-minerva-issue-learn-more": "Fir méi ze wëssen",
-	"skin-minerva-mobile-option-MinervaShowCategoriesButton": "Kategorien",
-	"skin-minerva-mobile-option-MinervaShowCategoriesButton-description": "Kategorie vu Säite weisen"
+	"skin-minerva-mobile-option-MinervaShowCategories": "Kategorien",
+	"skin-minerva-mobile-option-MinervaShowCategories-description": "Kategorie vu Säite weisen"
 }

@@ -15,23 +15,22 @@
 	"license-name": "GPL-2.0-or-later",
 	"type": "parserhook",
 	"requires": {
-		"MediaWiki": ">= 1.33.0"
+		"MediaWiki": ">= 1.38.0"
 	},
 	"APIModules": {
-		"templatedata": "ApiTemplateData"
+		"templatedata": "MediaWiki\\Extension\\TemplateData\\Api\\ApiTemplateData"
 	},
-	"AutoloadClasses": {
-		"TemplateDataHooks": "includes/TemplateDataHooks.php",
-		"TemplateDataBlob": "includes/TemplateDataBlob.php",
-		"TemplateDataCompressedBlob": "includes/TemplateDataCompressedBlob.php",
-		"ApiTemplateData": "includes/api/ApiTemplateData.php"
+	"AutoloadNamespaces": {
+		"MediaWiki\\Extension\\TemplateData\\": "includes/"
 	},
 	"Hooks": {
-		"ParserFirstCallInit": "TemplateDataHooks::onParserFirstCallInit",
-		"PageContentSave": "TemplateDataHooks::onPageContentSave",
-		"ResourceLoaderRegisterModules": "TemplateDataHooks::onResourceLoaderRegisterModules",
-		"EditPage::showEditForm:initial": "TemplateDataHooks::onEditPage",
-		"ParserFetchTemplateData": "TemplateDataHooks::onParserFetchTemplateData"
+		"EditPage::showEditForm:fields": "MediaWiki\\Extension\\TemplateData\\Hooks::onEditPageShowEditFormFields",
+		"ParserFirstCallInit": "MediaWiki\\Extension\\TemplateData\\Hooks::onParserFirstCallInit",
+		"MultiContentSave": "MediaWiki\\Extension\\TemplateData\\Hooks::onMultiContentSave",
+		"ResourceLoaderRegisterModules": "MediaWiki\\Extension\\TemplateData\\Hooks::onResourceLoaderRegisterModules",
+		"EditPage::showEditForm:initial": "MediaWiki\\Extension\\TemplateData\\Hooks::onEditPage",
+		"ParserFetchTemplateData": "MediaWiki\\Extension\\TemplateData\\Hooks::onParserFetchTemplateData",
+		"MakeGlobalVariablesScript": "MediaWiki\\Extension\\TemplateData\\Hooks::onMakeGlobalVariablesScript"
 	},
 	"MessagesDirs": {
 		"TemplateData": [
@@ -48,15 +47,15 @@
 		"ext.templateDataGenerator.editPage": {
 			"localBasePath": "modules/ext.templateDataGenerator.editPage",
 			"remoteExtPath": "TemplateData/modules/ext.templateDataGenerator.editPage",
-			"scripts": [
+			"packageFiles": [
 				"init.js"
 			]
 		},
 		"ext.templateDataGenerator.data": {
 			"localBasePath": "modules/ext.templateDataGenerator.data",
 			"remoteExtPath": "TemplateData/modules/ext.templateDataGenerator.data",
-			"scripts": [
-				"index.js",
+			"packageFiles": [
+				"init.js",
 				"Model.js",
 				"SourceHandler.js"
 			],
@@ -68,15 +67,17 @@
 			"localBasePath": "modules/ext.templateDataGenerator.editTemplatePage",
 			"remoteExtPath": "TemplateData/modules/ext.templateDataGenerator.editTemplatePage",
 			"styles": "templateDataGenerator.ui.css",
-			"scripts": [
-				"Target.js",
+			"packageFiles": [
+				"init.js",
+				"widgets/AutosizeTextInputWidget.js",
 				"widgets/ParamSelectWidget.js",
 				"widgets/ParamWidget.js",
 				"widgets/ParamImportWidget.js",
 				"widgets/LanguageResultWidget.js",
 				"widgets/LanguageSearchWidget.js",
 				"Dialog.js",
-				"init.js"
+				"Metrics.js",
+				"Target.js"
 			],
 			"dependencies": [
 				"mediawiki.api",
@@ -85,6 +86,7 @@
 				"oojs-ui-windows",
 				"oojs-ui.styles.icons-layout",
 				"oojs-ui.styles.icons-interactions",
+				"oojs-ui.styles.icons-moderation",
 				"ext.templateData",
 				"ext.templateData.images",
 				"ext.templateDataGenerator.data",
@@ -113,6 +115,7 @@
 				"templatedata-exists-on-related-page",
 				"templatedata-modal-button-add-language",
 				"templatedata-modal-button-addparam",
+				"templatedata-modal-button-addmap",
 				"templatedata-modal-button-apply",
 				"templatedata-modal-button-back",
 				"templatedata-modal-button-cancel",
@@ -120,6 +123,8 @@
 				"templatedata-modal-button-delparam",
 				"templatedata-modal-button-done",
 				"templatedata-modal-button-importParams",
+				"templatedata-modal-button-map",
+				"templatedata-modal-button-removemap",
 				"templatedata-modal-button-restoreparam",
 				"templatedata-modal-button-saveparam",
 				"templatedata-modal-confirmcancel",
@@ -134,11 +139,16 @@
 				"templatedata-modal-format-placeholder",
 				"templatedata-modal-json-error-replace",
 				"templatedata-modal-notice-import-numparams",
+				"templatedata-modal-placeholder-add-new-map-input",
 				"templatedata-modal-placeholder-paramkey",
 				"templatedata-modal-search-input-placeholder",
+				"templatedata-modal-placeholder-mapinfo",
+				"templatedata-modal-placeholder-prompt-map-name",
 				"templatedata-modal-table-param-actions",
 				"templatedata-modal-table-param-aliases",
 				"templatedata-modal-table-param-autovalue",
+				"templatedata-modal-table-param-suggestedvalues",
+				"templatedata-modal-table-param-suggestedvalues-placeholder",
 				"templatedata-modal-table-param-default",
 				"templatedata-modal-table-param-deprecated",
 				"templatedata-modal-table-param-deprecatedValue",
@@ -207,6 +217,12 @@
 		]
 	},
 	"attributes": {
+		"EventLogging": {
+			"Schemas": {
+				"TemplateDataEditor": "/analytics/legacy/templatedataeditor/1.0.0",
+				"TemplateDataApi": "/analytics/legacy/templatedataapi/1.0.0"
+			}
+		},
 		"VisualEditor": {
 			"PluginModules": [
 				"ext.templateDataGenerator.editPage"
@@ -216,6 +232,11 @@
 	"config": {
 		"TemplateDataUseGUI": {
 			"value": true
+		},
+		"TemplateDataSuggestedValuesEditor": {
+			"description": "Temporary feature flag to enable the \"suggested values\" UI",
+			"value": false,
+			"public": true
 		}
 	},
 	"manifest_version": 2

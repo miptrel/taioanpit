@@ -10,7 +10,6 @@
 	"minerva-download": "Lattaa PDF",
 	"mobile-frontend-history": "Näytä tämän sivun muutoshistuuria.",
 	"mobile-frontend-home-button": "Alkusivu",
-	"mobile-frontend-logged-in-homepage-notification": "{{GENDER:$1|Tervetuloa}}, $1!",
 	"mobile-frontend-main-menu-contributions": "Mookkaukset",
 	"mobile-frontend-main-menu-login": "Lokkaa sisäle",
 	"mobile-frontend-main-menu-logout": "Lokkaa ulos",
@@ -30,6 +29,6 @@
 	"minerva-page-actions-backlinks": "Mitä länkkaa tänne",
 	"minerva-page-actions-logs": "Lokit",
 	"minerva-page-actions-language-switcher": "Kielet",
-	"skin-minerva-mobile-option-MinervaShowCategoriesButton": "Katekuurit",
-	"skin-minerva-mobile-option-MinervaShowCategoriesButton-description": "Näytä sivujen katekuurit"
+	"skin-minerva-mobile-option-MinervaShowCategories": "Katekuurit",
+	"skin-minerva-mobile-option-MinervaShowCategories-description": "Näytä sivujen katekuurit"
 }

@@ -7,7 +7,7 @@ use MediaWiki\MediaWikiServices;
  * @group Database
  * @covers SpamBlacklist
  */
-class SpamBlacklistTest extends MediaWikiTestCase {
+class SpamBlacklistTest extends MediaWikiIntegrationTestCase {
 	/**
 	 * @var SpamBlacklist
 	 */
@@ -63,19 +63,78 @@ class SpamBlacklistTest extends MediaWikiTestCase {
 	 * @dataProvider spamProvider
 	 */
 	public function testSpam( $links, $expected ) {
-		$returnValue = $this->spamFilter->filter( $links, Title::newMainPage() );
+		$returnValue = $this->spamFilter->filter(
+			$links,
+			Title::newMainPage(),
+			$this->createMock( User::class )
+		);
 		$this->assertEquals( $expected, $returnValue );
 	}
 
-	protected function setUp() : void {
-		parent::setUp();
+	public function spamEditProvider() {
+		return [
+			'no spam' => [
+				'https://example.com',
+				true,
+			],
+			'revision with spam, with additional non-spam' => [
+				"https://foo.com\nhttp://01bags.com\nhttp://bar.com'",
+				false,
+			],
 
-		// create spam filter
-		$this->spamFilter = new SpamBlacklist;
+			'revision with domain blacklisted as spam, but subdomain whitelisted' => [
+				'http://a5b.sytes.net',
+				true,
+			],
+		];
+	}
+
+	/**
+	 * @dataProvider spamEditProvider
+	 */
+	public function testSpamEdit( $text, $ok ) {
+		$fields = [
+			'wpTextbox1' => $text,
+			'wpUnicodeCheck' => EditPage::UNICODE_CHECK,
+			'wpRecreate' => true,
+		];
+
+		$req = new FauxRequest( $fields, true );
+
+		$page = $this->getNonexistingTestPage( __METHOD__ );
+		$title = $page->getTitle();
+
+		$articleContext = new RequestContext;
+		$articleContext->setRequest( $req );
+		$articleContext->setWikiPage( $page );
+		$articleContext->setUser( $this->getTestUser()->getUser() );
+
+		$article = new Article( $title );
+		$ep = new EditPage( $article );
+		$ep->setContextTitle( $title );
+
+		$ep->importFormData( $req );
+
+		$status = $ep->attemptSave( $result );
+
+		$this->assertSame( $ok, $status->isOK() );
+
+		if ( !$ok ) {
+			$this->assertTrue( $status->hasMessage( 'spam-blacklisted-link' ) );
+		}
+	}
+
+	protected function setUp(): void {
+		parent::setUp();
 
 		$this->setMwGlobals( 'wgBlacklistSettings', [
 			'files' => [],
 		] );
+
+		BaseBlacklist::clearInstanceCache();
+
+		// create spam filter
+		$this->spamFilter = new SpamBlacklist;
 
 		MediaWikiServices::getInstance()->getMessageCache()->enable();
 		$this->insertPage( 'MediaWiki:Spam-blacklist', implode( "\n", $this->blacklist ) );
@@ -88,7 +147,7 @@ class SpamBlacklistTest extends MediaWikiTestCase {
 		$reflProp->setValue( $instance, false );
 	}
 
-	protected function tearDown() : void {
+	protected function tearDown(): void {
 		MediaWikiServices::getInstance()->getMessageCache()->disable();
 		parent::tearDown();
 	}

@@ -28,7 +28,7 @@ trait ApiParsoidTrait {
 	/**
 	 * @return LoggerInterface
 	 */
-	protected function getLogger() : LoggerInterface {
+	protected function getLogger(): LoggerInterface {
 		return $this->logger ?: new NullLogger();
 	}
 
@@ -49,7 +49,7 @@ trait ApiParsoidTrait {
 	 *
 	 * @return VirtualRESTService the VirtualRESTService object to use
 	 */
-	protected function getVRSObject() : VirtualRESTService {
+	protected function getVRSObject(): VirtualRESTService {
 		global $wgVisualEditorParsoidAutoConfig;
 		// the params array to create the service object with
 		$params = [];
@@ -96,7 +96,7 @@ trait ApiParsoidTrait {
 	 *
 	 * @return VirtualRESTServiceClient
 	 */
-	protected function getVRSClient() : VirtualRESTServiceClient {
+	protected function getVRSClient(): VirtualRESTServiceClient {
 		if ( !$this->serviceClient ) {
 			$this->serviceClient = new VirtualRESTServiceClient(
 				MediaWikiServices::getInstance()->getHttpRequestFactory()->createMultiClient() );
@@ -117,38 +117,29 @@ trait ApiParsoidTrait {
 	 */
 	protected function requestRestbase(
 		Title $title, string $method, string $path, array $params, array $reqheaders = []
-	) : array {
-		$request = [
-			'method' => $method,
-			'url' => '/restbase/local/v1/' . $path
-		];
-		if ( $method === 'GET' ) {
-			$request['query'] = $params;
-		} else {
-			$request['body'] = $params;
-		}
+	): array {
 		// Should be synchronised with modules/ve-mw/init/ve.init.mw.ArticleTargetLoader.js
-		$defaultReqHeaders = [
+		$reqheaders += [
 			'Accept' =>
 				'text/html; charset=utf-8; profile="https://www.mediawiki.org/wiki/Specs/HTML/2.0.0"',
 			'Accept-Language' => self::getPageLanguage( $title )->getCode(),
 			'User-Agent' => 'VisualEditor-MediaWiki/' . MW_VERSION,
 			'Api-User-Agent' => 'VisualEditor-MediaWiki/' . MW_VERSION,
+			'Promise-Non-Write-API-Action' => 'true',
 		];
-		// $reqheaders take precedence over $defaultReqHeaders
-		$request['headers'] = $reqheaders + $defaultReqHeaders;
+		$request = [
+			'method' => $method,
+			'url' => '/restbase/local/v1/' . $path,
+			( $method === 'GET' ? 'query' : 'body' ) => $params,
+			'headers' => $reqheaders,
+		];
 		$response = $this->getVRSClient()->run( $request );
 		if ( $response['code'] === 200 && $response['error'] === "" ) {
 			// If response was served directly from Varnish, use the response
 			// (RP) header to declare the cache hit and pass the data to the client.
 			$headers = $response['headers'];
-			$rp = null;
 			if ( isset( $headers['x-cache'] ) && strpos( $headers['x-cache'], 'hit' ) !== false ) {
-				$rp = 'cached-response=true';
-			}
-			if ( $rp !== null ) {
-				$resp = $this->getRequest()->response();
-				$resp->header( 'X-Cache: ' . $rp );
+				$this->getRequest()->response()->header( 'X-Cache: cached-response=true' );
 			}
 		} elseif ( $response['error'] !== '' ) {
 			$this->dieWithError(
@@ -162,7 +153,7 @@ trait ApiParsoidTrait {
 				[
 					'code' => $response['code'],
 					'trace' => ( new Exception )->getTraceAsString(),
-					'response' => $response['body'],
+					'response' => [ 'body' => $response['body'] ],
 					'requestPath' => $path,
 					'requestIfMatch' => $reqheaders['If-Match'] ?? '',
 				]
@@ -181,7 +172,7 @@ trait ApiParsoidTrait {
 	 * @param Title $title Page title
 	 * @return RevisionRecord A revision record
 	 */
-	protected function getLatestRevision( Title $title ) : RevisionRecord {
+	protected function getLatestRevision( Title $title ): RevisionRecord {
 		$revisionLookup = MediaWikiServices::getInstance()->getRevisionLookup();
 		$latestRevision = $revisionLookup->getRevisionByTitle( $title );
 		if ( $latestRevision !== null ) {
@@ -197,14 +188,13 @@ trait ApiParsoidTrait {
 	 *
 	 * If the oldid is invalid, an API error will be reported.
 	 *
-	 * @param Title $title Page title
+	 * @param Title|null $title Page title, not required if $oldid is used
 	 * @param int|string|null $oldid Optional revision ID.
 	 *  Should be an integer but will validate and convert user input strings.
 	 * @return RevisionRecord A revision record
 	 */
-	protected function getValidRevision( Title $title, $oldid = null ) : RevisionRecord {
+	protected function getValidRevision( Title $title = null, $oldid = null ): RevisionRecord {
 		$revisionLookup = MediaWikiServices::getInstance()->getRevisionLookup();
-		$revision = null;
 		if ( $oldid === null || $oldid === 0 ) {
 			return $this->getLatestRevision( $title );
 		} else {
@@ -222,7 +212,7 @@ trait ApiParsoidTrait {
 	 * @param RevisionRecord $revision Page revision
 	 * @return array The RESTBase server's response
 	 */
-	protected function requestRestbasePageHtml( RevisionRecord $revision ) : array {
+	protected function requestRestbasePageHtml( RevisionRecord $revision ): array {
 		$title = Title::newFromLinkTarget( $revision->getPageAsLinkTarget() );
 		return $this->requestRestbase(
 			$title,
@@ -235,35 +225,35 @@ trait ApiParsoidTrait {
 	}
 
 	/**
-	 * Transform HTML to wikitext via Parsoid through RESTbase.
+	 * Transform HTML to wikitext via Parsoid through RESTbase. Wrapper for ::postData().
 	 *
-	 * @param string $path The RESTbase path of the transform endpoint
 	 * @param Title $title The title of the page
-	 * @param array $data An array of the HTML and the 'scrub_wikitext' option
-	 * @param array $parserParams Parsoid parser parameters to pass in
+	 * @param string $html The HTML of the page to be transformed
+	 * @param int|null $oldid What oldid revision, if any, to base the request from (default: `null`)
 	 * @param string|null $etag The ETag to set in the HTTP request header
-	 * @return string Body of the RESTbase server's response
+	 * @return array The RESTbase server's response, 'code', 'reason', 'headers' and 'body'
 	 */
-	protected function postData(
-		string $path, Title $title, array $data, array $parserParams, ?string $etag
-	) : string {
-		$path .= urlencode( $title->getPrefixedDBkey() );
-		if ( isset( $parserParams['oldid'] ) && $parserParams['oldid'] ) {
-			$path .= '/' . $parserParams['oldid'];
-		}
+	protected function transformHTML(
+		Title $title, string $html, int $oldid = null, string $etag = null
+	): array {
+		$data = [ 'html' => $html, 'scrub_wikitext' => 1 ];
+		$path = 'transform/html/to/wikitext/' . urlencode( $title->getPrefixedDBkey() ) .
+			( $oldid === null ? '' : '/' . $oldid );
+
 		// Adapted from RESTBase mwUtil.parseETag()
 		// ETag is not expected when creating a new page (oldid=0)
-		if ( isset( $parserParams['oldid'] ) && $parserParams['oldid'] && !preg_match( '/
+		if ( $oldid && !( preg_match( '/
 			^(?:W\\/)?"?
-			([^"\\/]+)
+			' . preg_quote( "$oldid", '/' ) . '
 			(?:\\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}))
 			(?:\\/([^"]+))?
 			"?$
-		/x', $etag ) ) {
+		/x', $etag ) ) ) {
 			$this->getLogger()->info(
-				__METHOD__ . ": Received funny ETag from client: {etag}",
+				__METHOD__ . ": Received funny ETag from client: '{etag}'",
 				[
 					'etag' => $etag,
+					'oldid' => $oldid,
 					'requestPath' => $path,
 				]
 			);
@@ -272,33 +262,42 @@ trait ApiParsoidTrait {
 			$title,
 			'POST', $path, $data,
 			[ 'If-Match' => $etag ]
-		)['body'];
+		);
 	}
 
 	/**
-	 * Transform HTML to wikitext via Parsoid through RESTbase. Wrapper for ::postData().
+	 * Transform wikitext to HTML via Parsoid through RESTbase. Wrapper for ::postData().
 	 *
-	 * @param Title $title The title of the page
-	 * @param string $html The HTML of the page to be transformed
-	 * @param array $parserParams Parsoid parser parameters to pass in
-	 * @param string|null $etag The ETag to set in the HTTP request header
-	 * @return string Body of the RESTbase server's response
+	 * @param Title $title The title of the page to use as the parsing context
+	 * @param string $wikitext The wikitext fragment to parse
+	 * @param bool $bodyOnly Whether to provide only the contents of the `<body>` tag
+	 * @param int|null $oldid What oldid revision, if any, to base the request from (default: `null`)
+	 * @param bool $stash Whether to stash the result in the server-side cache (default: `false`)
+	 * @return array The RESTbase server's response, 'code', 'reason', 'headers' and 'body'
 	 */
-	protected function postHTML(
-		Title $title, string $html, array $parserParams, ?string $etag
-	) : string {
-		return $this->postData(
-			'transform/html/to/wikitext/', $title,
-			[ 'html' => $html, 'scrub_wikitext' => 1 ], $parserParams, $etag
+	protected function transformWikitext(
+		Title $title, string $wikitext, bool $bodyOnly, int $oldid = null, bool $stash = false
+	): array {
+		return $this->requestRestbase(
+			$title,
+			'POST',
+			'transform/wikitext/to/html/' . urlencode( $title->getPrefixedDBkey() ) .
+				( $oldid === null ? '' : '/' . $oldid ),
+			[
+				'wikitext' => $wikitext,
+				'body_only' => $bodyOnly ? 1 : 0,
+				'stash' => $stash ? 1 : 0
+			]
 		);
 	}
 
 	/**
 	 * Get the page language from a title, using the content language as fallback on special pages
-	 * @param Title $title Title
+	 *
+	 * @param Title $title
 	 * @return Language Content language
 	 */
-	public static function getPageLanguage( Title $title ) : Language {
+	public static function getPageLanguage( Title $title ): Language {
 		if ( $title->isSpecial( 'CollabPad' ) ) {
 			// Use the site language for CollabPad, as getPageLanguage just
 			// returns the interface language for special pages.
@@ -315,6 +314,7 @@ trait ApiParsoidTrait {
 	 * @param string|null $code See ApiErrorFormatter::addError()
 	 * @param array|null $data See ApiErrorFormatter::addError()
 	 * @param int|null $httpCode HTTP error code to use
+	 * @return never
 	 */
 	abstract public function dieWithError( $msg, $code = null, $data = null, $httpCode = null );
 

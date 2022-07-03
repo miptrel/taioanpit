@@ -21,10 +21,9 @@
 namespace MediaWiki\Logger;
 
 use MediaWiki\Logger\Monolog\BufferHandler;
-use Monolog\Handler\NullHandler;
 use Monolog\Handler\StreamHandler;
 use Monolog\Logger;
-use Wikimedia\ObjectFactory;
+use Wikimedia\ObjectFactory\ObjectFactory;
 
 /**
  * LoggerFactory service provider that creates loggers implemented by
@@ -226,10 +225,6 @@ class MonologSpi implements Spi {
 			foreach ( $spec['handlers'] as $handler ) {
 				$obj->pushHandler( $this->getHandler( $handler ) );
 			}
-		} else {
-			// When no handlers are registered Monolog 1.x sends logs to stderr,
-			// which could be not expected: avoid this behaviour
-			$obj->pushHandler( new NullHandler() );
 		}
 		return $obj;
 	}
@@ -257,7 +252,10 @@ class MonologSpi implements Spi {
 		if ( !isset( $this->singletons['handlers'][$name] ) ) {
 			$spec = $this->config['handlers'][$name];
 			$handler = ObjectFactory::getObjectFromSpec( $spec );
-			if ( isset( $spec['formatter'] ) ) {
+			if (
+				isset( $spec['formatter'] ) &&
+				is_subclass_of( $handler, 'Monolog\Handler\FormattableHandlerInterface' )
+			) {
 				$handler->setFormatter(
 					$this->getFormatter( $spec['formatter'] )
 				);

@@ -5,12 +5,15 @@ namespace MediaWiki\User\Hook;
 use User;
 
 /**
+ * This is a hook handler interface, see docs/Hooks.md.
+ * Use the hook name "UserEffectiveGroups" to register handlers implementing this interface.
+ *
  * @stable to implement
  * @ingroup Hooks
  */
 interface UserEffectiveGroupsHook {
 	/**
-	 * This hook is called in User::getEffectiveGroups().
+	 * This hook is called in UserGroupManager::getUserEffectiveGroups().
 	 *
 	 * @since 1.35
 	 *

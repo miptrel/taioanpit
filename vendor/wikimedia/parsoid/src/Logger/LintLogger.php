@@ -72,6 +72,7 @@ class LintLogger {
 		foreach ( $lints as &$lint ) {
 			$dsr = &$lint['dsr'];
 			if ( ( $dsr[2] ?? 0 ) > 1 ) { // widths 0,1,null are fine
+				// @phan-suppress-next-line PhanPluginDuplicateExpressionAssignmentOperation; consistency
 				$dsr[2] = $dsr[2] - $dsr[0];
 			}
 			if ( ( $dsr[3] ?? 0 ) > 1 ) { // widths 0,1,null are fine
@@ -89,10 +90,6 @@ class LintLogger {
 	 */
 	public function logLintOutput() {
 		$env = $this->env;
-
-		if ( $env->noDataAccess() ) {
-			return;
-		}
 
 		// We only want to send to the MW API if this was a request to parse
 		// the full page.
@@ -113,7 +110,7 @@ class LintLogger {
 		if ( $linting === true ) {
 			$enabledBuffer = $env->getLints(); // Everything is enabled
 		} elseif ( is_array( $linting ) ) {
-			$enabledBuffer = array_filter( $env->getLints(), function ( $item ) use ( &$linting ) {
+			$enabledBuffer = array_filter( $env->getLints(), static function ( $item ) use ( &$linting ) {
 				return array_search( $item['type'], $linting, true ) !== false;
 			} );
 		} else {

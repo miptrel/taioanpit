@@ -1,10 +1,12 @@
 {
 	"@metadata": {
 		"authors": [
+			"MinecraftAustralia",
 			"Sab",
 			"Sainte-Rose (on ty.wikipedia.org)",
+			"TMg",
 			"Tahitoa (on ty.wikipedia.org)",
-			"TMg"
+			"Tok Pisin"
 		]
 	},
 	"sunday": "tāpati",
@@ -60,8 +62,6 @@
 	"about": "Nō",
 	"article": "Parau pāpa’i",
 	"navigation": "Arata’i",
-	"qbedit": "Fa’ahuru ’ē",
-	"qbmyoptions": "ta’u ’api",
 	"help": "Tauturu",
 	"search": "Roromā’imi",
 	"searchbutton": "Roromā’imi",

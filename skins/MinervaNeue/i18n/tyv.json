@@ -2,21 +2,21 @@
 	"@metadata": {
 		"authors": [
 			"Agilight",
-			"Көпек",
+			"Riverman",
 			"Монгуш Салим"
 		]
 	},
 	"mobile-frontend-editor-edit": "Эдер",
-	"mobile-frontend-home-button": "Кол арынче",
-	"mobile-frontend-language-article-heading": "Өске дылга номчуур",
-	"mobile-frontend-logged-in-homepage-notification": "Кирип моорлаңар, %s!",
+	"mobile-frontend-history": "Арынның эткен төөгүзүн көөр.",
+	"mobile-frontend-home-button": "Кол арын",
+	"mobile-frontend-language-article-heading": "Дыл",
 	"mobile-frontend-main-menu-button-tooltip": "Кол менюну ажыдар",
 	"mobile-frontend-main-menu-login": "Кирер",
 	"mobile-frontend-main-menu-logout": "Үнер",
 	"mobile-frontend-main-menu-nearby": "Чанында",
-	"mobile-frontend-main-menu-settings": "Аайлалга",
+	"mobile-frontend-main-menu-settings": "Өйлээшкиннер",
 	"mobile-frontend-main-menu-watchlist": "Хайгаарал даңзызы",
 	"mobile-frontend-pageaction-edit-tooltip": "Арынның кол адырын эдер",
-	"mobile-frontend-placeholder": "Дилээр",
-	"mobile-frontend-random-button": "Душ бооп таварышканы"
+	"mobile-frontend-placeholder": "{{SITENAME}} иштинден дилээр",
+	"mobile-frontend-random-button": "Рандом"
 }

@@ -1,12 +1,15 @@
 {
 	"@metadata": {
 		"authors": [
+			"Edwingudfriend",
+			"Kipala",
 			"Lloffiwr",
 			"Muddyb",
 			"Muddyb Blast Producer",
 			"Yasen igra"
 		]
 	},
+	"vector-language-button-label": "{{PLURAL:$1|lugha}}",
 	"vector-action-addsection": "Weka mada",
 	"vector-action-delete": "Futa",
 	"vector-action-move": "Hamisha",
@@ -18,5 +21,6 @@
 	"vector-view-history": "Fungua historia",
 	"vector-view-view": "Soma",
 	"vector-view-viewsource": "Tazama msimbo",
+	"vector-jumptocontent": "Rukia yaliyomo",
 	"vector-more-actions": "Zaidi"
 }

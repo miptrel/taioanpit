@@ -38,17 +38,6 @@ main {
 	background-color: @background-color-base;
 }
 
-.header-container {
-	border-bottom: 1px solid @colorGray12;
-	padding: 0 @contentPadding;
-
-	&.header-chrome {
-		background-color: @chromeColor;
-		border: 0;
-		box-shadow: inset 0 -1px 3px rgba( 0, 0, 0, 0.08 );
-	}
-}
-
 // If footer has last modified list item (Desktop MinervaNeue ?useformat=desktop&useskin=minerva),
 // hide it (T173545).
 // stylelint-disable-next-line selector-max-id
@@ -57,19 +46,19 @@ main {
 	display: none;
 }
 
-.last-modified-bar {
-	a,
-	a:visited {
-		color: @colorGray5;
-		// If browser supports
-		&:nth-child( 1 ) {
-			font-weight: bold;
-		}
-	}
+// Override rule in MobileFrontend to show copyright.
+// FIXME: This can be removed when I0bfc7f977cdaf5ce8873103346c64121d704b86c
+// is merged.
+// stylelint-disable-next-line selector-max-id
+#footer-info-copyright {
+	display: block;
 }
 
-.header {
-	display: table;
+// JavaScript overlay and server side rendered header
+.overlay-header,
+.minerva-header {
+	display: flex;
+	align-items: center;
 	width: 100%;
 	border-spacing: 0;
 	border-collapse: collapse;
@@ -78,81 +67,34 @@ main {
 	// When banners are present we want to easily distinguish between them and the header so add border
 	border-top: 1px solid @colorGray12;
 	margin-top: @headerMarginTop;
+}
 
-	> div,
-	> .navigation-drawer {
-		position: relative;
-		vertical-align: middle;
-		display: table-cell;
-	}
+//
+// Search
+//
+.minerva-search-form {
+	display: flex;
+	width: 100%;
+	flex-grow: 1;
+	align-items: center;
 
-	// Menu and notifications button
-	> div a {
-		display: block;
-	}
-
-	.branding-box {
-		width: auto;
-		opacity: @opacity-icon-subtle; // T251135
-
-		// TODO: Remove `h1` after T198947 HTML changes expire from cache.
-		h1,
-		a {
-			margin-left: 5px;
-			font-size: 1em;
-			text-decoration: none;
-			color: @colorGray2;
-
-			span {
-				line-height: 1;
-				font-size: inherit;
-			}
-
-			img {
-				vertical-align: middle;
-			}
-
-			> * {
-				float: left;
-			}
-
-			sup {
-				color: @colorGray5;
-				display: none;
-
-				.beta & {
-					display: initial;
-				}
-			}
-		}
-	}
-
-	> .header-title {
-		vertical-align: middle;
+	> button {
+		margin-left: auto;
 	}
 }
 
-#searchInput { // stylelint-disable-line selector-max-id
-	cursor: text;
-}
-
-.search-box,
-/* `.header .search-box` is needed to override table-cell rules */
-.header .search-box {
-	display: none;
-	width: auto;
-}
-
-/* Search */
+// Search input
+// Used in minerva header and search overlay header
 .search-box .search {
-	@searchIconSize: 18px;
-	@searchIconGutter: 6px;
+	@size-icon-search: unit( 18 / @font-size-browser, em );
+	@size-icon-search-gutter: unit( 8 / @font-size-browser, em );
+	@size-modifier-border: unit( 1 / @font-size-browser, em );
 	@padding-vertical-search: 8px - @border-width-base;
-	@padding-start-search-icon: @searchIconSize + ( 2 * @searchIconGutter ) - @border-width-base;
+	@padding-start-search-icon: @size-icon-search + ( 2 * @size-icon-search-gutter ) - @size-modifier-border;
 	background-color: #fff; // Support Fennec, Opera Mini: Remove default background, see T38490.
-	background-position: left @searchIconGutter center;
+	background-position: left @size-icon-search-gutter center;
 	background-repeat: no-repeat;
-	background-size: @searchIconSize;
+	background-size: @size-icon-search;
 	// Support Safari: Get rid of rounded corners.
 	-webkit-appearance: none;
 	width: 100%;
@@ -162,19 +104,10 @@ main {
 	border-radius: @border-radius-base;
 	padding: @padding-vertical-search 0 @padding-vertical-search @padding-start-search-icon;
 	box-shadow: 0 1px 1px rgba( 0, 0, 0, 0.05 );
-	// Keyboard focus is taken care of below at `.search-box .search:focus`.
+	// Keyboard focus is taken care of below at `.search:focus`.
 	outline: 0;
 	.transition( border-color @transition-duration-medium, box-shadow @transition-duration-medium; );
-}
 
-// Provide focus styles only in non-JS and overlay to prevent double transition.
-.client-nojs .search-box .search:focus,
-.search-overlay .search-box .search:focus {
-	border-color: @colorProgressive;
-	box-shadow: inset 0 0 0 1px @colorProgressive, 0 1px 1px rgba( 0, 0, 0, 0.05 );
-}
-
-input.search {
 	// [T139928] Hide all pseudo-elements added to search inputs in WebKit.
 	&::-webkit-search-decoration,
 	&::-webkit-search-cancel-button,
@@ -182,6 +115,13 @@ input.search {
 	&::-webkit-search-results-decoration {
 		display: none;
 	}
+}
+
+// Provide focus styles only in non-JS and overlay to prevent double transition.
+.client-nojs .search-box .search:focus,
+.search-overlay .search-box .search:focus {
+	border-color: @colorProgressive;
+	box-shadow: inset 0 0 0 1px @colorProgressive, 0 1px 1px rgba( 0, 0, 0, 0.05 );
 }
 
 .content {
@@ -207,44 +147,35 @@ input.search {
 		margin-bottom: @headingMargin;
 	}
 
-	.mw-parser-output > h1,
-	.mw-parser-output > h2,
-	.mw-parser-output > h3,
-	.mw-parser-output > h4,
-	.mw-parser-output > h5,
-	.section-heading,
-	.in-block {
-		// Safari needs this. @see T106347
-		display: table;
+	// The following rules are duplicated in MobileFrontend
+	// but needed by Minerva desktop
+	.mw-parser-output {
+		> h1,
+		> h2,
+		> h3,
+		> h4,
+		> h5 {
+			// Safari needs this. @see T106347
+			display: table;
 
-		.mw-headline {
-			width: 100%;
-		}
+			.mw-headline {
+				width: 100%;
+			}
 
-		> span {
-			display: table-cell;
-			vertical-align: middle;
-		}
-
-		> .mw-editsection > .mw-ui-icon-element {
-			margin-top: -0.75em;
-			margin-bottom: -0.75em;
+			> span {
+				display: table-cell;
+			}
 		}
 	}
-}
 
-// Toggling indicators are unusable without JavaScript
-.client-nojs {
-	.section-heading .indicator {
-		display: none;
+	.mw-editsection > .mw-ui-icon-element {
+		margin-top: -0.75em;
+		margin-bottom: -0.75em;
 	}
 }
 
 // stylelint-disable selector-max-id
 #page-secondary-actions {
-	// Clears floating on table of contents on stub pages.
-	clear: both;
-
 	a {
 		margin: 10px 2px 2px 0;
 	}
@@ -261,10 +192,8 @@ input.search {
 .topic-title-list li,
 .site-link-list li,
 .drawer,
-.messagebox,
-.errorbox,
-.successbox,
-.warningbox,
+/*Specificity needed to override content styles in core. */
+.content h2.list-header,
 .list-header,
 .mw-revision {
 	padding-left: @contentPadding;
@@ -273,6 +202,7 @@ input.search {
 
 .talk-overlay .comment .comment-content,
 .image-list,
+.minerva-anon-talk-message,
 .pre-content,
 /* Form only pages e.g Special:MobileOptions */
 #mw-content-text > form > .oo-ui-fieldLayout > .oo-ui-fieldLayout-body,

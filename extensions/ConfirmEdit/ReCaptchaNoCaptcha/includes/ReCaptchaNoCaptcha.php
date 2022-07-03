@@ -33,7 +33,7 @@ class ReCaptchaNoCaptcha extends SimpleCaptcha {
     <div style="width: 302px; height: 422px; position: relative;">
       <div style="width: 302px; height: 422px; position: absolute;">
         <iframe
-        	src="https://www.recaptcha.net/recaptcha/api/fallback?k={$htmlUrlencoded}&hl={$lang}"
+            src="https://www.recaptcha.net/recaptcha/api/fallback?k={$htmlUrlencoded}&hl={$lang}"
             frameborder="0" scrolling="no"
             style="width: 302px; height:422px; border-style: none;">
         </iframe>
@@ -162,7 +162,7 @@ HTML;
 		global $wgReCaptchaSiteKey;
 		return [
 			'type' => 'recaptchanocaptcha',
-			'mime' => 'image/png',
+			'mime' => 'application/javascript',
 			'key' => $wgReCaptchaSiteKey,
 		];
 	}

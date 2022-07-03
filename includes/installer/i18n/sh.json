@@ -52,7 +52,6 @@
 	"config-env-bad": "Okruženje je provjereno.\nNe možete uspostaviti MediaWiki.",
 	"config-env-php": "PHP $1 je uspostavljen.",
 	"config-unicode-using-intl": "Uz dodatak [https://pecl.php.net/intl intL PECL] za Unicode normalizaciju.",
-	"config-unicode-pure-php-warning": "'''Upozorenje''': Dodatak [https://pecl.php.net/intl intl PECL] nije dostupan za normalizaciju Unicode, vraćajući se na sporu primjenu čistog PHP-a.\n\nAko imate web-lokaciju s visokim prometom, morat ćete pročitati više o [https://www.mediawiki.org/wiki/Special:MyLanguage/Unicode_normalization_considerations Unicode normalizacije].",
 	"config-unicode-update-warning": "'''Upozorenje:''' Uspostavljena verzija omotnice Unicode normalizacije koristi stariju verziju biblioteke [http://site.icu-project.org/ projekta ICU].\nDa biste koristili Unicode, trebate napraviti [https://www.mediawiki.org/wiki/Special:MyLanguage/Unicode_normalization_considerations nadogradnju].",
 	"config-no-db": "Nisam mogao pronaći odgovarajući upravljački program za bazu podataka! Morat ćete uspostaviti upravljački program za PHP-bazu.\n{{PLURAL:$2|Podržana je sljedeća vrsta|Podržane su sljedeće vrste}} baze: $1.\n\nAko ste sami kompilirali PHP, omogućite bazni klijent u postavkama - npr. s <code>./configure --with-mysqli</code>.\nAko ovaj PHP uspostavite iz Debian ili Ubuntu paketa, tada ćete ga morati uspostaviti, npr., paket <code>php-mysql</code>.",
 	"config-outdated-sqlite": "<strong>Upozorenje</strong>: imate SQLite $2. Najstarija dopuštena verzija je $1. Stoga, SQLite će biti nedostupan.",
@@ -186,7 +185,6 @@
 	"config-upload-enable": "Omogući postavljanje datoteka",
 	"config-upload-deleted": "Folder za obrisane datoteke:",
 	"config-upload-deleted-help": "Odaberite u kojem folderu će se arhivirati izbrisane datoteke.\nNajbolje bi bilo ako taj nije dostupan putem svemrežja.",
-	"config-logo": "URL za logotipa:",
 	"config-instantcommons": "Omogući Instant Commons",
 	"config-cc-again": "Odaberite ponovo...",
 	"config-cc-not-chosen": "Odaberite željenu licencu Creative Commons i kliknite na „proceed”.",
@@ -229,7 +227,7 @@
 	"config-install-updates": "Spriječi vršenje nepotrebnih podnova",
 	"config-install-updates-failed": "<strong>Greška:</strong> Umetanje podnovnih klučeva u tabele nije uspjelo, zbog sljedeće greške: $1",
 	"config-install-sysop": "Otvaranje korisničkog računa administratora",
-	"config-install-subscribe-fail": "Nije moguće Vas pretplatiti se na izvješćenje mediawiki-announce: $1",
+	"config-install-subscribe-fail": "Nije moguće Vas pretplatiti se na izvješćenje mediawiki-announce[https://lists.wikimedia.org/postorius/lists/mediawiki-announce.lists.wikimedia.org/ mediawiki-announce]: $1",
 	"config-install-subscribe-notpossible": "cURL nije instaliran, a <code>allow_url_fopen</code> nije dostupno.",
 	"config-install-mainpage": "Pravim početnu stranicu sa standardnim sadržajem",
 	"config-install-mainpage-exists": "Početna strana već postoji. Prelazim na sljedeće.",
@@ -246,5 +244,5 @@
 	"config-extension-not-found": "Nisam mogao naći datoteku registracije za dodatak „$1”",
 	"config-extension-dependency": "Naišao na grešku sa zavisnošću pri instaliranju dodatka „$1”: $2",
 	"mainpagetext": "<strong>MediaWiki je instaliran.</strong>",
-	"mainpagedocfooter": "Za informacije o korištenju wiki softvera konzultirajte [https://meta.wikimedia.org/wiki/Help:Contents Vodič za korisnike].\n\n== Uvod u rad ==\n* [https://www.mediawiki.org/wiki/Special:MyLanguage/Manual:Configuration_settings Lista konfiguracije postavki]\n* [https://www.mediawiki.org/wiki/Special:MyLanguage/Manual:FAQ MediaWiki FAQ]\n* [https://lists.wikimedia.org/mailman/listinfo/mediawiki-announce Lista primatelja izdanja MediaWikija]\n* [https://www.mediawiki.org/wiki/Special:MyLanguage/Localisation#Translation_resources Lokalizirajte MediaWiki za svoj jezik]\n* [https://www.mediawiki.org/wiki/Special:MyLanguage/Manual:Combating_spam Saznajte kako se boriti protiv spama na svojem wikiju]"
+	"mainpagedocfooter": "Za informacije o korištenju wiki softvera konzultirajte [https://meta.wikimedia.org/wiki/Help:Contents Vodič za korisnike].\n\n== Uvod u rad ==\n* [https://www.mediawiki.org/wiki/Special:MyLanguage/Manual:Configuration_settings Lista konfiguracije postavki]\n* [https://www.mediawiki.org/wiki/Special:MyLanguage/Manual:FAQ MediaWiki FAQ]\n* [https://lists.wikimedia.org/postorius/lists/mediawiki-announce.lists.wikimedia.org/ Lista primatelja izdanja MediaWikija]\n* [https://www.mediawiki.org/wiki/Special:MyLanguage/Localisation#Translation_resources Lokalizirajte MediaWiki za svoj jezik]\n* [https://www.mediawiki.org/wiki/Special:MyLanguage/Manual:Combating_spam Saznajte kako se boriti protiv spama na svojem wikiju]"
 }

@@ -3,12 +3,9 @@
 use Composer\Semver\Semver;
 use MediaWiki\Shell\Shell;
 use MediaWiki\ShellDisabledError;
-use Wikimedia\AtEase\AtEase;
 use Wikimedia\ScopedCallback;
 
 /**
- * ExtensionRegistry class
- *
  * The Registry loads JSON files, and uses a Processor
  * to extract information from them. It also registers
  * classes with the autoloader.
@@ -59,6 +56,7 @@ class ExtensionRegistry {
 	private const LAZY_LOADED_ATTRIBUTES = [
 		'TrackingCategories',
 		'QUnitTestModules',
+		'SkinLessImportPaths',
 	];
 
 	/**
@@ -68,7 +66,7 @@ class ExtensionRegistry {
 	 * by ExtensionProcessor::CREDIT_ATTRIBS (plus a 'path' key that
 	 * points to the skin or extension JSON file).
 	 *
-	 * This info may be accessed via via ExtensionRegistry::getAllThings.
+	 * This info may be accessed via ExtensionRegistry::getAllThings.
 	 *
 	 * @var array[]
 	 */
@@ -77,7 +75,7 @@ class ExtensionRegistry {
 	/**
 	 * List of paths that should be loaded
 	 *
-	 * @var array
+	 * @var int[]
 	 */
 	protected $queued = [];
 
@@ -109,6 +107,13 @@ class ExtensionRegistry {
 	 * @var array
 	 */
 	protected $lazyAttributes = [];
+
+	/**
+	 * The hash of cache-varying options, lazy-initialised
+	 *
+	 * @var string|null
+	 */
+	private $varyHash;
 
 	/**
 	 * Whether to check dev-requires
@@ -147,6 +152,7 @@ class ExtensionRegistry {
 	 */
 	public function setCheckDevRequires( $check ) {
 		$this->checkDev = $check;
+		$this->invalidateProcessCache();
 	}
 
 	/**
@@ -168,9 +174,8 @@ class ExtensionRegistry {
 
 		$mtime = $wgExtensionInfoMTime;
 		if ( $mtime === false ) {
-			AtEase::suppressWarnings();
-			$mtime = filemtime( $path );
-			AtEase::restoreWarnings();
+			// phpcs:ignore Generic.PHP.NoSilencedErrors.Discouraged
+			$mtime = @filemtime( $path );
 			// @codeCoverageIgnoreStart
 			if ( $mtime === false ) {
 				$err = error_get_last();
@@ -179,30 +184,51 @@ class ExtensionRegistry {
 			}
 		}
 		$this->queued[$path] = $mtime;
+		$this->invalidateProcessCache();
 	}
 
-	private function getCache() : BagOStuff {
+	private function getCache(): BagOStuff {
 		// Can't call MediaWikiServices here, as we must not cause services
 		// to be instantiated before extensions have loaded.
 		return ObjectCache::makeLocalServerCache();
 	}
 
 	private function makeCacheKey( BagOStuff $cache, $component, ...$extra ) {
-		// Everything we vary the cache on
-		$vary = [
-			'registration' => self::CACHE_VERSION,
-			'mediawiki' => MW_VERSION,
-			'abilities' => $this->getAbilities(),
-			'checkDev' => $this->checkDev,
-			'queue' => $this->queued,
-		];
-		return $cache->makeKey(
+		// Allow reusing cached ExtensionRegistry metadata between wikis (T274648)
+		return $cache->makeGlobalKey(
 			"registration-$component",
-			// We vary the cache on the current queue (what will be or already was loaded)
-			// plus various versions of stuff for VersionChecker
-			md5( json_encode( $vary ) ),
+			$this->getVaryHash(),
 			...$extra
 		);
+	}
+
+	/**
+	 * Get the cache varying hash
+	 *
+	 * @return string
+	 */
+	private function getVaryHash() {
+		if ( $this->varyHash === null ) {
+			// We vary the cache on the current queue (what will be or already was loaded)
+			// plus various versions of stuff for VersionChecker
+			$vary = [
+				'registration' => self::CACHE_VERSION,
+				'mediawiki' => MW_VERSION,
+				'abilities' => $this->getAbilities(),
+				'checkDev' => $this->checkDev,
+				'queue' => $this->queued,
+			];
+			$this->varyHash = md5( json_encode( $vary ) );
+		}
+		return $this->varyHash;
+	}
+
+	/**
+	 * Invalidate the cache of the vary hash and the lazy options.
+	 */
+	private function invalidateProcessCache() {
+		$this->varyHash = null;
+		$this->lazyAttributes = [];
 	}
 
 	/**
@@ -267,7 +293,7 @@ class ExtensionRegistry {
 	 * Get the current load queue. Not intended to be used
 	 * outside of the installer.
 	 *
-	 * @return array
+	 * @return int[] Map of extension.json files' modification timestamps keyed by absolute path
 	 */
 	public function getQueue() {
 		return $this->queued;
@@ -279,6 +305,7 @@ class ExtensionRegistry {
 	 */
 	public function clearQueue() {
 		$this->queued = [];
+		$this->invalidateProcessCache();
 	}
 
 	/**
@@ -301,7 +328,7 @@ class ExtensionRegistry {
 	}
 
 	/**
-	 * Queries information about the software environment and constructs an appropiate version checker
+	 * Queries information about the software environment and constructs an appropriate version checker
 	 *
 	 * @return VersionChecker
 	 */
@@ -324,7 +351,7 @@ class ExtensionRegistry {
 	/**
 	 * Process a queue of extensions and return their extracted data
 	 *
-	 * @param array $queue keys are filenames, values are ignored
+	 * @param int[] $queue keys are filenames, values are ignored
 	 * @return array extracted info
 	 * @throws Exception
 	 * @throws ExtensionDependencyError
@@ -425,7 +452,6 @@ class ExtensionRegistry {
 	) {
 		if ( isset( $info['AutoloadClasses'] ) ) {
 			$autoload = self::processAutoLoader( $dir, $info['AutoloadClasses'] );
-			// @phan-suppress-next-line PhanUndeclaredVariableAssignOp
 			$GLOBALS['wgAutoloadClasses'] += $autoload;
 			$autoloadClasses += $autoload;
 		}
@@ -469,6 +495,13 @@ class ExtensionRegistry {
 				$mergeStrategy = 'array_merge';
 			}
 
+			if ( $mergeStrategy === 'provide_default' ) {
+				if ( !array_key_exists( $key, $GLOBALS ) ) {
+					$GLOBALS[$key] = $val;
+				}
+				continue;
+			}
+
 			// Optimistic: If the global is not set, or is an empty array, replace it entirely.
 			// Will be O(1) performance.
 			if ( !array_key_exists( $key, $GLOBALS ) || ( is_array( $GLOBALS[$key] ) && !$GLOBALS[$key] ) ) {
@@ -486,7 +519,7 @@ class ExtensionRegistry {
 					$GLOBALS[$key] = array_merge_recursive( $GLOBALS[$key], $val );
 					break;
 				case 'array_replace_recursive':
-					$GLOBALS[$key] = array_replace_recursive( $GLOBALS[$key], $val );
+					$GLOBALS[$key] = array_replace_recursive( $val, $GLOBALS[$key] );
 					break;
 				case 'array_plus_2d':
 					$GLOBALS[$key] = wfArrayPlus2d( $GLOBALS[$key], $val );
@@ -546,7 +579,7 @@ class ExtensionRegistry {
 	 * Whether a thing has been loaded
 	 * @param string $name
 	 * @param string $constraint The required version constraint for this dependency
-	 * @throws LogicException if a specific contraint is asked for,
+	 * @throws LogicException if a specific constraint is asked for,
 	 *                        but the extension isn't versioned
 	 * @return bool
 	 */
@@ -591,12 +624,16 @@ class ExtensionRegistry {
 		if ( isset( $this->testAttributes[$name] ) ) {
 			return $this->testAttributes[$name];
 		}
+		if ( isset( $this->lazyAttributes[$name] ) ) {
+			return $this->lazyAttributes[$name];
+		}
 
 		// See if it's in the cache
 		$cache = $this->getCache();
 		$key = $this->makeCacheKey( $cache, 'lazy-attrib', $name );
 		$data = $cache->get( $key );
 		if ( $data !== false ) {
+			$this->lazyAttributes[$name] = $data;
 			return $data;
 		}
 
@@ -610,6 +647,7 @@ class ExtensionRegistry {
 		$result = $this->readFromQueue( $paths );
 		$data = $result['attributes'][$name] ?? [];
 		$this->saveToCache( $cache, $result );
+		$this->lazyAttributes[$name] = $data;
 
 		return $data;
 	}
@@ -650,7 +688,7 @@ class ExtensionRegistry {
 	 * Fully expand autoloader paths
 	 *
 	 * @param string $dir
-	 * @param array $files
+	 * @param string[] $files
 	 * @return array
 	 */
 	protected static function processAutoLoader( $dir, array $files ) {

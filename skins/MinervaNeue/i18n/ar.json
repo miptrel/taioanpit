@@ -2,6 +2,8 @@
 	"@metadata": {
 		"authors": [
 			"Abanima",
+			"Dr. Mohammed",
+			"FiberAhmed",
 			"Hiba Alshawi",
 			"Maroen1990",
 			"Meno25",
@@ -11,12 +13,13 @@
 			"ديفيد",
 			"زكريا",
 			"علاء",
-			"محمد أحمد عبد الفتاح"
+			"محمد أحمد عبد الفتاح",
+			"أَحمد"
 		]
 	},
 	"minerva-last-modified-date": "آخر تعديل بتاريخ $1، في $2",
 	"minerva-watchlist-cta": "تتبع هذه الصفحة وجميع التغييرات عليها.",
-	"minerva-talk-add-topic": "أضف نقاشًا",
+	"minerva-talk-add-topic": "أضِف موضوعًا",
 	"mobile-frontend-cookies-required": "إن ملفات تعريف الإرتباط (كوكيز) ضرورية لتغيير واجهة العرض; الرجاء تفعيل خاصية الاحتفاظ بهذه الملفات والمحاولة مرة أخرى.",
 	"mobile-frontend-editor-edit": "عدل",
 	"minerva-download": "تنزيل بصيغة PDF",
@@ -27,7 +30,6 @@
 	"mobile-frontend-home-button": "الصفحة الرئيسية",
 	"mobile-frontend-language-article-heading": "اللغة",
 	"mobile-frontend-languages-not-available": "هذه الصفحة غير متوفرة بلغات أخرى.",
-	"mobile-frontend-logged-in-homepage-notification": "{{GENDER:$1|أهلاً بك}}، $1!",
 	"mobile-frontend-main-menu-button-tooltip": "افتح القائمة الرئيسية",
 	"mobile-frontend-main-menu-contributions": "مساهمات",
 	"mobile-frontend-main-menu-login": "دخول",
@@ -62,6 +64,10 @@
 	"minerva-page-actions-permalink": "وصلة دائمة",
 	"minerva-page-actions-backlinks": "ماذا يصل هنا",
 	"minerva-page-actions-cite": "استشهد بالصفحة",
+	"minerva-page-actions-move": "انقل",
+	"minerva-page-actions-delete": "احذف",
+	"minerva-page-actions-protect": "احمِ",
+	"minerva-page-actions-unprotect": "رفع الحماية",
 	"minerva-page-actions-user-groups": "مجموعات المستخدم",
 	"minerva-page-actions-logs": "سجلات",
 	"minerva-page-actions-wikibase": "{{WBREPONAME}} عنصر",
@@ -75,8 +81,8 @@
 	"skinname-minerva": "منيرفانيو",
 	"minerva-skin-desc": "واجهة أولى ذات تصميم مستجيب للمحمول",
 	"skin-minerva-issue-learn-more": "معرفة المزيد",
-	"skin-minerva-mobile-option-MinervaShowCategoriesButton": "التصنيفات",
-	"skin-minerva-mobile-option-MinervaShowCategoriesButton-description": "عرض تصنيفات الصفحات",
+	"skin-minerva-mobile-option-MinervaShowCategories": "التصنيفات",
+	"skin-minerva-mobile-option-MinervaShowCategories-description": "عرض تصنيفات الصفحات",
 	"skin-minerva-mobile-option-MinervaPageIssuesNewTreatment": "تم تحسين معالجة مشاكل الصفحة",
 	"skin-minerva-mobile-option-MinervaPageIssuesNewTreatment-description": "سيتم تضمين موضوعات الصفحة (قالب:صندوق رسالة مقالة) في المقالة.",
 	"skin-minerva-recentchanges-warning-enhanced-not-supported": "لسوء الحظ، تجميع النتائج حسب الصفحة غير متاح على الجوال، إذا كنت ترغب في استخدام ميزة المجموعة حسب الصفحة فتُرجَى زيارة موقع سطح المكتب."

@@ -19,8 +19,8 @@
  */
 namespace MediaWiki\Minerva\Menu\PageActions;
 
+use MediaWiki\Minerva\MinervaUI;
 use MessageLocalizer;
-use MinervaUI;
 use MWException;
 
 /**
@@ -47,7 +47,7 @@ final class PageActionsDirector {
 	/**
 	 * Director responsible for Page Actions menu building
 	 *
-	 * @param ToolbarBuilder $toolbarBuilder The toolbar builder
+	 * @param ToolbarBuilder $toolbarBuilder
 	 * @param IOverflowBuilder $overflowBuilder The overflow menu builder
 	 * @param MessageLocalizer $messageLocalizer Message localizer used to translate texts
 	 */
@@ -64,18 +64,19 @@ final class PageActionsDirector {
 	/**
 	 * Build the menu data array that can be passed to views/javascript
 	 * @param array $toolbox An array of common toolbox items from the sidebar menu
+	 * @param array $actions An array of actions usually bucketed under the more menu
 	 * @return array
 	 * @throws MWException
 	 */
-	public function buildMenu( array $toolbox ): array {
+	public function buildMenu( array $toolbox, array $actions ): array {
 		$toolbar = $this->toolbarBuilder->getGroup();
-		$overflowMenu = $this->overflowBuilder->getGroup( $toolbox );
+		$overflowMenu = $this->overflowBuilder->getGroup( $toolbox, $actions );
 
 		$menu = [
 			'toolbar' => $toolbar->getEntries()
 		];
 		if ( $overflowMenu->hasEntries() ) {
-			// See components/ToggleList.
+			// See includes/Skins/ToggleList.
 			$menu[ 'overflowMenu' ] = [
 				'item-id' => 'page-actions-overflow',
 				'checkboxID' => 'page-actions-overflow-checkbox',

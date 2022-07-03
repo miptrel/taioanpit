@@ -2,7 +2,8 @@
 	"@metadata": {
 		"authors": [
 			"Har-wradim",
-			"פוילישער"
+			"פוילישער",
+			"Pacha Tchernof"
 		]
 	},
 	"minerva-last-modified-date": "לעצט רעדאגירט אום $1, ביי $2",
@@ -15,9 +16,8 @@
 	"mobile-frontend-editor-redlink-leave": "ניין, א דאנק",
 	"mobile-frontend-history": "באקוקן רעדאקטירן היסטאריע פון דעם בלאט.",
 	"mobile-frontend-home-button": "היימבלאַט",
-	"mobile-frontend-language-article-heading": "שפראַך",
+	"mobile-frontend-language-article-heading": "שפּראַך",
 	"mobile-frontend-languages-not-available": "דער בלאט איז נישט פאראן אין אנדערע שפראכן.",
-	"mobile-frontend-logged-in-homepage-notification": "{{GENDER:$1|ברוך הבא}}, $1!",
 	"mobile-frontend-main-menu-button-tooltip": "עפענען הויפטמעניו",
 	"mobile-frontend-main-menu-contributions": "בײַשטײַערונגען",
 	"mobile-frontend-main-menu-login": "אַרײַנלאָגירן",
@@ -42,7 +42,7 @@
 	"minerva-page-actions-logs": "לאגביכער",
 	"minerva-page-actions-wikibase": "{{WBREPONAME}}־אביעקט",
 	"minerva-page-actions-language-switcher": "שפּראַכן",
-	"minerva-page-actions-history": "היסטאריע",
-	"skin-minerva-mobile-option-MinervaShowCategoriesButton": "קאַטעגאָריעס",
+	"minerva-page-actions-history": "היסטאָריע",
+	"skin-minerva-mobile-option-MinervaShowCategories": "קאַטעגאָריעס",
 	"skin-minerva-recentchanges-warning-enhanced-not-supported": "ליידע, איז גרופּירן פֿון אויסקומען לויט בלעטער נישט פֿאַראַן אויף א מאביל. אַז איר װילט ניצן די גרופּירן אויסקומען לויט בלעטער אייגנשאַפֿט ביטע באַזוכט דעם בלאַט פֿאַר קאמפיוטערס."
 }

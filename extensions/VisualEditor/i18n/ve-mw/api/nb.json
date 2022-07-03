@@ -39,6 +39,7 @@
 	"apihelp-visualeditoredit-param-cachekey": "Bruk resultatet fra en tidligere serializeforcache-forespørsel med denne nøkkelen. Overstyrer $1html.",
 	"apihelp-visualeditoredit-param-captchaid": "Captcha-ID (når det lagres med en captcha-respons).",
 	"apihelp-visualeditoredit-param-captchaword": "Svar på captcha (når det lagres med en captcha-respons).",
+	"apihelp-visualeditoredit-param-data-{plugin}": "Vilkårlig data sendt av en plugin med API-forespørselen.",
 	"apihelp-visualeditoredit-param-etag": "ETag som sendes.",
 	"apihelp-visualeditoredit-param-html": "HTML som sendes til Parsoid for å konverteres til wikitekst.",
 	"apihelp-visualeditoredit-param-minor": "Merk som mindre redigering.",
@@ -50,6 +51,7 @@
 	"apihelp-visualeditoredit-param-sectiontitle": "Tittel for nytt avsnitt.",
 	"apihelp-visualeditoredit-param-starttimestamp": "Ved lagring, sett denne til tidsstempelet for når siden ble lastet. Brukes for å oppdage redigeringskonflikter.",
 	"apihelp-visualeditoredit-param-summary": "Redigeringsforklaring.",
+	"apihelp-visualeditoredit-param-tags": "Endringstagg som skal brukes på redigeringen.",
 	"apihelp-visualeditoredit-param-wikitext": "Wikiteksten det jobbes på.",
 	"apihelp-visualeditoredit-summary": "Lagre en HTML5-side til MediaWiki (konvertert til wikitekst med Parsoid-tjenesten)."
 }

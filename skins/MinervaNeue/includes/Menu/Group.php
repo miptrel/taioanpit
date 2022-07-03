@@ -36,7 +36,7 @@ final class Group {
 	/**
 	 * @var string
 	 */
-	private $id = '';
+	private $id;
 
 	/**
 	 * @param string $id of the menu defaults to null (optional)
@@ -69,7 +69,7 @@ final class Group {
 	 * @return array
 	 */
 	public function getEntries() {
-		$entryPresenter = function ( IMenuEntry $entry ) {
+		$entryPresenter = static function ( IMenuEntry $entry ) {
 			$result = [
 				'name' => $entry->getName(),
 				'components' => $entry->getComponents(),

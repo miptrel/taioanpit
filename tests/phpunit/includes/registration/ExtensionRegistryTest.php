@@ -10,7 +10,7 @@ class ExtensionRegistryTest extends MediaWikiIntegrationTestCase {
 
 	private $dataDir;
 
-	protected function setUp() : void {
+	protected function setUp(): void {
 		parent::setUp();
 		$this->dataDir = __DIR__ . '/../../data/registration';
 	}
@@ -80,7 +80,7 @@ class ExtensionRegistryTest extends MediaWikiIntegrationTestCase {
 
 	public function testReadFromQueue_nonexistent() {
 		$registry = new ExtensionRegistry();
-		$this->expectException( PHPUnit\Framework\Error\Error::class );
+		$this->expectError();
 		$registry->readFromQueue( [
 			__DIR__ . '/doesnotexist.json' => 1
 		] );
@@ -361,17 +361,17 @@ class ExtensionRegistryTest extends MediaWikiIntegrationTestCase {
 						'JsonZeroConfig' => [
 							'namespace' => 480,
 							'nsName' => 'Zero',
-							'isLocal' => true,
+							'isLocal' => false,
+							'remote' => [
+								'username' => 'foo',
+							],
 						],
 					],
 				],
 				[
 					'mwtestJsonConfigs' => [
 						'JsonZeroConfig' => [
-							'isLocal' => false,
-							'remote' => [
-								'username' => 'foo',
-							],
+							'isLocal' => true,
 						],
 						ExtensionRegistry::MERGE_STRATEGY => 'array_replace_recursive',
 					],
@@ -401,6 +401,35 @@ class ExtensionRegistryTest extends MediaWikiIntegrationTestCase {
 					'NullGlobal' => null
 				],
 			],
+			[
+				'provide_default passive case',
+				[
+					'wgFlatArray' => [],
+				],
+				[
+					'wgFlatArray' => [
+						1,
+						ExtensionRegistry::MERGE_STRATEGY => 'provide_default'
+					],
+				],
+				[
+					'wgFlatArray' => []
+				],
+			],
+			[
+				'provide_default active case',
+				[
+				],
+				[
+					'wgFlatArray' => [
+						1,
+						ExtensionRegistry::MERGE_STRATEGY => 'provide_default'
+					],
+				],
+				[
+					'wgFlatArray' => [ 1 ]
+				],
+			]
 		];
 	}
 
@@ -408,7 +437,7 @@ class ExtensionRegistryTest extends MediaWikiIntegrationTestCase {
 		$registry = new ExtensionRegistry();
 		$registry->queue( "{$this->dataDir}/good.json" );
 		$registry->loadFromQueue();
-		// Sanity check that it worked
+		// Check that it worked
 		$this->assertSame( [ 'test' ], $registry->getAttribute( 'FooBarAttr' ) );
 		$reset = $registry->setAttributeForTest( 'FooBarAttr', [ 'override' ] );
 		// overridden properly
@@ -433,11 +462,8 @@ class ExtensionRegistryTest extends MediaWikiIntegrationTestCase {
 		// Verify the registry is absolutely empty
 		$this->assertSame( [], $registry->getLazyLoadedAttribute( 'FooBarBaz' ) );
 		// Indicate what paths should be checked for the lazy attributes
-		$registry->loaded = [
-			'FooBar' => [
-				'path' => "{$this->dataDir}/attribute.json",
-			]
-		];
+		$registry->queue( "{$this->dataDir}/attribute.json" );
+		$registry->loadFromQueue();
 		// Set in attribute.json
 		$this->assertEquals(
 			[ 'buzz' => true ],

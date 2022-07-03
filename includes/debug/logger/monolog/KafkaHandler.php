@@ -42,6 +42,7 @@ use Psr\Log\LoggerInterface;
  *
  * Requires the nmred/kafka-php library, version >= 1.3.0
  *
+ * @deprecated since 1.38
  * @since 1.26
  * @author Erik Bernhardson <ebernhardson@wikimedia.org>
  * @copyright © 2015 Erik Bernhardson and Wikimedia Foundation.
@@ -81,6 +82,7 @@ class KafkaHandler extends AbstractProcessingHandler {
 	public function __construct(
 		Produce $produce, array $options, $level = Logger::DEBUG, $bubble = true
 	) {
+		wfDeprecated( __CLASS__, '1.38' );
 		parent::__construct( $level, $bubble );
 		$this->produce = $produce;
 		$this->options = array_merge( self::DEFAULT_OPTIONS, $options );
@@ -130,7 +132,7 @@ class KafkaHandler extends AbstractProcessingHandler {
 	/**
 	 * @inheritDoc
 	 */
-	protected function write( array $record ) {
+	protected function write( array $record ): void {
 		if ( $record['formatted'] !== null ) {
 			$this->addMessages( $record['channel'], [ $record['formatted'] ] );
 			$this->send();
@@ -141,7 +143,7 @@ class KafkaHandler extends AbstractProcessingHandler {
 	 * @inheritDoc
 	 * @phan-param array[] $batch
 	 */
-	public function handleBatch( array $batch ) {
+	public function handleBatch( array $batch ): void {
 		$channels = [];
 		foreach ( $batch as $record ) {
 			if ( $record['level'] < $this->level ) {

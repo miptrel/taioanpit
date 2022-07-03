@@ -6,11 +6,13 @@ use Wikimedia\ScopedCallback;
  * @covers Scribunto_LuaUstringLibrary
  */
 class Scribunto_LuaUstringLibraryTest extends Scribunto_LuaEngineUnitTestBase {
+	/** @inheritDoc */
 	protected static $moduleName = 'UstringLibraryTests';
 
+	/** @var UstringLibraryNormalizationTestProvider|null */
 	private $normalizationDataProvider = null;
 
-	protected function tearDown() : void {
+	protected function tearDown(): void {
 		if ( $this->normalizationDataProvider ) {
 			$this->normalizationDataProvider->destroy();
 			$this->normalizationDataProvider = null;

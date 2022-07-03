@@ -1,6 +1,7 @@
 {
 	"@metadata": {
 		"authors": [
+			"BadDog",
 			"Conquistador",
 			"OC Ripper",
 			"Vlad5250"
@@ -18,7 +19,6 @@
 	"mobile-frontend-home-button": "Početna",
 	"mobile-frontend-language-article-heading": "Jezik",
 	"mobile-frontend-languages-not-available": "Ova stranica nije dostupna na drugim jezicima",
-	"mobile-frontend-logged-in-homepage-notification": "{{GENDER:$1|Dobro došli}}, $1!",
 	"mobile-frontend-main-menu-button-tooltip": "Otvori glavni meni",
 	"mobile-frontend-main-menu-contributions": "Doprinosi",
 	"mobile-frontend-main-menu-login": "Prijavi se",
@@ -30,7 +30,7 @@
 	"mobile-frontend-meta-data-issues-header-talk": "O ovoj stranici",
 	"mobile-frontend-notifications-filter": "Filtriraj",
 	"mobile-frontend-pageaction-edit-tooltip": "Uredite uvodni pasus ove stranice",
-	"mobile-frontend-placeholder": "Pretraži {{SITENAME}}",
+	"mobile-frontend-placeholder": "Pretraži projekt {{SITENAME}}",
 	"mobile-frontend-random-button": "Slučajna",
 	"mobile-frontend-user-button-tooltip": "Prikaži moje obavijesti",
 	"mobile-frontend-user-newmessages": "Imate nove poruke na Vašoj razgovornoj stranici",
@@ -47,5 +47,5 @@
 	"minerva-page-actions-history": "Historija",
 	"minerva-skin-desc": "Osetljiv izgled za prvenstveno mobilnu upotrebu.",
 	"skin-minerva-issue-learn-more": "Saznajte više",
-	"skin-minerva-mobile-option-MinervaShowCategoriesButton": "Kategorije"
+	"skin-minerva-mobile-option-MinervaShowCategories": "Kategorije"
 }

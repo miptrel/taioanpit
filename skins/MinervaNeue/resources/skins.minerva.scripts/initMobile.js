@@ -6,16 +6,18 @@
  * framework or upstreamed from MobileFrotend to core) should be and moved into ./setup.js
  * @todo anything left should be moved to MobileFrontend extension and removed from here.
  */
+var HISTORY_ICON_CLASS = 'mw-ui-icon-wikimedia-history-base20';
+var HISTORY_ARROW_CLASS = 'mw-ui-icon-mf-expand-gray';
 module.exports = function () {
 	var
 		// eslint-disable-next-line no-restricted-properties
 		mobile = mw.mobileFrontend.require( 'mobile.startup' ),
 		PageGateway = mobile.PageGateway,
+		LanguageInfo = mobile.LanguageInfo,
 		permissions = mw.config.get( 'wgMinervaPermissions' ) || {},
 		toast = mobile.toast,
 		Icon = mobile.Icon,
 		time = mobile.time,
-		errorLogging = require( './errorLogging.js' ),
 		preInit = require( './preInit.js' ),
 		mobileRedirect = require( './mobileRedirect.js' ),
 		search = require( './search.js' ),
@@ -23,7 +25,7 @@ module.exports = function () {
 		TitleUtil = require( './TitleUtil.js' ),
 		issues = require( './page-issues/index.js' ),
 		Toolbar = require( './Toolbar.js' ),
-		ToggleList = require( '../../components/ToggleList/ToggleList.js' ),
+		ToggleList = require( '../../includes/Skins/ToggleList/ToggleList.js' ),
 		TabScroll = require( './TabScroll.js' ),
 		router = require( 'mediawiki.router' ),
 		ctaDrawers = require( './ctaDrawers.js' ),
@@ -107,19 +109,26 @@ module.exports = function () {
 	 * @method
 	 * @ignore
 	 * @param {string} title the title of the image
-	 * @return {jQuery.Deferred|Overlay}
+	 * @return {void|Overlay} note must return void if the overlay should not show (see T262703)
+	 *  otherwise an Overlay is expected and this can lead to e.on/off is not a function
 	 */
 	function makeMediaViewerOverlayIfNeeded( title ) {
 		if ( mw.loader.getState( 'mmv.bootstrap' ) === 'ready' ) {
 			// This means MultimediaViewer has been installed and is loaded.
 			// Avoid loading it (T169622)
-			return $.Deferred().reject();
+			return;
+		}
+		try {
+			title = decodeURIComponent( title );
+		} catch ( e ) {
+			// e.g. https://ro.m.wikipedia.org/wiki/Elisabeta_I_a_Angliei#/media/Fi%C8%18ier:Elizabeth_I_Rainbow_Portrait.jpg
+			return;
 		}
 
 		return mobile.mediaViewer.overlay( {
 			api: api,
 			thumbnails: currentPageHTMLParser.getThumbnails(),
-			title: decodeURIComponent( title ),
+			title: title,
 			eventBus: eventBus
 		} );
 	}
@@ -128,6 +137,16 @@ module.exports = function () {
 	overlayManager.add( /^\/media\/(.+)$/, makeMediaViewerOverlayIfNeeded );
 	overlayManager.add( /^\/languages$/, function () {
 		return mobile.languageOverlay( new PageGateway( api ) );
+	} );
+	// Register a LanguageInfo overlay which has no built-in functionality;
+	// a hook is fired when a language is selected, and extensions can respond
+	// to that hook. See GrowthExperiments WelcomeSurvey feature (in gerrit
+	// Ib558dc7c46cc56ff667957f9126bbe0471d25b8e for example usage).
+	overlayManager.add( /^\/languages\/all$/, function () {
+		return mobile.languageInfoOverlay( new LanguageInfo( api ), true );
+	} );
+	overlayManager.add( /^\/languages\/all\/no-suggestions$/, function () {
+		return mobile.languageInfoOverlay( new LanguageInfo( api ), false );
 	} );
 
 	// Setup
@@ -151,10 +170,9 @@ module.exports = function () {
 	 * @param {jQuery.Object} $lastModifiedLink
 	 */
 	function initHistoryLink( $lastModifiedLink ) {
-		var delta, historyUrl, $msg, $bar,
+		var delta, $msg, $bar,
 			ts, username, gender;
 
-		historyUrl = $lastModifiedLink.attr( 'href' );
 		ts = $lastModifiedLink.data( 'timestamp' );
 		username = $lastModifiedLink.data( 'user-name' ) || false;
 		gender = $lastModifiedLink.data( 'user-gender' );
@@ -164,15 +182,22 @@ module.exports = function () {
 			if ( time.isRecent( delta ) ) {
 				$bar = $lastModifiedLink.closest( '.last-modified-bar' );
 				$bar.addClass( 'active' );
-				$bar.find( '.mw-ui-icon-wikimedia-history-base20' ).addClass( 'mw-ui-icon-wikimedia-history-invert' );
-				$bar.find( '.mw-ui-icon-mf-expand-gray' ).addClass( 'mw-ui-icon-mf-expand-invert' );
+				$bar.find( '.' + HISTORY_ICON_CLASS )
+					.addClass( HISTORY_ICON_CLASS.replace( '-base20', '-invert' ) )
+					.removeClass( HISTORY_ICON_CLASS );
+				$bar.find( '.' + HISTORY_ARROW_CLASS )
+					.addClass( HISTORY_ARROW_CLASS.replace( '-gray', '-invert' ) )
+					.removeClass( HISTORY_ARROW_CLASS );
 			}
 
 			$msg = $( '<span>' )
 				// The new element should maintain the non-js element's CSS classes.
 				.attr( 'class', $lastModifiedLink.attr( 'class' ) )
 				.html(
-					time.getLastModifiedMessage( ts, username, gender, historyUrl )
+					time.getLastModifiedMessage( ts, username, gender,
+						// For cached HTML
+						$lastModifiedLink.attr( 'href' )
+					)
 				);
 			$lastModifiedLink.replaceWith( $msg );
 		}
@@ -234,7 +259,7 @@ module.exports = function () {
 	 * Initialisation function for user creation module.
 	 *
 	 * Enhances an element representing a time
-	 + to show a human friendly date in seconds, minutes, hours, days
+	 * to show a human friendly date in seconds, minutes, hours, days
 	 * months or years
 	 *
 	 * @ignore
@@ -249,37 +274,6 @@ module.exports = function () {
 			msg = time.getRegistrationMessage( ts, $tagline.data( 'userpage-gender' ) );
 			$tagline.text( msg );
 		}
-	}
-
-	/**
-	 * For logout links do the API logout first so system do not show interstitial step,
-	 * and then redirect to LogoutPage (when user is already logged out) to show information
-	 * about successful logout and information about caching.
-	 *
-	 * @param {string} selector Logout links selector
-	 */
-	function initSmartLogout( selector ) {
-		// Turn logout to a POST action
-		$( selector ).on( 'click', function ( e ) {
-			mw.notify(
-				mw.message( 'logging-out-notify' ).text(), {
-					tag: 'logout',
-					autoHide: false
-				}
-			);
-			api.postWithToken( 'csrf', {
-				action: 'logout'
-			} ).then(
-				function () {
-					location.reload();
-				},
-				function () {
-					toast.showOnPageReload( mw.message( 'logout-failed' ).text() );
-					location.reload();
-				}
-			);
-			e.preventDefault();
-		} );
 	}
 
 	/**
@@ -353,7 +347,8 @@ module.exports = function () {
 			// eslint-disable-next-line no-jquery/no-global-selector
 			$watch = $( '#page-actions-watch' ),
 			toolbarElement = document.querySelector( Toolbar.selector ),
-			userMenu = document.querySelector( '.minerva-user-menu' ); // See UserMenuDirector.
+			userMenu = document.querySelector( '.minerva-user-menu' ), // See UserMenuDirector.
+			navigationDrawer = document.querySelector( '.navigation-drawer' );
 
 		// The `minerva-animations-ready` class can be used by clients to prevent unwanted
 		// CSS transitions from firing on page load in some browsers (see
@@ -398,6 +393,14 @@ module.exports = function () {
 		if ( userMenu ) {
 			ToggleList.bind( window, userMenu );
 		}
+		if ( navigationDrawer ) {
+			ToggleList.bind( window, navigationDrawer );
+			var navigationDrawerMask = navigationDrawer.querySelector( '.main-menu-mask' );
+			// The 'for' attribute is used to close the drawer when the mask is clicked without JS
+			// Since we are using JS to enhance the drawer behavior, we need to
+			// remove the attribute to prevent the drawer from being toggled twice
+			navigationDrawerMask.removeAttribute( 'for' );
+		}
 		TabScroll.initTabsScrollPosition();
 		// Setup the issues banner on the page
 		// Pages which dont exist (id 0) cannot have issues
@@ -405,7 +408,6 @@ module.exports = function () {
 			issues.init( overlayManager, currentPageHTMLParser );
 		}
 
-		mw.requestIdleCallback( errorLogging );
 		// deprecation notices
 		mw.log.deprecate( router, 'navigate', router.navigate, 'use navigateTo instead' );
 
@@ -437,7 +439,6 @@ module.exports = function () {
 				return !isUserUri( element.href );
 			} )
 		);
-		initSmartLogout( '.menu__item--logout' );
 		initUserRedLinks();
 	} );
 };

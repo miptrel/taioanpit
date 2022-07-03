@@ -94,7 +94,7 @@ const iShouldSeeAToastNotification = () => {
 const iShouldSeeAToastNotificationWithMessage = ( msg ) => {
 	iShouldSeeAToastNotification();
 	const notificationBody = ArticlePage.notification_element.$( '.mw-notification-content' );
-	assert.strictEqual( notificationBody.getText().indexOf( msg ) > -1, true );
+	assert.strictEqual( notificationBody.getText().includes( msg ), true );
 };
 
 const iClickTheBrowserBackButton = () => {
@@ -103,6 +103,7 @@ const iClickTheBrowserBackButton = () => {
 
 const iClickTheOverlayCloseButton = () => {
 	waitForPropagation( 2000 );
+	ArticlePageWithOverlay.overlay_close_element.waitForDisplayed();
 	ArticlePageWithOverlay.overlay_close_element.click();
 };
 

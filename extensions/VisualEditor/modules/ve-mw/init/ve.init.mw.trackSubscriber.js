@@ -8,8 +8,7 @@
  */
 
 ( function () {
-	var timing, editingSessionId,
-		actionPrefixMap = {
+	var actionPrefixMap = {
 			firstChange: 'first_change',
 			saveIntent: 'save_intent',
 			saveAttempt: 'save_attempt',
@@ -24,8 +23,9 @@
 			mw.Uri().query.editingStatsId;
 	}
 
-	timing = {};
-	editingSessionId = getEditingSessionIdFromRequest() || mw.user.generateRandomSessionId();
+	var timing = {};
+	var editingSessionId = getEditingSessionIdFromRequest() || mw.user.generateRandomSessionId();
+	ve.init.editingSessionId = editingSessionId;
 
 	function log() {
 		// mw.log is a no-op unless resource loader is in debug mode, so
@@ -40,6 +40,27 @@
 			1 / mw.config.get( 'wgWMESchemaEditAttemptStepSamplingRate' ),
 			editingSessionId
 		);
+	}
+
+	function addABTestData( data, addToken ) {
+		// DiscussionTools New Topic A/B test for logged out users
+		if ( !mw.config.get( 'wgDiscussionToolsABTest' ) ) {
+			return;
+		}
+		if ( mw.user.isAnon() ) {
+			var tokenData = mw.storage.getObject( 'DTNewTopicABToken' );
+			if ( !tokenData ) {
+				return;
+			}
+			var anonid = parseInt( tokenData.token.slice( 0, 8 ), 16 );
+			data.bucket = anonid % 2 === 0 ? 'test' : 'control';
+			if ( addToken ) {
+				// eslint-disable-next-line camelcase
+				data.anonymous_user_token = tokenData.token;
+			}
+		} else if ( mw.user.options.get( 'discussiontools-abtest2' ) ) {
+			data.bucket = mw.user.options.get( 'discussiontools-abtest2' );
+		}
 	}
 
 	function computeDuration( action, event, timeStamp ) {
@@ -86,13 +107,13 @@
 	function mwEditHandler( topic, data, timeStamp ) {
 		var action = topic.split( '.' )[ 1 ],
 			actionPrefix = actionPrefixMap[ action ] || action,
-			duration = 0,
-			event;
+			duration = 0;
 
 		if ( action === 'init' ) {
 			if ( firstInitDone ) {
 				// Regenerate editingSessionId
 				editingSessionId = mw.user.generateRandomSessionId();
+				ve.init.editingSessionId = editingSessionId;
 			}
 			firstInitDone = true;
 		}
@@ -141,7 +162,7 @@
 		}
 
 		/* eslint-disable camelcase */
-		event = $.extend( {
+		var event = ve.extendObject( {
 			version: 1,
 			action: action,
 			is_oversample: !inSample(),
@@ -151,7 +172,7 @@
 			page_title: mw.config.get( 'wgPageName' ),
 			page_ns: mw.config.get( 'wgNamespaceNumber' ),
 			// eslint-disable-next-line no-jquery/no-global-selector
-			revision_id: mw.config.get( 'wgRevisionId' ) || $( 'input[name=parentRevId]' ).val(),
+			revision_id: mw.config.get( 'wgRevisionId' ) || +$( 'input[name=parentRevId]' ).val() || 0,
 			editing_session_id: editingSessionId,
 			page_token: mw.user.getPageviewToken(),
 			session_token: mw.user.sessionId(),
@@ -180,7 +201,6 @@
 		if ( action === 'saveFailure' ) {
 			event[ actionPrefix + '_message' ] = event.message;
 		}
-		/* eslint-enable camelcase */
 
 		// Remove renamed properties
 		delete event.type;
@@ -193,6 +213,9 @@
 		} else {
 			timing[ action ] = timeStamp;
 		}
+		/* eslint-enable camelcase */
+
+		addABTestData( event, true );
 
 		if ( trackdebug ) {
 			log( topic, duration + 'ms', event );
@@ -217,10 +240,9 @@
 	}
 
 	function activityHandler( topic, data ) {
-		var feature = topic.split( '.' )[ 1 ],
-			event;
+		var feature = topic.split( '.' )[ 1 ];
 
-		if ( !inSample() && !trackdebug ) {
+		if ( !inSample() && !mw.config.get( 'wgWMESchemaEditAttemptStepOversample' ) && !trackdebug ) {
 			return;
 		}
 
@@ -237,10 +259,11 @@
 		}
 
 		/* eslint-disable camelcase */
-		event = {
+		var event = {
 			feature: feature,
 			action: data.action,
 			editingSessionId: editingSessionId,
+			is_oversample: !inSample(),
 			user_id: mw.user.getId(),
 			user_editcount: mw.config.get( 'wgUserEditCount', 0 ),
 			editor_interface: ve.getProp( ve, 'init', 'target', 'surface', 'mode' ) === 'source' ? 'wikitext-2017' : 'visualeditor',
@@ -248,6 +271,8 @@
 			platform: ve.getProp( ve, 'init', 'target', 'constructor', 'static', 'platformType' ) || 'other'
 		};
 		/* eslint-enable camelcase */
+
+		addABTestData( data );
 
 		if ( trackdebug ) {
 			log( topic, event );

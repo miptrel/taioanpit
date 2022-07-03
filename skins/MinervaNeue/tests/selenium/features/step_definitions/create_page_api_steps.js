@@ -45,7 +45,7 @@ const iAmInAWikiThatHasCategories = ( title ) => {
 };
 
 const iAmOnAPageThatHasTheFollowingEdits = function ( table ) {
-	const randomString = Math.random().toString( 36 ).substring( 7 ),
+	const randomString = Math.random().toString( 36 ).slice( 7 ),
 		pageTitle = `Selenium_diff_test_${randomString}`,
 		edits = table.rawTable.map( ( row, i ) =>
 			[ i === 0 ? 'create' : 'edit', pageTitle, row[ 0 ] ] );
@@ -84,13 +84,14 @@ const watch = ( title ) => {
 	// So we run the non-js workflow.
 	const page = new Page();
 	page.openTitle( title, { action: 'watch' } );
+	$( '#mw-content-text button[type="submit"]' ).waitForDisplayed();
 	$( '#mw-content-text button[type="submit"]' ).click();
 	waitForPropagation( 10000 );
 	page.openTitle( title );
 };
 
 const iAmViewingAWatchedPage = () => {
-	const title = `I am on the "Selenium mobile watched page test ${new Date().getTime()}`;
+	const title = `I am on the "Selenium mobile watched page test ${Date.now()}`;
 	browser.call( () => {
 		return createPage( title, 'watch test' );
 	} );

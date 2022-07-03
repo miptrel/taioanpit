@@ -2,6 +2,7 @@
 	"@metadata": {
 		"authors": [
 			"Dbc334",
+			"Eleassar",
 			"Janezdrilc"
 		]
 	},
@@ -39,7 +40,7 @@
 	"action-oathauth-enable": "vključi dvostopenjsko preverjanje pristnosti",
 	"oathauth-auth-token-label": "Žeton",
 	"oathauth-auth-token-help": "Geslo za enkratno uporabo, ki služi kot druga stopnja dvostopenjskega preverjanja pristnosti.",
-	"oathauth-auth-ui": "Vnesi kodo za potrditev iz svoje naprave za preverjanje pristnosti.",
+	"oathauth-auth-ui": "Iz svoje naprave prepišite kodo za potrditev identitete.",
 	"oathauth-throttled": "Preveč poskusov potrditve! Počakaj $1.",
 	"oathauth-login-failed": "Potrditev je spodletela.",
 	"oathauth-describe-provider": "Dvostopenjsko preverjanje pristnosti (OATH).",
@@ -51,7 +52,7 @@
 	"oath-log-name": "Dnevnik dvostopenjskega preverjanja pristnosti",
 	"oath-log-header": "Ti dogodki beležijo spremembe uporabnikovega statusa dvostopenjskega preverjanja pristnosti.",
 	"logentry-oath-disable-other": "$1 {{GENDER:$2|je izključil}} dvostopenjsko preverjanje pristnosti od $3",
-	"oauthauth-ui-no-module": "Noben ni omogočen",
+	"oathauth-ui-no-module": "Noben ni omogočen",
 	"oathauth-module-totp-label": "TOTP (enkratni žeton)",
 	"oathauth-ui-manage": "Upravljaj",
 	"oathmanage": "Upravljaj dvostopenjsko preverjanje pristnosti",

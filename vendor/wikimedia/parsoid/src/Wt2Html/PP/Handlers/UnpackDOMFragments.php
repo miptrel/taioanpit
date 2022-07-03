@@ -3,11 +3,13 @@ declare( strict_types = 1 );
 
 namespace Wikimedia\Parsoid\Wt2Html\PP\Handlers;
 
-use DOMElement;
-use DOMNode;
 use Wikimedia\Assert\Assert;
 use Wikimedia\Parsoid\Config\Env;
 use Wikimedia\Parsoid\Core\DomSourceRange;
+use Wikimedia\Parsoid\DOM\DocumentFragment;
+use Wikimedia\Parsoid\DOM\Element;
+use Wikimedia\Parsoid\DOM\Node;
+use Wikimedia\Parsoid\NodeData\TempData;
 use Wikimedia\Parsoid\Utils\ContentUtils;
 use Wikimedia\Parsoid\Utils\DOMCompat;
 use Wikimedia\Parsoid\Utils\DOMDataUtils;
@@ -18,11 +20,13 @@ use Wikimedia\Parsoid\Utils\Utils;
 
 class UnpackDOMFragments {
 	/**
-	 * @param DOMNode $targetNode
-	 * @param DOMNode $fragment
+	 * @param Node $targetNode
+	 * @param DocumentFragment $fragment
 	 * @return bool
 	 */
-	private static function hasBadNesting( DOMNode $targetNode, DOMNode $fragment ): bool {
+	private static function hasBadNesting(
+		Node $targetNode, DocumentFragment $fragment
+	): bool {
 		// SSS FIXME: This is not entirely correct. This is only
 		// looking for nesting of identical tags. But, HTML tree building
 		// has lot more restrictions on nesting. It seems the simplest way
@@ -31,20 +35,20 @@ class UnpackDOMFragments {
 		// A-tags cannot ever be nested inside each other at any level.
 		// This is the one scenario we definitely have to handle right now.
 		// We need a generic robust solution for other nesting scenarios.
-		return $targetNode->nodeName === 'a' &&
-			DOMUtils::treeHasElement( $fragment, $targetNode->nodeName );
+		return DOMCompat::nodeName( $targetNode ) === 'a' &&
+			DOMUtils::treeHasElement( $fragment, DOMCompat::nodeName( $targetNode ) );
 	}
 
 	/**
-	 * @param DOMNode $targetNode
-	 * @param DOMNode $fragment
+	 * @param Element $targetNode
+	 * @param DocumentFragment $fragment
 	 * @param Env $env
 	 */
-	private static function fixUpMisnestedTagDSR(
-		DOMNode $targetNode, DOMNode $fragment, Env $env
+	public static function fixUpMisnestedTagDSR(
+		Element $targetNode, DocumentFragment $fragment, Env $env
 	): void {
 		// Currently, this only deals with A-tags
-		if ( $targetNode->nodeName !== 'a' ) {
+		if ( DOMCompat::nodeName( $targetNode ) !== 'a' ) {
 			return;
 		}
 
@@ -59,22 +63,29 @@ class UnpackDOMFragments {
 		PipelineUtils::addSpanWrappers( $fragment->childNodes );
 
 		$resetDSR = false;
-		$currOffset = 0;
 		$dsrFixer = new DOMTraverser();
-		$fixHandler = function ( DOMNode $node ) use ( &$resetDSR, &$currOffset ) {
-			if ( $node instanceof DOMElement ) {
+		$newOffset = DOMDataUtils::getDataParsoid( $targetNode )->dsr->end ?? null;
+		$fixHandler = static function ( Node $node ) use ( &$resetDSR, &$newOffset ) {
+			if ( $node instanceof Element ) {
 				$dp = DOMDataUtils::getDataParsoid( $node );
-				if ( $node->nodeName === 'a' ) {
+				if ( !$resetDSR && DOMCompat::nodeName( $node ) === 'a' ) {
 					$resetDSR = true;
+					// Wrap next siblings to the 'A', since they can end up bare
+					// after the misnesting
+					PipelineUtils::addSpanWrappers( $node->parentNode->childNodes, $node );
+					return $node;
 				}
 				if ( $resetDSR ) {
-					if ( isset( $dp->dsr->start ) ) {
-						$currOffset = $dp->dsr->end = $dp->dsr->start;
-					} else {
-						$dp->dsr = new DomSourceRange( $currOffset, $currOffset, null, null );
+					if ( $newOffset === null ) {
+						// We end up here when $targetNode is part of encapsulated content.
+						// Till we add logic to prevent that from happening, we need this fallback.
+						if ( isset( $dp->dsr->start ) ) {
+							$newOffset = $dp->dsr->start;
+						}
 					}
+					$dp->dsr = new DomSourceRange( $newOffset, $newOffset, null, null );
 					$dp->misnested = true;
-				} elseif ( !empty( $dp->tmp->wrapper ) ) {
+				} elseif ( $dp->getTempFlag( TempData::WRAPPER ) ) {
 					// Unnecessary wrapper added above -- strip it.
 					$next = $node->firstChild ?: $node->nextSibling;
 					DOMUtils::migrateChildren( $node, $node->parentNode, $node );
@@ -90,48 +101,14 @@ class UnpackDOMFragments {
 	}
 
 	/**
-	 * @param DOMNode $node
-	 * @param int $delta
-	 */
-	public static function addDeltaToDSR( DOMNode $node, int $delta ): void {
-		// Add 'delta' to dsr->start and dsr->end for nodes in the subtree
-		// node's dsr has already been updated
-		$child = $node->firstChild;
-		while ( $child ) {
-			if ( $child instanceof DOMElement ) {
-				$dp = DOMDataUtils::getDataParsoid( $child );
-				if ( !empty( $dp->dsr ) ) {
-					// SSS FIXME: We've exploited partial DSR information
-					// in propagating DSR values across the DOM.  But, worth
-					// revisiting at some point to see if we want to change this
-					// so that either both or no value is present to eliminate these
-					// kind of checks.
-					//
-					// Currently, it can happen that one or the other
-					// value can be null.  So, we should try to udpate
-					// the dsr value in such a scenario.
-					if ( is_int( $dp->dsr->start ) ) {
-						$dp->dsr->start += $delta;
-					}
-					if ( is_int( $dp->dsr->end ) ) {
-						$dp->dsr->end += $delta;
-					}
-				}
-				self::addDeltaToDSR( $child, $delta );
-			}
-			$child = $child->nextSibling;
-		}
-	}
-
-	/**
 	 * @param Env $env
-	 * @param DOMNode $node
+	 * @param Node $node
 	 * @param array &$aboutIdMap
 	 */
-	private static function fixAbouts( Env $env, DOMNode $node, array &$aboutIdMap = [] ): void {
+	private static function fixAbouts( Env $env, Node $node, array &$aboutIdMap = [] ): void {
 		$c = $node->firstChild;
 		while ( $c ) {
-			if ( $c instanceof DOMElement ) {
+			if ( $c instanceof Element ) {
 				if ( $c->hasAttribute( 'about' ) ) {
 					$cAbout = $c->getAttribute( 'about' );
 					// Update about
@@ -149,23 +126,23 @@ class UnpackDOMFragments {
 	}
 
 	/**
-	 * @param DOMNode $node
+	 * @param DocumentFragment $domFragment
 	 * @param string $about
 	 */
 	private static function makeChildrenEncapWrappers(
-		DOMNode $node, string $about
+		DocumentFragment $domFragment, string $about
 	): void {
-		PipelineUtils::addSpanWrappers( $node->childNodes );
+		PipelineUtils::addSpanWrappers( $domFragment->childNodes );
 
-		$c = $node->firstChild;
+		$c = $domFragment->firstChild;
 		while ( $c ) {
 			/**
 			 * We just span wrapped the child nodes, so it's safe to assume
-			 * they're all DOMElements.
+			 * they're all Elements.
 			 *
-			 * @var DOMElement $c
+			 * @var Element $c
 			 */
-			'@phan-var DOMElement $c';
+			'@phan-var Element $c';
 			// FIXME: This unconditionally sets about on children
 			// This is currently safe since all of them are nested
 			// inside a transclusion, but do we need future-proofing?
@@ -177,12 +154,12 @@ class UnpackDOMFragments {
 	/**
 	 * DOMTraverser handler that unpacks DOM fragments which were injected in the
 	 * token pipeline.
-	 * @param DOMNode $node
+	 * @param Node $node
 	 * @param Env $env
-	 * @return bool|DOMNode
+	 * @return bool|Node
 	 */
-	public static function handler( DOMNode $node, Env $env ) {
-		if ( !$node instanceof DOMElement ) {
+	public static function handler( Node $node, Env $env ) {
+		if ( !$node instanceof Element ) {
 			return true;
 		}
 
@@ -195,45 +172,11 @@ class UnpackDOMFragments {
 
 		// Replace this node and possibly a sibling with node.dp.html
 		$fragmentParent = $node->parentNode;
-		$dummyNode = $node->ownerDocument->createElement( $fragmentParent->nodeName );
 
-		Assert::invariant( preg_match( '/^mwf/', $dp->html ), '' );
-		$nodes = $env->getDOMFragment( $dp->html );
+		Assert::invariant( str_starts_with( $dp->html, 'mwf' ), '' );
+		$domFragment = $env->getDOMFragment( $dp->html );
 
-		if ( !empty( $dp->tmp->isHtmlExt ) ) {
-			// FIXME: This is a silly workaround for foundationwiki which has the
-			// "html" extension tag which lets through arbitrary content and
-			// often does so in a way that doesn't consider that we'd like to
-			// encapsulate it.  For example, it closes the tag in the middle
-			// of style tag content to insert a template and then closes the style
-			// tag in another "html" extension tag.  The balance proposal isn't
-			// its friend.
-			//
-			// This works because importNode does attribute error checking, whereas
-			// parsing does not.  A better fix would be to use one ownerDocument
-			// for the entire parse, so no adoption is needed.  See T179082
-			$nodeStrings = array_map( function ( $n ) {
-				$str = ContentUtils::ppToXML( $n );
-				// Put $n back in canonical form.
-				// Since $nodes isn't used beyond this point, we can also
-				// set $nodes to null but this is an uncommon use case so
-				// simpler to do this here.
-				DOMDataUtils::visitAndLoadDataAttribs( $n );
-				return $str;
-			}, $nodes );
-			$html = implode( '', $nodeStrings );
-			ContentUtils::ppToDOM( $env, $html, [ 'node' => $dummyNode ] );
-		} else {
-			array_walk( $nodes, function ( $n ) use ( &$dummyNode ) {
-				// Dump $n's node data from the data-bag onto the node attribute
-				DOMDataUtils::visitAndStoreDataAttribs( $n );
-				$imp = $dummyNode->ownerDocument->importNode( $n, true );
-				$dummyNode->appendChild( $imp );
-			} );
-			DOMDataUtils::visitAndLoadDataAttribs( $dummyNode );
-		}
-
-		$contentNode = $dummyNode->firstChild;
+		$contentNode = $domFragment->firstChild;
 
 		if ( DOMUtils::hasTypeOf( $node, 'mw:Transclusion' ) ) {
 			// Ensure our `firstChild` is an element to add annotation.  At present,
@@ -243,10 +186,10 @@ class UnpackDOMFragments {
 			// omitted or new uses for dom fragments found.  For now, the test case
 			// necessitating this is an edgy link-in-link scenario:
 			//   [[Test|{{1x|[[Hmm|Something <sup>strange</sup>]]}}]]
-			PipelineUtils::addSpanWrappers( $dummyNode->childNodes );
+			PipelineUtils::addSpanWrappers( $domFragment->childNodes );
 			// Reset `contentNode`, since the `firstChild` may have changed in
 			// span wrapping.
-			$contentNode = $dummyNode->firstChild;
+			$contentNode = $domFragment->firstChild;
 			DOMUtils::assertElt( $contentNode );
 			// Transfer typeof, data-mw, and param info
 			// about attributes are transferred below.
@@ -270,8 +213,10 @@ class UnpackDOMFragments {
 		// content etc).
 		// TODO: Make sure that is the only reason for not having a DSR here.
 		$dsr = $dp->dsr ?? null;
-		if ( $dsr &&
-			!( empty( $dp->tmp->setDSR ) && empty( $dp->tmp->fromCache ) && empty( $dp->fostered ) )
+		if ( $dsr && !(
+			!$dp->getTempFlag( TempData::SET_DSR )
+			&& !$dp->getTempFlag( TempData::FROM_CACHE )
+			&& empty( $dp->fostered ) )
 		) {
 			DOMUtils::assertElt( $contentNode );
 			$cnDP = DOMDataUtils::getDataParsoid( $contentNode );
@@ -286,16 +231,10 @@ class UnpackDOMFragments {
 				$cnDP->dsr = $dsr;
 			} else { // non-transcluded images
 				$cnDP->dsr = new DomSourceRange( $dsr->start, $dsr->end, 2, 2 );
-				// Reused image -- update dsr by tsrDelta on all
-				// descendents of 'firstChild' which is the <figure> tag
-				$tsrDelta = $dp->tmp->tsrDelta ?? 0;
-				if ( $tsrDelta ) {
-					self::addDeltaToDSR( $contentNode, $tsrDelta );
-				}
 			}
 		}
 
-		if ( !empty( $dp->tmp->fromCache ) ) {
+		if ( $dp->getTempFlag( TempData::FROM_CACHE ) ) {
 			// Replace old about-id with new about-id that is
 			// unique to the global page environment object.
 			//
@@ -304,7 +243,7 @@ class UnpackDOMFragments {
 			// of those individual transclusions should get a new unique
 			// about id. Hence a need for an aboutIdMap and the need to
 			// walk the entire tree.
-			self::fixAbouts( $env, $dummyNode );
+			self::fixAbouts( $env, $domFragment );
 		}
 
 		// If the fragment wrapper has an about id, it came from template
@@ -313,12 +252,12 @@ class UnpackDOMFragments {
 		// of whether we're coming `fromCache` or not.
 		// FIXME: Presumably we have a nesting issue here if this is a cached
 		// transclusion.
-		$about = $node->getAttribute( 'about' );
+		$about = $node->getAttribute( 'about' ) ?? '';
 		if ( $about !== '' ) {
 			// Span wrapping may not have happened for the transclusion above if
 			// the fragment is not the first encapsulation wrapper node.
-			PipelineUtils::addSpanWrappers( $dummyNode->childNodes );
-			$n = $dummyNode->firstChild;
+			PipelineUtils::addSpanWrappers( $domFragment->childNodes );
+			$n = $domFragment->firstChild;
 			while ( $n ) {
 				DOMUtils::assertElt( $n );
 				$n->setAttribute( 'about', $about );
@@ -328,7 +267,7 @@ class UnpackDOMFragments {
 
 		$nextNode = $node->nextSibling;
 
-		if ( self::hasBadNesting( $fragmentParent, $dummyNode ) ) {
+		if ( self::hasBadNesting( $fragmentParent, $domFragment ) ) {
 			DOMUtils::assertElt( $fragmentParent );
 			/* -----------------------------------------------------------------------
 			 * If fragmentParent is an A element and the fragment contains another
@@ -360,17 +299,17 @@ class UnpackDOMFragments {
 			// In this example, the <a> corresponding to Foo is fragmentParent and has an about.
 			// dummyNode is the DOM corresponding to "This is [[bad]], very bad". Post-fixup
 			// "[[bad]], very bad" are at encapsulation level and need about ids.
-			$about = $fragmentParent->getAttribute( 'about' );
+			$about = $fragmentParent->getAttribute( 'about' ) ?? '';
 			if ( $about !== '' ) {
-				self::makeChildrenEncapWrappers( $dummyNode, $about );
+				self::makeChildrenEncapWrappers( $domFragment, $about );
 			}
 
 			// Set zero-dsr width on all elements that will get split
 			// in dummyNode's tree to prevent selser-based corruption
 			// on edits to a page that contains badly nested tags.
-			self::fixUpMisnestedTagDSR( $fragmentParent, $dummyNode, $env );
+			self::fixUpMisnestedTagDSR( $fragmentParent, $domFragment, $env );
 
-			$dummyHTML = ContentUtils::ppToXML( $dummyNode, [
+			$dummyHTML = ContentUtils::ppToXML( $domFragment, [
 					'innerXML' => true,
 					// We just added some span wrappers and we need to keep
 					// that tmp info so the unnecessary ones get stripped.
@@ -378,14 +317,23 @@ class UnpackDOMFragments {
 					'keepTmp' => true
 				]
 			);
+
+			// Empty the fragment since we've serialized its children and
+			// removing it asserts everything has been migrated out
+			DOMCompat::replaceChildren( $domFragment );
+
 			$parentHTML = ContentUtils::ppToXML( $fragmentParent );
 
 			$p = $fragmentParent->previousSibling;
 
 			// We rely on HTML5 parser to fixup the bad nesting (see big comment above)
-			$newDoc = DOMUtils::parseHTML( str_replace( $timestamp, $dummyHTML, $parentHTML ) );
-			$body = DOMCompat::getBody( $newDoc );
-			DOMUtils::migrateChildrenBetweenDocs( $body, $fragmentParent->parentNode, $fragmentParent );
+			$newFragment = DOMUtils::parseHTMLToFragment(
+				$fragmentParent->ownerDocument,
+				str_replace( $timestamp, $dummyHTML, $parentHTML )
+			);
+			DOMUtils::migrateChildren(
+				$newFragment, $fragmentParent->parentNode, $fragmentParent
+			);
 
 			if ( !$p ) {
 				$p = $fragmentParent->parentNode->firstChild;
@@ -406,9 +354,11 @@ class UnpackDOMFragments {
 			$fragmentParent->parentNode->removeChild( $fragmentParent );
 		} else {
 			// Move the content nodes over and delete the placeholder node
-			DOMUtils::migrateChildren( $dummyNode, $fragmentParent, $node );
+			DOMUtils::migrateChildren( $domFragment, $fragmentParent, $node );
 			$node->parentNode->removeChild( $node );
 		}
+
+		$env->removeDOMFragment( $dp->html );
 
 		return $nextNode;
 	}

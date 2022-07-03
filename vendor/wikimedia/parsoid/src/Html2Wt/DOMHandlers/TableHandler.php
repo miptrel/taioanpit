@@ -3,13 +3,12 @@ declare( strict_types = 1 );
 
 namespace Wikimedia\Parsoid\Html2Wt\DOMHandlers;
 
-use DOMElement;
-use DOMNode;
+use Wikimedia\Parsoid\DOM\Element;
+use Wikimedia\Parsoid\DOM\Node;
 use Wikimedia\Parsoid\Html2Wt\SerializerState;
-use Wikimedia\Parsoid\Html2Wt\WTSUtils;
+use Wikimedia\Parsoid\Utils\DOMCompat;
 use Wikimedia\Parsoid\Utils\DOMDataUtils;
 use Wikimedia\Parsoid\Utils\DOMUtils;
-use Wikimedia\Parsoid\Utils\PHPUtils;
 use Wikimedia\Parsoid\Utils\WTUtils;
 
 class TableHandler extends DOMHandler {
@@ -20,11 +19,11 @@ class TableHandler extends DOMHandler {
 
 	/** @inheritDoc */
 	public function handle(
-		DOMElement $node, SerializerState $state, bool $wrapperUnmodified = false
-	): ?DOMNode {
+		Element $node, SerializerState $state, bool $wrapperUnmodified = false
+	): ?Node {
 		$dp = DOMDataUtils::getDataParsoid( $node );
-		$wt = PHPUtils::coalesce( $dp->startTagSrc ?? null, '{|' );
-		$indentTable = $node->parentNode->nodeName === 'dd'
+		$wt = $dp->startTagSrc ?? '{|';
+		$indentTable = DOMCompat::nodeName( $node->parentNode ) === 'dd'
 			&& DOMUtils::previousNonSepSibling( $node ) === null;
 		if ( $indentTable ) {
 			$state->singleLineContext->disable();
@@ -48,7 +47,7 @@ class TableHandler extends DOMHandler {
 			// is never computed and set here.
 			$state->sep->constraints = [ 'min' => 1, 'max' => 2, 'constraintInfo' => [] ];
 		}
-		WTSUtils::emitEndTag( PHPUtils::coalesce( $dp->endTagSrc ?? null, '|}' ), $node, $state );
+		$state->emitChunk( $dp->endTagSrc ?? '|}', $node );
 		if ( $indentTable ) {
 			$state->singleLineContext->pop();
 		}
@@ -56,9 +55,9 @@ class TableHandler extends DOMHandler {
 	}
 
 	/** @inheritDoc */
-	public function before( DOMElement $node, DOMNode $otherNode, SerializerState $state ): array {
+	public function before( Element $node, Node $otherNode, SerializerState $state ): array {
 		// Handle special table indentation case!
-		if ( $node->parentNode === $otherNode && $otherNode->nodeName === 'dd' ) {
+		if ( $node->parentNode === $otherNode && DOMCompat::nodeName( $otherNode ) === 'dd' ) {
 			return [ 'min' => 0, 'max' => 2 ];
 		} else {
 			return [ 'min' => 1, 'max' => 2 ];
@@ -66,9 +65,9 @@ class TableHandler extends DOMHandler {
 	}
 
 	/** @inheritDoc */
-	public function after( DOMElement $node, DOMNode $otherNode, SerializerState $state ): array {
+	public function after( Element $node, Node $otherNode, SerializerState $state ): array {
 		if ( ( WTUtils::isNewElt( $node ) || WTUtils::isNewElt( $otherNode ) )
-			&& !DOMUtils::isBody( $otherNode )
+			&& !DOMUtils::atTheTop( $otherNode )
 		) {
 			return [ 'min' => 1, 'max' => 2 ];
 		} else {
@@ -77,12 +76,12 @@ class TableHandler extends DOMHandler {
 	}
 
 	/** @inheritDoc */
-	public function firstChild( DOMElement $node, DOMNode $otherNode, SerializerState $state ): array {
+	public function firstChild( Node $node, Node $otherNode, SerializerState $state ): array {
 		return [ 'min' => 1, 'max' => $this->maxNLsInTable( $node, $otherNode ) ];
 	}
 
 	/** @inheritDoc */
-	public function lastChild( DOMElement $node, DOMNode $otherNode, SerializerState $state ): array {
+	public function lastChild( Node $node, Node $otherNode, SerializerState $state ): array {
 		return [ 'min' => 1, 'max' => $this->maxNLsInTable( $node, $otherNode ) ];
 	}
 

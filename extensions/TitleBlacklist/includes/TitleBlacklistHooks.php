@@ -6,12 +6,22 @@
  * @license GPL-2.0-or-later
  */
 
+use MediaWiki\Revision\RevisionRecord;
+use MediaWiki\Storage\EditResult;
+use MediaWiki\User\UserIdentity;
+
 /**
  * Hooks for the TitleBlacklist class
  *
  * @ingroup Extensions
  */
-class TitleBlacklistHooks {
+class TitleBlacklistHooks implements
+	\MediaWiki\Hook\EditFilterHook,
+	\MediaWiki\Hook\TitleGetEditNoticesHook,
+	\MediaWiki\Hook\MovePageCheckPermissionsHook,
+	\MediaWiki\Permissions\Hook\GetUserPermissionsErrorsExpensiveHook,
+	\MediaWiki\Storage\Hook\PageSaveCompleteHook
+{
 
 	/**
 	 * getUserPermissionsErrorsExpensive hook
@@ -19,11 +29,11 @@ class TitleBlacklistHooks {
 	 * @param Title $title
 	 * @param User $user
 	 * @param string $action
-	 * @param array|IApiMessage &$result
+	 * @param array|string|MessageSpecifier &$result
 	 *
 	 * @return bool
 	 */
-	public static function onUserCan( $title, $user, $action, &$result ) {
+	public function onGetUserPermissionsErrorsExpensive( $title, $user, $action, &$result ) {
 		# Some places check createpage, while others check create.
 		# As it stands, upload does createpage, but normalize both
 		# to the same action, to stop future similar bugs.
@@ -73,7 +83,7 @@ class TitleBlacklistHooks {
 	 * @param int $oldid
 	 * @param array &$notices
 	 */
-	public static function onDisplayBlacklistOverrideNotice( Title $title, $oldid, array &$notices ) {
+	public function onTitleGetEditNotices( $title, $oldid, &$notices ) {
 		if ( !RequestContext::getMain()->getUser()->isAllowed( 'tboverride' ) ) {
 			return;
 		}
@@ -107,8 +117,8 @@ class TitleBlacklistHooks {
 	 *
 	 * @return bool
 	 */
-	public static function onMovePageCheckPermissions(
-		Title $oldTitle, Title $newTitle, User $user, $reason, Status $status
+	public function onMovePageCheckPermissions(
+		$oldTitle, $newTitle, $user, $reason, $status
 	) {
 		$titleBlacklist = TitleBlacklist::singleton();
 		$blacklisted = $titleBlacklist->userCannot( $newTitle, $user, 'move' );
@@ -179,8 +189,9 @@ class TitleBlacklistHooks {
 	 * @param string $text
 	 * @param string $section
 	 * @param string &$error
+	 * @param string $summary
 	 */
-	public static function onValidateBlacklist( $editor, $text, $section, &$error ) {
+	public function onEditFilter( $editor, $text, $section, &$error, $summary ) {
 		$title = $editor->getTitle();
 
 		if ( $title->getNamespace() == NS_MEDIAWIKI && $title->getDBkey() == 'Titleblacklist' ) {
@@ -207,18 +218,22 @@ class TitleBlacklistHooks {
 	}
 
 	/**
-	 * PageContentSaveComplete hook
+	 * PageSaveComplete hook
 	 *
 	 * @param WikiPage $wikiPage
-	 * @param User $user
-	 * @param Content $content
+	 * @param UserIdentity $userIdentity
 	 * @param string $summary
-	 * @param bool $isminor
-	 * @param bool $iswatch
-	 * @param string $section
+	 * @param int $flags
+	 * @param RevisionRecord $revisionRecord
+	 * @param EditResult $editResult
 	 */
-	public static function onClearBlacklist(
-		WikiPage $wikiPage, $user, $content, $summary, $isminor, $iswatch, $section
+	public function onPageSaveComplete(
+		$wikiPage,
+		$userIdentity,
+		$summary,
+		$flags,
+		$revisionRecord,
+		$editResult
 	) {
 		$title = $wikiPage->getTitle();
 		if ( $title->getNamespace() === NS_MEDIAWIKI && $title->getDBkey() == 'Titleblacklist' ) {

@@ -7,6 +7,9 @@
 	ul {
 		// This is, like, the area for the disclaimer.
 		&.hlist {
+			display: flex;
+			flex-wrap: wrap;
+
 			li {
 				background-color: transparent;
 				border: 0;
@@ -25,6 +28,10 @@
 					&:hover {
 						background-color: transparent;
 						box-shadow: none;
+					}
+
+					span {
+						font-weight: normal;
 					}
 				}
 			}

@@ -5,21 +5,21 @@ use UtfNormal\Validator;
 class Scribunto_LuaUstringLibrary extends Scribunto_LuaLibraryBase {
 	/**
 	 * Limit on pattern lengths, in bytes not characters
-	 * @var integer
+	 * @var int
 	 */
 	private $patternLengthLimit = 10000;
 
 	/**
 	 * Limit on string lengths, in bytes not characters
 	 * If null, $wgMaxArticleSize * 1024 will be used
-	 * @var integer|null
+	 * @var int|null
 	 */
 	private $stringLengthLimit = null;
 
 	/**
 	 * PHP until 5.6.9 are buggy when the regex in preg_replace an
 	 * preg_match_all matches the empty string.
-	 * @var boolean
+	 * @var bool
 	 */
 	private $phpBug53823 = false;
 
@@ -86,10 +86,10 @@ class Scribunto_LuaUstringLibrary extends Scribunto_LuaLibraryBase {
 	/**
 	 * Check a string first parameter
 	 * @param string $name Function name, for errors
-	 * @param mixed $s Value to check
+	 * @param mixed &$s Value to check
 	 * @param bool $checkEncoding Whether to validate UTF-8 encoding.
 	 */
-	private function checkString( $name, $s, $checkEncoding = true ) {
+	private function checkString( $name, &$s, $checkEncoding = true ) {
 		if ( $this->getLuaType( $s ) == 'number' ) {
 			$s = (string)$s;
 		} else {
@@ -314,8 +314,8 @@ class Scribunto_LuaUstringLibrary extends Scribunto_LuaLibraryBase {
 		if ( $j < $i ) {
 			return [ '' ];
 		}
-		$i = max( 1, min( $i, $len + 1 ) );
-		$j = max( 1, min( $j, $len + 1 ) );
+		$i = max( 1, min( (int)$i, $len + 1 ) );
+		$j = max( 1, min( (int)$j, $len + 1 ) );
 		$s = mb_substr( $s, $i - 1, $j - $i + 1, 'UTF-8' );
 		return [ $s ];
 	}
@@ -372,12 +372,13 @@ class Scribunto_LuaUstringLibrary extends Scribunto_LuaLibraryBase {
 	 *  - $re: The regular expression
 	 *  - $capt: Definition of capturing groups, see addCapturesFromMatch()
 	 *  - $anypos: Whether any positional captures were encountered in the pattern.
+	 * @return-taint none
 	 */
 	private function patternToRegex( $pattern, $anchor, $name ) {
 		$cacheKey = serialize( [ $pattern, $anchor ] );
 		if ( !$this->patternRegexCache->has( $cacheKey ) ) {
 			$this->checkPattern( $name, $pattern );
-			$pat = preg_split( '//us', $pattern, null, PREG_SPLIT_NO_EMPTY );
+			$pat = preg_split( '//us', $pattern, -1, PREG_SPLIT_NO_EMPTY );
 
 			static $charsets = null, $brcharsets = null;
 			if ( $charsets === null ) {
@@ -817,11 +818,11 @@ class Scribunto_LuaUstringLibrary extends Scribunto_LuaLibraryBase {
 		switch ( $this->getLuaType( $repl ) ) {
 		case 'string':
 		case 'number':
-			$cb = function ( $m ) use ( $repl, $anypos, &$captures ) {
+			$cb = static function ( $m ) use ( $repl, $anypos, &$captures ) {
 				if ( $anypos ) {
 					$m = array_shift( $captures );
 				}
-				return preg_replace_callback( '/%([%0-9])/', function ( $m2 ) use ( $m ) {
+				return preg_replace_callback( '/%([%0-9])/', static function ( $m2 ) use ( $m ) {
 					$x = $m2[1];
 					if ( $x === '%' ) {
 						return '%';
@@ -865,6 +866,7 @@ class Scribunto_LuaUstringLibrary extends Scribunto_LuaLibraryBase {
 				$args = [];
 				if ( count( $capt ) ) {
 					foreach ( $capt as $i => $pos ) {
+						// @phan-suppress-next-line PhanTypeArraySuspiciousNullable
 						$args[] = $m["m$i"];
 					}
 				} else {
@@ -894,7 +896,7 @@ class Scribunto_LuaUstringLibrary extends Scribunto_LuaLibraryBase {
 			$maxMatches = $n < 0 ? INF : $n;
 			$n = -1;
 			$realCallback = $cb;
-			$cb = function ( $m ) use ( $realCallback, &$skippedMatches, &$maxMatches ) {
+			$cb = static function ( $m ) use ( $realCallback, &$skippedMatches, &$maxMatches ) {
 				$c = ord( $m['phpBug53823'] );
 				if ( $c >= 0x80 && $c <= 0xbf || $maxMatches <= 0 ) {
 					$skippedMatches++;

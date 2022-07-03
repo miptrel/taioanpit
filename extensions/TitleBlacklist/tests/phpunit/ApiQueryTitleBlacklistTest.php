@@ -17,19 +17,19 @@
  */
 class ApiQueryTitleBlacklistTest extends ApiTestCase {
 
-	public function setUp() : void {
+	public function setUp(): void {
 		parent::setUp();
 
 		TitleBlacklist::destroySingleton();
 		$this->setMwGlobals( 'wgTitleBlacklistSources', [
 			[
 				'type' => 'file',
-				'src'  => __DIR__ . '/testSource',
+				'src'  => __DIR__ . '/testSource.txt',
 			],
 		] );
 	}
 
-	public function tearDown() : void {
+	public function tearDown(): void {
 		TitleBlacklist::destroySingleton();
 		parent::tearDown();
 	}
@@ -91,7 +91,7 @@ class ApiQueryTitleBlacklistTest extends ApiTestCase {
 		);
 		$this->assertEquals(
 			"The title \"bar\" has been banned from creation.\nIt matches the following " .
-				"blacklist entry: <code>[Bb]ar #example blacklist entry</code>",
+				"disallowed titles list entry: <code>[Bb]ar #example disallowed list entry</code>",
 			$listed[0]['titleblacklist']['reason'],
 			'Listed title error text is as expected'
 		);
@@ -103,7 +103,7 @@ class ApiQueryTitleBlacklistTest extends ApiTestCase {
 		);
 
 		$this->assertEquals(
-			"[Bb]ar #example blacklist entry",
+			"[Bb]ar #example disallowed list entry",
 			$listed[0]['titleblacklist']['line'],
 			'Correct blacklist line is returned'
 		);

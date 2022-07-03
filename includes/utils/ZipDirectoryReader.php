@@ -185,6 +185,7 @@ class ZipDirectoryReader {
 	 * @param mixed $code
 	 * @param string $debugMessage
 	 * @throws ZipDirectoryReaderError
+	 * @return never
 	 */
 	private function error( $code, $debugMessage ) {
 		wfDebug( __CLASS__ . ": Fatal error: $debugMessage" );
@@ -369,7 +370,6 @@ class ZipDirectoryReader {
 	 * Read the central directory at the given location
 	 * @param int $offset
 	 * @param int $size
-	 * @suppress PhanTypeInvalidLeftOperandOfIntegerOp
 	 */
 	private function readCentralDirectory( $offset, $size ) {
 		$block = $this->getBlock( $offset, $size );
@@ -532,8 +532,8 @@ class ZipDirectoryReader {
 			$this->error( 'zip-bad', "getBlock() requested end position $end, " .
 				"file length is $fileLength" );
 		}
-		$startSeg = floor( $start / self::SEGSIZE );
-		$endSeg = ceil( $end / self::SEGSIZE );
+		$startSeg = (int)floor( $start / self::SEGSIZE );
+		$endSeg = (int)ceil( $end / self::SEGSIZE );
 
 		$block = '';
 		for ( $segIndex = $startSeg; $segIndex <= $endSeg; $segIndex++ ) {

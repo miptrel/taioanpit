@@ -30,7 +30,7 @@ use Vector\FeatureManagement\Requirement;
  *
  * @unstable
  *
- * @package FeatureManagement
+ * @package Vector\FeatureManagement\Requirements
  * @internal
  */
 class SimpleRequirement implements Requirement {
@@ -57,14 +57,14 @@ class SimpleRequirement implements Requirement {
 	/**
 	 * @inheritDoc
 	 */
-	public function getName() : string {
+	public function getName(): string {
 		return $this->name;
 	}
 
 	/**
 	 * @inheritDoc
 	 */
-	public function isMet() : bool {
+	public function isMet(): bool {
 		return $this->isMet;
 	}
 }

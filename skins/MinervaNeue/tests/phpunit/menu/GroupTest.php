@@ -10,18 +10,22 @@ use MediaWiki\Minerva\Menu\Group;
  * @group MinervaNeue
  * @coversDefaultClass \MediaWiki\Minerva\Menu\Group
  */
-class GroupTest extends \MediaWikiTestCase {
+class GroupTest extends \MediaWikiIntegrationTestCase {
+	/** @var string[] */
 	private $homeComponent = [
 		'text' => 'Home',
 		'href' => '/Main_page',
 		'class' => 'mw-ui-icon mw-ui-icon-before mw-ui-icon-home',
 		'data-event-name' => 'home',
+		'icon' => null,
 	];
 
+	/** @var string[] */
 	private $nearbyComponent = [
 		'text' => 'Nearby',
 		'href' => '/wiki/Special:Nearby',
 		'class' => 'mw-ui-icon mw-ui-icon-before mw-ui-icon-nearby',
+		'icon' => null
 	];
 
 	/**
@@ -178,13 +182,15 @@ class GroupTest extends \MediaWikiTestCase {
 			'text' => 'Phuedx (WMF)',
 			'href' => '/wiki/User:Phuedx_(WMF)',
 			'class' =>
-				'mw-ui-icon mw-ui-icon-before mw-ui-icon-profile truncated-text primary-action',
+				'mw-ui-icon mw-ui-icon-before mw-ui-icon-profile',
+			'icon' => null,
 		];
 		$authLogoutComponent = [
 			'text' => 'Logout',
 			'href' => '/wiki/Special:UserLogout',
 			'class' =>
-				'mw-ui-icon mw-ui-icon-element secondary-logout secondary-action truncated-text',
+				'mw-ui-icon mw-ui-icon-element secondary-logout',
+			'icon' => null,
 		];
 
 		$menu = new Group( 'p-test' );

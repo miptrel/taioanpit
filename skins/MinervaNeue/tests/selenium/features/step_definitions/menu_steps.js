@@ -8,15 +8,16 @@ const iSeeALinkToAboutPage = () => {
 };
 
 const iClickOnTheMainNavigationButton = () => {
+	ArticlePage.menu_button_element.waitForDisplayed();
 	ArticlePage.menu_button_element.click();
 };
 
 const iShouldSeeAUserPageLinkInMenu = () => {
-	ArticlePage.menu_element.$( '.primary-action' );
+	ArticlePage.menu_element.$( '.menu__item--user' );
 };
 
 const iShouldSeeLogoutLinkInMenu = () => {
-	ArticlePage.menu_element.$( '.secondary-action' );
+	ArticlePage.menu_element.$( '.menu__item--logout' );
 };
 
 const iShouldSeeALinkInMenu = ( text ) => {
@@ -25,8 +26,8 @@ const iShouldSeeALinkInMenu = ( text ) => {
 };
 
 const iShouldSeeALinkToDisclaimer = () => {
-	ArticlePage.menu_element.$( '=Disclaimers' ).waitForDisplayed();
-	assert.strictEqual( ArticlePage.menu_element.$( '=Disclaimers' ).isDisplayed(), true );
+	ArticlePage.menu_element.$( 'span=Disclaimers' ).waitForDisplayed();
+	assert.strictEqual( ArticlePage.menu_element.$( 'span=Disclaimers' ).isDisplayed(), true );
 };
 
 module.exports = {

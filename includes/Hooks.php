@@ -102,7 +102,7 @@ class Hooks {
 	public static function getHandlers( $name ) {
 		$hookContainer = MediaWikiServices::getInstance()->getHookContainer();
 		$handlers = $hookContainer->getLegacyHandlers( $name );
-		$funcName = 'on' . str_replace( ':', '_',  ucfirst( $name ) );
+		$funcName = 'on' . strtr( ucfirst( $name ), ':-', '__' );
 		foreach ( $hookContainer->getHandlers( $name ) as $obj ) {
 			$handlers[] = [ $obj, $funcName ];
 		}
@@ -166,6 +166,7 @@ class Hooks {
 	 * protected method.
 	 *
 	 * @since 1.35
+	 * @internal because HookRunner is intended for core only, see documentation on that class
 	 *
 	 * @return HookRunner
 	 */

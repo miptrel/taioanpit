@@ -70,6 +70,12 @@ ve.ui.TabIndexScope.prototype.getElementsInRoot = function () {
 			if ( self.skipAriaHidden && $( this ).closest( '[aria-hidden="true"]', self.$root[ 0 ] ).length ) {
 				return false;
 			}
+			if ( this.isContentEditable && this.contentEditable !== 'true' ) {
+				// Skip nodes within contentEditable nodes (but not the root contentEditable nodes),
+				// which would be focusable if they weren't editable, e.g. links.
+				// This matches browser behavior.
+				return false;
+			}
 			return OO.ui.isFocusableElement( $( this ) );
 		} ).map( function ( index ) {
 			return { element: this, index: index };
@@ -95,14 +101,12 @@ ve.ui.TabIndexScope.prototype.getElementsInRoot = function () {
  * @param {jQuery.Event} e
  */
 ve.ui.TabIndexScope.prototype.onRootKeyDown = function ( e ) {
-	var elements, index;
-
 	if ( e.which !== OO.ui.Keys.TAB ) {
 		return;
 	}
 
-	elements = this.getElementsInRoot();
-	index = elements.indexOf( e.target );
+	var elements = this.getElementsInRoot();
+	var index = elements.indexOf( e.target );
 
 	if ( index === -1 ) {
 		return;

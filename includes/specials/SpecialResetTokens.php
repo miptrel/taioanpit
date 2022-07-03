@@ -38,6 +38,10 @@ class SpecialResetTokens extends FormSpecialPage {
 		return true;
 	}
 
+	public function requiresUnblock() {
+		return false;
+	}
+
 	/**
 	 * Returns the token information list for this page after running
 	 * the hook and filtering out disabled preferences.
@@ -52,7 +56,7 @@ class SpecialResetTokens extends FormSpecialPage {
 			$this->getHookRunner()->onSpecialResetTokensTokens( $tokens );
 
 			$hiddenPrefs = $this->getConfig()->get( 'HiddenPrefs' );
-			$tokens = array_filter( $tokens, function ( $tok ) use ( $hiddenPrefs ) {
+			$tokens = array_filter( $tokens, static function ( $tok ) use ( $hiddenPrefs ) {
 				return !in_array( $tok['preference'], $hiddenPrefs );
 			} );
 

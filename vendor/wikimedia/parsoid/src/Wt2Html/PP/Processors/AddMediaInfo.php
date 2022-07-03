@@ -3,16 +3,21 @@ declare( strict_types = 1 );
 
 namespace Wikimedia\Parsoid\Wt2Html\PP\Processors;
 
-use DOMElement;
 use stdClass;
 use Wikimedia\Assert\Assert;
 use Wikimedia\Parsoid\Config\Env;
+use Wikimedia\Parsoid\Core\Sanitizer;
+use Wikimedia\Parsoid\DOM\DocumentFragment;
+use Wikimedia\Parsoid\DOM\Element;
+use Wikimedia\Parsoid\DOM\Node;
 use Wikimedia\Parsoid\Html2Wt\WTSUtils;
 use Wikimedia\Parsoid\Utils\DOMCompat;
 use Wikimedia\Parsoid\Utils\DOMDataUtils;
 use Wikimedia\Parsoid\Utils\DOMUtils;
+use Wikimedia\Parsoid\Utils\Title;
+use Wikimedia\Parsoid\Utils\WTUtils;
+use Wikimedia\Parsoid\Wikitext\Consts;
 use Wikimedia\Parsoid\Wt2Html\PegTokenizer;
-use Wikimedia\Parsoid\Wt2Html\TT\Sanitizer;
 use Wikimedia\Parsoid\Wt2Html\Wt2HtmlDOMProcessor;
 
 class AddMediaInfo implements Wt2HtmlDOMProcessor {
@@ -59,11 +64,11 @@ class AddMediaInfo implements Wt2HtmlDOMProcessor {
 
 		// Calculate the scaling ratio from the user-specified width and height
 		$ratio = null;
-		if ( !empty( $attrs['size']['height'] ) && !empty( $info['height'] ) ) {
-			$ratio = $attrs['size']['height'] / $info['height'];
+		if ( !empty( $attrs['dims']['height'] ) && !empty( $info['height'] ) ) {
+			$ratio = $attrs['dims']['height'] / $info['height'];
 		}
-		if ( !empty( $attrs['size']['width'] ) && !empty( $info['width'] ) ) {
-			$r = $attrs['size']['width'] / $info['width'];
+		if ( !empty( $attrs['dims']['width'] ) && !empty( $info['width'] ) ) {
+			$r = $attrs['dims']['width'] / $info['width'];
 			$ratio = ( $ratio === null || $r < $ratio ) ? $r : $ratio;
 		}
 
@@ -88,7 +93,9 @@ class AddMediaInfo implements Wt2HtmlDOMProcessor {
 	 * @param int|float|null $length
 	 * @return int|float|null
 	 */
-	private static function parseTimeString( string $timeString, $length = null ) {
+	private static function parseTimeString(
+		string $timeString, $length = null
+	) {
 		$parts = explode( ':', $timeString );
 		$time = 0;
 		$countParts = count( $parts );
@@ -142,13 +149,13 @@ class AddMediaInfo implements Wt2HtmlDOMProcessor {
 	}
 
 	/**
-	 * @param DOMElement $elt
+	 * @param Element $elt
 	 * @param array $info
 	 * @param stdClass $dataMw
 	 * @param bool $hasDimension
 	 */
 	private static function addSources(
-		DOMElement $elt, array $info, stdClass $dataMw, bool $hasDimension
+		Element $elt, array $info, stdClass $dataMw, bool $hasDimension
 	): void {
 		$doc = $elt->ownerDocument;
 		$frag = self::parseFrag( $info, $dataMw );
@@ -190,10 +197,10 @@ class AddMediaInfo implements Wt2HtmlDOMProcessor {
 	}
 
 	/**
-	 * @param DOMElement $elt
+	 * @param Element $elt
 	 * @param array $info
 	 */
-	private static function addTracks( DOMElement $elt, array $info ): void {
+	private static function addTracks( Element $elt, array $info ): void {
 		$doc = $elt->ownerDocument;
 		if ( is_array( $info['thumbdata']['timedtext'] ?? null ) ) {
 			// BatchAPI's `getAPIData`
@@ -235,16 +242,19 @@ class AddMediaInfo implements Wt2HtmlDOMProcessor {
 
 	/**
 	 * @param Env $env
-	 * @param DOMElement $container
+	 * @param Element $span
 	 * @param array $attrs
 	 * @param array $info
+	 * @param ?array $manualinfo
 	 * @param stdClass $dataMw
+	 * @param Element $container
 	 * @return array
 	 */
 	private static function handleAudio(
-		Env $env, DOMElement $container, array $attrs, array $info, stdClass $dataMw
+		Env $env, Element $span, array $attrs, array $info, ?array $manualinfo,
+		stdClass $dataMw, Element $container
 	): array {
-		$doc = $container->ownerDocument;
+		$doc = $span->ownerDocument;
 		$audio = $doc->createElement( 'audio' );
 
 		$audio->setAttribute( 'controls', '' );
@@ -258,13 +268,10 @@ class AddMediaInfo implements Wt2HtmlDOMProcessor {
 		// See `AddMediaInfo.handleSize`
 		DOMCompat::getClassList( $container )->add( 'mw-default-audio-height' );
 
-		self::copyOverAttribute( $audio, $container, 'resource' );
+		self::copyOverAttribute( $audio, $span, 'resource' );
 
-		$grandChild = $container->firstChild->firstChild;
-		/** @var DOMElement $grandChild */
-		DOMUtils::assertElt( $grandChild );
-		if ( $grandChild->hasAttribute( 'lang' ) ) {
-			self::copyOverAttribute( $audio, $container, 'lang' );
+		if ( $span->hasAttribute( 'lang' ) ) {
+			self::copyOverAttribute( $audio, $span, 'lang' );
 		}
 
 		self::addSources( $audio, $info, $dataMw, false );
@@ -275,18 +282,18 @@ class AddMediaInfo implements Wt2HtmlDOMProcessor {
 
 	/**
 	 * @param Env $env
-	 * @param DOMElement $container
+	 * @param Element $span
 	 * @param array $attrs
 	 * @param array $info
-	 * @param array|null $manualinfo
+	 * @param ?array $manualinfo
 	 * @param stdClass $dataMw
 	 * @return array
 	 */
 	private static function handleVideo(
-		Env $env, DOMElement $container, array $attrs,
-		array $info, ?array $manualinfo, stdClass $dataMw
+		Env $env, Element $span, array $attrs, array $info, ?array $manualinfo,
+		stdClass $dataMw
 	): array {
-		$doc = $container->ownerDocument;
+		$doc = $span->ownerDocument;
 		$video = $doc->createElement( 'video' );
 
 		if ( $manualinfo || !empty( $info['thumburl'] ) ) {
@@ -300,13 +307,10 @@ class AddMediaInfo implements Wt2HtmlDOMProcessor {
 		DOMDataUtils::addNormalizedAttribute( $video, 'height', (string)$size['height'], null, true );
 		DOMDataUtils::addNormalizedAttribute( $video, 'width', (string)$size['width'], null, true );
 
-		self::copyOverAttribute( $video, $container, 'resource' );
+		self::copyOverAttribute( $video, $span, 'resource' );
 
-		$grandChild = $container->firstChild->firstChild;
-		/** @var DOMElement $grandChild */
-		DOMUtils::assertElt( $grandChild );
-		if ( $grandChild->hasAttribute( 'lang' ) ) {
-			self::copyOverAttribute( $video, $container, 'lang' );
+		if ( $span->hasAttribute( 'lang' ) ) {
+			self::copyOverAttribute( $video, $span, 'lang' );
 		}
 
 		self::addSources( $video, $info, $dataMw, true );
@@ -319,18 +323,18 @@ class AddMediaInfo implements Wt2HtmlDOMProcessor {
 	 * Set up the actual image structure, attributes, etc.
 	 *
 	 * @param Env $env
-	 * @param DOMElement $container
+	 * @param Element $span
 	 * @param array $attrs
 	 * @param array $info
-	 * @param array|null $manualinfo
+	 * @param ?array $manualinfo
 	 * @param stdClass $dataMw
 	 * @return array
 	 */
 	private static function handleImage(
-		Env $env, DOMElement $container, array $attrs,
-		array $info, ?array $manualinfo, stdClass $dataMw
+		Env $env, Element $span, array $attrs, array $info, ?array $manualinfo,
+		stdClass $dataMw
 	): array {
-		$doc = $container->ownerDocument;
+		$doc = $span->ownerDocument;
 		$img = $doc->createElement( 'img' );
 
 		self::addAttributeFromDataMw( $img, $dataMw, 'alt' );
@@ -339,15 +343,13 @@ class AddMediaInfo implements Wt2HtmlDOMProcessor {
 			$info = $manualinfo;
 		}
 
-		self::copyOverAttribute( $img, $container, 'resource' );
+		self::copyOverAttribute( $img, $span, 'resource' );
 
 		$img->setAttribute( 'src', self::getPath( $info ) );
+		$img->setAttribute( 'decoding', 'async' );
 
-		$grandChild = $container->firstChild->firstChild;
-		/** @var DOMElement $grandChild */
-		DOMUtils::assertElt( $grandChild );
-		if ( $grandChild->hasAttribute( 'lang' ) ) {
-			self::copyOverAttribute( $img, $container, 'lang' );
+		if ( $span->hasAttribute( 'lang' ) ) {
+			self::copyOverAttribute( $img, $span, 'lang' );
 		}
 
 		// Add (read-only) information about original file size (T64881)
@@ -362,9 +364,6 @@ class AddMediaInfo implements Wt2HtmlDOMProcessor {
 		// Handle "responsive" images, i.e. srcset
 		if ( !empty( $info['responsiveUrls'] ) ) {
 			$candidates = [];
-			// Match Parsoid/JS ordering of these responsive urls
-			// FIXME: Parsoid's output here doesn't match core! T234932
-			krsort( $info['responsiveUrls'] );
 			foreach ( $info['responsiveUrls'] as $density => $url ) {
 				$candidates[] = $url . ' ' . $density . 'x';
 			}
@@ -377,28 +376,9 @@ class AddMediaInfo implements Wt2HtmlDOMProcessor {
 	}
 
 	/**
-	 * Use sane defaults
-	 *
-	 * @param Env $env
-	 * @param string $key
-	 * @param array $dims
-	 * @return array
-	 */
-	private static function errorInfo( Env $env, string $key, array $dims ): array {
-		$widthOption = $env->getSiteConfig()->widthOption();
-		return [
-			'url' => './Special:FilePath/' . Sanitizer::sanitizeTitleURI( $key, false ),
-			// Preserve width and height from the wikitext options
-			// even if the image is non-existent.
-			'width' => $dims['width'] ?? $widthOption,
-			'height' => $dims['height'] ?? $dims['width'] ?? $widthOption,
-		];
-	}
-
-	/**
 	 * @param string $key
 	 * @param string $message
-	 * @param array|null $params
+	 * @param ?array $params
 	 * @return array
 	 */
 	private static function makeErr(
@@ -413,34 +393,13 @@ class AddMediaInfo implements Wt2HtmlDOMProcessor {
 	}
 
 	/**
-	 * @param Env $env
-	 * @param string $key
-	 * @param array $dims
-	 * @return array
-	 */
-	public static function requestInfo( Env $env, string $key, array $dims ): array {
-		$err = null;
-		$info = $env->getDataAccess()->getFileInfo(
-			$env->getPageConfig(),
-			[ $key => $dims ]
-		)[$key] ?? null;
-		if ( !$info ) {
-			$info = self::errorInfo( $env, $key, $dims );
-			$err = self::makeErr( 'apierror-filedoesnotexist', 'This image does not exist.' );
-		} elseif ( isset( $info['thumberror'] ) ) {
-			$err = self::makeErr( 'apierror-unknownerror', $info['thumberror'] );
-		}
-		return [ 'err' => $err, 'info' => $info ];
-	}
-
-	/**
-	 * @param DOMElement $container
+	 * @param Element $container
 	 * @param array $errs
 	 * @param stdClass $dataMw
 	 */
-	private static function addErrors( DOMElement $container, array $errs, stdClass $dataMw ): void {
+	private static function addErrors( Element $container, array $errs, stdClass $dataMw ): void {
 		if ( !DOMUtils::hasTypeOf( $container, 'mw:Error' ) ) {
-			$typeOf = $container->getAttribute( 'typeof' );
+			$typeOf = $container->getAttribute( 'typeof' ) ?? '';
 			$typeOf = 'mw:Error' . ( $typeOf ? ' ' . $typeOf : '' );
 			$container->setAttribute( 'typeof', $typeOf );
 		}
@@ -451,64 +410,28 @@ class AddMediaInfo implements Wt2HtmlDOMProcessor {
 	}
 
 	/**
-	 * @param DOMElement $elt
-	 * @param DOMElement $container
+	 * @param Element $elt
+	 * @param Element $span
 	 * @param string $attribute
 	 */
 	private static function copyOverAttribute(
-		DOMElement $elt, DOMElement $container, string $attribute
+		Element $elt, Element $span, string $attribute
 	): void {
-		$span = $container->firstChild->firstChild;
-		/** @var DOMElement $span */
-		DOMUtils::assertElt( $span );
 		DOMDataUtils::addNormalizedAttribute(
 			$elt,
 			$attribute,
-			$span->getAttribute( $attribute ),
+			$span->getAttribute( $attribute ) ?? '',
 			WTSUtils::getAttributeShadowInfo( $span, $attribute )['value']
 		);
 	}
 
 	/**
-	 * If this is a manual thumbnail, fetch the info for that as well
-	 *
-	 * @param Env $env
-	 * @param array $attrs
-	 * @param array $dims
-	 * @param stdClass $dataMw
-	 * @return array
-	 */
-	private static function manualInfo(
-		Env $env, array $attrs, array $dims, stdClass $dataMw
-	): array {
-		$attr = WTSUtils::getAttrFromDataMw( $dataMw, 'manualthumb', true );
-		if ( $attr === null ) {
-			return [ 'err' => null, 'info' => null ];
-		}
-
-		$val = $attr[1]->txt;
-		$title = $env->makeTitleFromText( $val, $attrs['title']->getNamespace(), true );
-		if ( $title === null ) {
-			return [
-				'info' => self::errorInfo( $env, $attrs['title']->getKey(), $dims ),
-				'err' => self::makeErr(
-					'apierror-invalidtitle',
-					'Invalid thumbnail title.',
-					[ 'name' => $val ]
-				),
-			];
-		}
-
-		return self::requestInfo( $env, $title->getKey(), $dims );
-	}
-
-	/**
-	 * @param DOMElement $elt
+	 * @param Element $elt
 	 * @param stdClass $dataMw
 	 * @param string $key
 	 */
 	private static function addAttributeFromDataMw(
-		DOMElement $elt, stdClass $dataMw, string $key
+		Element $elt, stdClass $dataMw, string $key
 	): void {
 		$attr = WTSUtils::getAttrFromDataMw( $dataMw, $key, false );
 		if ( $attr === null ) {
@@ -521,36 +444,55 @@ class AddMediaInfo implements Wt2HtmlDOMProcessor {
 	/**
 	 * @param Env $env
 	 * @param PegTokenizer $urlParser
-	 * @param DOMElement $container
+	 * @param Element $oldAnchor
 	 * @param array $attrs
 	 * @param stdClass $dataMw
 	 * @param bool $isImage
+	 * @param int $page
+	 * @param string $lang
+	 * @return Element
 	 */
-	private static function handleLink(
-		Env $env, PegTokenizer $urlParser, DOMElement $container,
-		array $attrs, stdClass $dataMw, bool $isImage
-	): void {
-		$doc = $container->ownerDocument;
+	private static function replaceAnchor(
+		Env $env, PegTokenizer $urlParser, Element $oldAnchor, array $attrs,
+		stdClass $dataMw, bool $isImage, int $page, string $lang
+	): Element {
+		$doc = $oldAnchor->ownerDocument;
 		$attr = WTSUtils::getAttrFromDataMw( $dataMw, 'link', true );
 
 		$anchor = $doc->createElement( 'a' );
 		if ( $isImage ) {
+			$addDescriptionLink = static function ( Title $title ) use ( $env, $anchor, $page, $lang ) {
+				$href = $env->makeLink( $title );
+				$qs = [];
+				if ( $page > 0 ) {
+					$qs['page'] = $page;
+				}
+				if ( $lang ) {
+					$qs['lang'] = $lang;
+				}
+				if ( $qs ) {
+					$href .= '?' . http_build_query( $qs );
+				}
+				$anchor->setAttribute( 'href', $href );
+				$anchor->setAttribute( 'class', 'mw-file-description' );
+			};
 			if ( $attr !== null ) {
 				$discard = true;
 				$val = $attr[1]->txt;
 				if ( $val === '' ) {
 					// No href if link= was specified
 					$anchor = $doc->createElement( 'span' );
-				} elseif ( $urlParser->tokenizesAsURL( $val ) ) {
-					// an external link!
-					$anchor->setAttribute( 'href', $val );
+				} elseif ( $urlParser->tokenizeURL( $val ) !== false ) {
+					// An external link!
+					$href = Sanitizer::cleanUrl( $env->getSiteConfig(), $val, 'external' );
+					$anchor->setAttribute( 'href', $href );
 				} else {
 					$link = $env->makeTitleFromText( $val, null, true );
 					if ( $link !== null ) {
 						$anchor->setAttribute( 'href', $env->makeLink( $link ) );
 					} else {
 						// Treat same as if link weren't present
-						$anchor->setAttribute( 'href', $env->makeLink( $attrs['title'] ) );
+						$addDescriptionLink( $attrs['title'] );
 						// but preserve for roundtripping
 						$discard = false;
 					}
@@ -559,74 +501,85 @@ class AddMediaInfo implements Wt2HtmlDOMProcessor {
 					WTSUtils::getAttrFromDataMw( $dataMw, 'link', /* keep */false );
 				}
 			} else {
-				$anchor->setAttribute( 'href', $env->makeLink( $attrs['title'] ) );
+				$addDescriptionLink( $attrs['title'] );
 			}
 		} else {
 			$anchor = $doc->createElement( 'span' );
 		}
 
-		if ( $anchor->nodeName === 'a' ) {
-			$href = Sanitizer::cleanUrl( $env, $anchor->getAttribute( 'href' ), 'external' );
-			$anchor->setAttribute( 'href', $href );
-		}
+		$oldAnchor->parentNode->replaceChild( $anchor, $oldAnchor );
 
-		$container->replaceChild( $anchor, $container->firstChild );
+		return $anchor;
 	}
 
 	/**
 	 * @inheritDoc
 	 */
 	public function run(
-		Env $env, DOMElement $root, array $options = [], bool $atTopLevel = false
+		Env $env, Node $root, array $options = [], bool $atTopLevel = false
 	): void {
+		'@phan-var Element|DocumentFragment $root';  // @var Element|DocumentFragment $root
 		$urlParser = new PegTokenizer( $env );
-		$containers = DOMCompat::querySelectorAll( $root, 'figure,figure-inline' );
 
-		// Try to ensure `addMediaInfo` is idempotent based on finding the
-		// structure unaltered from the emitted tokens.  Note that we may hit
-		// false positivies in link-in-link scenarios but, in those cases, link
-		// content would already have been processed to dom in a subpipeline
-		// and would necessitate filtering here anyways.
-		$containers = array_filter(
-			$containers,
-			function ( $c ) {
-				return $c->firstChild && $c->firstChild->nodeName === 'a' &&
-					$c->firstChild->firstChild && $c->firstChild->firstChild->nodeName === 'span' &&
-					// The media element may remain a <span> if we hit an error
-					// below so use the annotation as another indicator of having
-					// already been processed.
-					!DOMUtils::hasTypeOf( $c, 'mw:Error' );
-			}
-		);
+		$validContainers = [];
+		$files = [];
+
+		// Since we haven't fetched info yet, they were all assumed to be mw:Image
+		// See WikiLinkHandler::renderFile()
+		$containers = DOMCompat::querySelectorAll( $root, '[typeof*="mw:Image"]' );
 
 		foreach ( $containers as $container ) {
-			$dataMw = DOMDataUtils::getDataMw( $container );
-			$span = $container->firstChild->firstChild;
-			/** @var DOMElement $span */
-			DOMUtils::assertElt( $span );
-			$attrs = [
-				'size' => [
-					'width' => (int)$span->getAttribute( 'data-width' ) ?: null,
-					'height' => (int)$span->getAttribute( 'data-height' ) ?: null,
-				],
-				'format' => WTSUtils::getMediaType( $container )['format'],
-				'title' => $env->makeTitleFromText( $span->textContent ),
-			];
+			// DOMFragmentWrappers assume the element name of their outermost
+			// content so, depending how the above query is written, we're
+			// protecting against getting a figure of the wrong type.  However,
+			// since we're currently using typeof, it shouldn't be a problem.
+			// Also note that info for the media nested in the fragment has
+			// already been added in their respective pipeline.
+			Assert::invariant(
+				!WTUtils::isDOMFragmentWrapper( $container ),
+				'Media info for fragment was already added'
+			);
 
-			$dims = $attrs['size'];
-
-			if ( $env->noDataAccess() ) {
-				$errs = [ self::makeErr(
-					'apierror-unknownerror',
-					'Fetch of image info disabled.'
-				) ];
-				self::addErrors( $container, $errs, $dataMw );
+			// We expect this structure to be predictable based on how it's
+			// emitted in the TT/WikiLinkHandler but treebuilding may have
+			// messed that up for us.
+			$anchor = $container->firstChild;
+			$anchorNodeName = DOMCompat::nodeName( $anchor );
+			if (
+				$anchor instanceof Element && $anchorNodeName !== 'a' &&
+				isset( Consts::$HTML['FormattingTags'][$anchorNodeName] )
+			) {
+				// An active formatting element may have been reopened inside
+				// the wrapper if a content model violation was encountered
+				// during treebuiling.  Try to be a little lenient about that
+				// instead of bailing out
+				$anchor = $anchor->firstChild;
+				$anchorNodeName = DOMCompat::nodeName( $anchor );
+			}
+			if ( !( $anchor instanceof Element && $anchorNodeName === 'a' ) ) {
+				$env->log( 'error', 'Unexpected structure when adding media info.' );
+				continue;
+			}
+			$span = $anchor->firstChild;
+			if ( !( $span instanceof Element && DOMCompat::nodeName( $span ) === 'span' ) ) {
+				$env->log( 'error', 'Unexpected structure when adding media info.' );
 				continue;
 			}
 
+			$dataMw = DOMDataUtils::getDataMw( $container );
+
+			$dims = [
+				'width' => (int)$span->getAttribute( 'data-width' ) ?: null,
+				'height' => (int)$span->getAttribute( 'data-height' ) ?: null,
+			];
+
 			$page = WTSUtils::getAttrFromDataMw( $dataMw, 'page', true );
-			if ( $page && $dims['width'] !== null ) {
+			if ( $page ) {
 				$dims['page'] = $page[1]->txt;
+			}
+
+			if ( $span->hasAttribute( 'lang' ) ) {
+				$dims['lang'] = $span->getAttribute( 'lang' );
 			}
 
 			// "starttime" should be used if "thumbtime" isn't present,
@@ -645,15 +598,90 @@ class AddMediaInfo implements Wt2HtmlDOMProcessor {
 				}
 			}
 
-			$i = self::requestInfo( $env, $attrs['title']->getKey(), $dims );
-			$m = self::manualInfo( $env, $attrs, $dims, $dataMw );
+			$attrs = [
+				'dims' => $dims,
+				'format' => WTSUtils::getMediaFormat( $container ),
+				'title' => $env->makeTitleFromText( $span->textContent ),
+			];
+
+			$file = [ $attrs['title']->getKey(), $dims ];
+			$infoKey = md5( json_encode( $file ) );
+			$files[$infoKey] = $file;
+
+			$manualKey = null;
+			$manualthumb = WTSUtils::getAttrFromDataMw( $dataMw, 'manualthumb', true );
+			if ( $manualthumb !== null ) {
+				$val = $manualthumb[1]->txt;
+				$title = $env->makeTitleFromText( $val, $attrs['title']->getNamespace(), true );
+				if ( $title === null ) {
+					$errs = [
+						self::makeErr(
+							'apierror-invalidtitle',
+							'Invalid thumbnail title.',
+							[ 'name' => $val ]
+						)
+					];
+					self::addErrors( $container, $errs, $dataMw );
+					continue;
+				} else {
+					$file = [ $title->getKey(), $dims ];
+					$manualKey = md5( json_encode( $file ) );
+					$files[$manualKey] = $file;
+				}
+			}
+
+			$validContainers[] = [
+				'container' => $container,
+				'attrs' => $attrs,
+				// Pass the anchor because we did some work to find it above
+				'anchor' => $anchor,
+				'infoKey' => $infoKey,
+				'manualKey' => $manualKey,
+			];
+		}
+
+		$start = microtime( true );
+
+		$infos = $env->getDataAccess()->getFileInfo(
+			$env->getPageConfig(),
+			array_values( $files )
+		);
+
+		if ( $env->profiling() ) {
+			$profile = $env->getCurrentProfile();
+			$profile->bumpMWTime( "Media", 1000 * ( microtime( true ) - $start ), "api" );
+			$profile->bumpCount( "Media" );
+		}
+
+		$files = array_combine(
+			array_keys( $files ),
+			$infos
+		);
+
+		foreach ( $validContainers as $c ) {
+			$container = $c['container'];
+			$anchor = $c['anchor'];
+			$span = $anchor->firstChild;
+			$attrs = $c['attrs'];
+			$dataMw = DOMDataUtils::getDataMw( $container );
 
 			$errs = [];
-			if ( $i['err'] !== null ) {
-				$errs[] = $i['err'];
+
+			$info = $files[$c['infoKey']];
+			if ( !$info ) {
+				$errs[] = self::makeErr( 'apierror-filedoesnotexist', 'This image does not exist.' );
+			} elseif ( isset( $info['thumberror'] ) ) {
+				$errs[] = self::makeErr( 'apierror-unknownerror', $info['thumberror'] );
 			}
-			if ( $m['err'] !== null ) {
-				$errs[] = $m['err'];
+
+			$manualinfo = null;
+			if ( $c['manualKey'] !== null ) {
+				$manualinfo = $files[$c['manualKey']];
+				if ( !$manualinfo ) {
+					$errs[] = self::makeErr( 'apierror-filedoesnotexist', 'This image does not exist.' );
+				} elseif ( isset( $manualinfo['thumberror'] ) ) {
+					$errs[] = self::makeErr( 'apierror-unknownerror', $manualinfo['thumberror'] );
+				}
 			}
 
 			// Add mw:Error to the RDFa type.
@@ -662,8 +690,7 @@ class AddMediaInfo implements Wt2HtmlDOMProcessor {
 				continue;
 			}
 
-			$info = $i['info'];
-			$manualinfo = $m['info'];
+			'@phan-var array $info';  // @var array $info
 
 			// T110692: The batching API seems to return these as strings.
 			// Till that is fixed, let us make sure these are numbers.
@@ -674,21 +701,23 @@ class AddMediaInfo implements Wt2HtmlDOMProcessor {
 			$isImage = false;
 			switch ( $info['mediatype'] ) {
 				case 'AUDIO':
-					$o = self::handleAudio( $env, $container, $attrs, $info, $dataMw );
+					$o = self::handleAudio( $env, $span, $attrs, $info, $manualinfo, $dataMw, $container );
 					break;
 				case 'VIDEO':
-					$o = self::handleVideo( $env, $container, $attrs, $info, $manualinfo, $dataMw );
+					$o = self::handleVideo( $env, $span, $attrs, $info, $manualinfo, $dataMw );
 					break;
 				default:
 					$isImage = true;
-					$o = self::handleImage( $env, $container, $attrs, $info, $manualinfo, $dataMw );
+					$o = self::handleImage( $env, $span, $attrs, $info, $manualinfo, $dataMw );
 			}
 			$rdfaType = $o['rdfaType'];
 			$elt = $o['elt'];
 
-			self::handleLink( $env, $urlParser, $container, $attrs, $dataMw, $isImage );
-
-			$anchor = $container->firstChild;
+			$anchor = self::replaceAnchor(
+				$env, $urlParser, $anchor, $attrs, $dataMw, $isImage,
+				(int)( $attrs['dims']['page'] ?? 0 ),
+				$attrs['dims']['lang'] ?? ''
+			);
 			$anchor->appendChild( $elt );
 
 			$typeOf = $container->getAttribute( 'typeof' ) ?? '';

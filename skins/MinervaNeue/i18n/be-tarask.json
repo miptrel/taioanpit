@@ -7,7 +7,7 @@
 		]
 	},
 	"minerva-last-modified-date": "Апошняе рэдагаваньне ў $2 $1",
-	"minerva-talk-add-topic": "Дадаць абмеркаваньне",
+	"minerva-talk-add-topic": "Дадаць тэму",
 	"mobile-frontend-cookies-required": "Файлы-кукі неабходныя для пераключэньня рэжымаў прагляду. Калі ласка, уключыце іх і паспрабуйце яшчэ раз.",
 	"mobile-frontend-editor-edit": "Рэдагаваць",
 	"minerva-download": "Спампаваць PDF",
@@ -18,7 +18,6 @@
 	"mobile-frontend-home-button": "Дадому",
 	"mobile-frontend-language-article-heading": "Мова",
 	"mobile-frontend-languages-not-available": "Гэтая старонка не даступная на іншых мовах.",
-	"mobile-frontend-logged-in-homepage-notification": "{{GENDER:$1|Вітаем}}, $1!",
 	"mobile-frontend-main-menu-button-tooltip": "Адкрыць галоўнае мэню",
 	"mobile-frontend-main-menu-contributions": "Унёсак",
 	"mobile-frontend-main-menu-login": "Увайсьці",
@@ -55,8 +54,8 @@
 	"minerva-page-actions-wikibase": "Элемэнт {{grammar:родны|{{WBREPONAME}}}}",
 	"minerva-skin-desc": "Першая адаптыўная мабільная тэма афармленьня",
 	"skin-minerva-issue-learn-more": "Даведацца болей",
-	"skin-minerva-mobile-option-MinervaShowCategoriesButton": "Катэгорыі",
-	"skin-minerva-mobile-option-MinervaShowCategoriesButton-description": "Прагляд катэгорыяў старонак",
+	"skin-minerva-mobile-option-MinervaShowCategories": "Катэгорыі",
+	"skin-minerva-mobile-option-MinervaShowCategories-description": "Прагляд катэгорыяў старонак",
 	"skin-minerva-mobile-option-MinervaPageIssuesNewTreatment": "Палепшанае вырашэньне праблемаў старонкі",
 	"skin-minerva-mobile-option-MinervaPageIssuesNewTreatment-description": "Праблемы старонкі (Шаблён:Паведамленьне) будуць прапісаныя ў артыкуле."
 }

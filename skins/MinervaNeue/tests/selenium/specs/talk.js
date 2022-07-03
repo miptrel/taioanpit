@@ -1,6 +1,6 @@
 'use strict';
 
-const { iAmOnATalkPageWithNoTalkTopics } = require( '../features/step_definitions/create_page_api_steps' ),
+const
 	{
 		pageExists, iAmOnAPageThatDoesNotExist,
 		iAmUsingTheMobileSite,
@@ -9,14 +9,10 @@ const { iAmOnATalkPageWithNoTalkTopics } = require( '../features/step_definition
 	} = require( '../features/step_definitions/common_steps' ),
 	{
 		iClickTheAddTalkButton,
-		iAddATopic,
-		iSeeTheTalkOverlay,
 		thereShouldBeASaveDiscussionButton,
-		noTopicIsPresent,
 		thereShouldBeAnAddDiscussionButton,
 		thereShouldBeATalkTab,
-		thereShouldBeNoTalkButton,
-		iShouldSeeTheTopicInTheListOfTopics
+		thereShouldBeNoTalkButton
 	} = require( '../features/step_definitions/talk_steps' );
 
 // @chrome @en.m.wikipedia.beta.wmflabs.org @firefox @test2.m.wikipedia.org @vagrant
@@ -51,28 +47,18 @@ describe( 'Talk', () => {
 	} );
 
 	// @smoke @login
-	it( 'Add discussion button shows on talk pages for logged in users', () => {
+	it.skip( 'Add discussion button shows on talk pages for logged in users', () => {
 		iAmLoggedIntoTheMobileWebsite();
 		iAmOnPage( 'Talk:Selenium talk test' );
 		thereShouldBeAnAddDiscussionButton();
 	} );
 
 	// @smoke @login
-	it( 'Add discussion for talk page possible as logged in user', () => {
+	it.skip( 'Add discussion for talk page possible as logged in user', () => {
 		iAmLoggedIntoTheMobileWebsite();
 		iAmOnPage( 'Talk:Selenium talk test' );
 		iClickTheAddTalkButton();
 		thereShouldBeASaveDiscussionButton();
-	} );
-
-	it( 'A newly created topic appears in the list of topics', () => {
-		iAmLoggedIntoTheMobileWebsite();
-		iAmOnATalkPageWithNoTalkTopics();
-		noTopicIsPresent();
-		iClickTheAddTalkButton();
-		iSeeTheTalkOverlay();
-		iAddATopic( 'New topic' );
-		iShouldSeeTheTopicInTheListOfTopics( 'New topic' );
 	} );
 
 } );

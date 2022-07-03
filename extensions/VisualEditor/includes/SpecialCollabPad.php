@@ -9,17 +9,6 @@
  */
 
 class SpecialCollabPad extends SpecialPage {
-	private $prefixes = [];
-
-	/**
-	 * @var null|Title
-	 */
-	private $title = null;
-
-	/**
-	 * @var null|ParserOutput
-	 */
-	private $output = null;
 
 	public function __construct() {
 		parent::__construct( 'CollabPad' );
@@ -36,16 +25,15 @@ class SpecialCollabPad extends SpecialPage {
 	 * @inheritDoc
 	 */
 	public function userCanExecute( User $user ) {
-		global $wgVisualEditorRebaserURL;
-		return (bool)$wgVisualEditorRebaserURL && parent::userCanExecute( $user );
+		return $this->getConfig()->get( 'VisualEditorRebaserURL' ) &&
+			parent::userCanExecute( $user );
 	}
 
 	/**
 	 * @inheritDoc
 	 */
 	public function isListed() {
-		global $wgVisualEditorRebaserURL;
-		return (bool)$wgVisualEditorRebaserURL;
+		return (bool)$this->getConfig()->get( 'VisualEditorRebaserURL' );
 	}
 
 	/**
@@ -106,6 +94,7 @@ class SpecialCollabPad extends SpecialPage {
 					new OOUI\ButtonWidget( [
 						'classes' => [ 've-init-mw-collabTarget-importButton' ],
 						'label' => $this->msg( 'visualeditor-rebase-client-import' )->text(),
+						'flags' => [ 'progressive' ],
 						// Only enable once JS has loaded
 						'disabled' => true,
 						'infusable' => true

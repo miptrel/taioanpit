@@ -22,7 +22,6 @@
 	"mobile-frontend-home-button": "Scumìsio",
 	"mobile-frontend-language-article-heading": "Léngua",
 	"mobile-frontend-languages-not-available": "Sta voxe no ła xe disponìbiłe in altre łéngue",
-	"mobile-frontend-logged-in-homepage-notification": "$1",
 	"mobile-frontend-main-menu-button-tooltip": "Verxi el menù prinsipałe",
 	"mobile-frontend-main-menu-contributions": "Contribusion",
 	"mobile-frontend-main-menu-login": "Lòghite",
@@ -30,7 +29,7 @@
 	"mobile-frontend-main-menu-nearby": "Arente cuà",
 	"mobile-frontend-main-menu-settings": "Inpostasion",
 	"mobile-frontend-main-menu-watchlist": "Pàjine tegnùe d'ocio",
-	"mobile-frontend-meta-data-issues": "Sta pàjina ła ga calche problema",
+	"mobile-frontend-meta-data-issues": "Avizi de ła voze",
 	"mobile-frontend-meta-data-issues-categories": "Sora de sta categoria",
 	"mobile-frontend-meta-data-issues-header": "Problemàdeghe de ła voxe",
 	"minerva-meta-data-issues-section-header": "Problemàdeghe de ła sesion",
@@ -69,7 +68,7 @@
 	"minerva-talk-reply-success": "La to contestasion ła xe stada salvada inte ła pàjina de discusion",
 	"minerva-skin-desc": "Na prima skin mòbiłe responsiva",
 	"skin-minerva-issue-learn-more": "Par savèrghene de pì",
-	"skin-minerva-mobile-option-MinervaShowCategoriesButton": "Categorie",
-	"skin-minerva-mobile-option-MinervaShowCategoriesButton-description": "Varda łe categorie de łe pàjine",
+	"skin-minerva-mobile-option-MinervaShowCategories": "Categorie",
+	"skin-minerva-mobile-option-MinervaShowCategories-description": "Varda łe categorie de łe pàjine",
 	"skin-minerva-mobile-option-MinervaPageIssuesNewTreatment": "Mejoramento del tratamento de łe pàjine problemàdeghe"
 }

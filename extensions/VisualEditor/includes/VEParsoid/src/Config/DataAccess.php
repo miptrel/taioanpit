@@ -1,6 +1,4 @@
 <?php
-// phpcs:disable MediaWiki.WhiteSpace.SpaceBeforeSingleLineComment.NewLineComment
-
 /**
  * Copyright (C) 2011-2020 Wikimedia Foundation and others.
  *
@@ -21,60 +19,81 @@
 
 namespace VEParsoid\Config;
 
+// phpcs:disable MediaWiki.WhiteSpace.SpaceBeforeSingleLineComment.NewLineComment
+
 use ContentHandler;
 use File;
-use Hooks;
 use LinkBatch;
 use Linker;
 use MediaTransformError;
-use MediaWiki\MediaWikiServices;
-use MediaWiki\Revision\RevisionStore;
-use PageProps;
+use MediaWiki\BadFileLookup;
+use MediaWiki\Content\Transform\ContentTransformer;
+use MediaWiki\HookContainer\HookContainer;
 use Parser;
-use ParserOptions;
+use ParserFactory;
+use RepoGroup;
 use Title;
 use Wikimedia\Parsoid\Config\DataAccess as IDataAccess;
 use Wikimedia\Parsoid\Config\PageConfig as IPageConfig;
 use Wikimedia\Parsoid\Config\PageContent as IPageContent;
+use Wikimedia\Parsoid\Core\ContentMetadataCollector;
 
-class DataAccess implements IDataAccess {
+class DataAccess extends IDataAccess {
 
-	/** @var RevisionStore */
-	private $revStore;
+	/** @var RepoGroup */
+	private $repoGroup;
+
+	/** @var BadFileLookup */
+	private $badFileLookup;
+
+	/** @var HookContainer */
+	private $hookContainer;
+
+	/** @var ContentTransformer */
+	private $contentTransformer;
 
 	/** @var Parser */
 	private $parser;
 
-	/** @var ParserOptions */
-	private $parserOptions;
+	/** @var \PPFrame */
+	private $ppFrame;
 
-	/** @var IPageConfig|null */
+	/** @var ?PageConfig */
 	private $previousPageConfig;
 
 	/**
-	 * @param RevisionStore $revStore
-	 * @param Parser $parser
-	 * @param ParserOptions $parserOptions
+	 * @param RepoGroup $repoGroup
+	 * @param BadFileLookup $badFileLookup
+	 * @param HookContainer $hookContainer
+	 * @param ContentTransformer $contentTransformer
+	 * @param ParserFactory $parserFactory A legacy parser factory,
+	 *   for PST/preprocessing/extension handling
 	 */
 	public function __construct(
-		RevisionStore $revStore, Parser $parser, ParserOptions $parserOptions
+		RepoGroup $repoGroup,
+		BadFileLookup $badFileLookup,
+		HookContainer $hookContainer,
+		ContentTransformer $contentTransformer,
+		ParserFactory $parserFactory
 	) {
-		$this->revStore = $revStore;
-		$this->parser = $parser;
-		$this->parserOptions = $parserOptions;
+		$this->repoGroup = $repoGroup;
+		$this->badFileLookup = $badFileLookup;
+		$this->hookContainer = $hookContainer;
+		$this->contentTransformer = $contentTransformer;
 
-		// Turn off some options since Parsoid/JS currently doesn't
-		// do anything with this. As we proceed with closer integration,
-		// we can figure out if there is any value to these limit reports.
-		$this->parserOptions->setOption( 'enableLimitReport', false );
+		// Use the same legacy parser object for all calls to extension tag
+		// processing, for greater compatibility.
+		$this->parser = $parserFactory->create();
+		$this->previousPageConfig = null; // ensure we initialize parser options
 	}
 
 	/**
+	 * @param IPageConfig $pageConfig
 	 * @param File $file
 	 * @param array $hp
 	 * @return array
 	 */
-	private function makeTransformOptions( $file, array $hp ): array {
+	private function makeTransformOptions( IPageConfig $pageConfig, $file, array $hp ): array {
 		// Validate the input parameters like Parser::makeImage()
 		$handler = $file->getHandler();
 		if ( !$handler ) {
@@ -88,7 +107,7 @@ class DataAccess implements IDataAccess {
 
 		// This part is similar to Linker::makeImageLink(). If there is no width,
 		// set one based on the source file size.
-		$page = $hp['page'] ?? 1;
+		$page = $hp['page'] ?? 0;
 		if ( !isset( $hp['width'] ) ) {
 			if ( isset( $hp['height'] ) && $file->isVectorized() ) {
 				// If it's a vector image, and user only specifies height
@@ -104,12 +123,17 @@ class DataAccess implements IDataAccess {
 			// for thumbnails.
 		}
 
+		// Parser::makeImage() always sets this
+		$hp['targetlang'] = $pageConfig->getPageLanguage();
+
 		return $hp;
 	}
 
 	/** @inheritDoc */
 	public function getPageInfo( IPageConfig $pageConfig, array $titles ): array {
 		$titleObjs = [];
+		$pagemap = [];
+		$classes = [];
 		$ret = [];
 		foreach ( $titles as $name ) {
 			$t = Title::newFromText( $name );
@@ -134,22 +158,30 @@ class DataAccess implements IDataAccess {
 		$linkBatch = new LinkBatch( $titleObjs );
 		$linkBatch->execute();
 
-		// This depends on the Disambiguator extension :(
-		// @todo Either merge that extension into core, or we'll need to make
-		// a "ParsoidGetRedlinkData" hook that Disambiguator can implement.
-		// T237538
-		$pageProps = PageProps::getInstance();
-		$properties = $pageProps->getProperties( $titleObjs, [ 'disambiguation' ] );
+		foreach ( $titleObjs as $obj ) {
+			$pdbk = $obj->getPrefixedDBkey();
+			$pagemap[$obj->getArticleID()] = $pdbk;
+			$classes[$pdbk] = $obj->isRedirect() ? 'mw-redirect' : '';
+		}
+		$context_title = Title::newFromText( $pageConfig->getTitle() );
+		$this->hookContainer->run(
+			'GetLinkColours',
+			[ $pagemap, &$classes, $context_title ]
+		);
 
 		foreach ( $titleObjs as $name => $obj ) {
 			/** @var Title $obj */
+			$pdbk = $obj->getPrefixedDBkey();
+			$c = preg_split(
+				'/\s+/', $classes[$pdbk] ?? '', -1, PREG_SPLIT_NO_EMPTY
+			);
 			$ret[$name] = [
 				'pageId' => $obj->getArticleID(),
 				'revId' => $obj->getLatestRevID(),
 				'missing' => !$obj->exists(),
 				'known' => $obj->isKnown(),
 				'redirect' => $obj->isRedirect(),
-				'disambiguation' => isset( $properties[$obj->getArticleID()] ),
+				'linkclasses' => $c, # See ApiQueryInfo::getLinkClasses() in core
 			];
 		}
 		return $ret;
@@ -158,27 +190,38 @@ class DataAccess implements IDataAccess {
 	/** @inheritDoc */
 	public function getFileInfo( IPageConfig $pageConfig, array $files ): array {
 		$page = Title::newFromText( $pageConfig->getTitle() );
-		$services = MediaWikiServices::getInstance();
-		$fileObjs = $services->getRepoGroup()->findFiles( array_keys( $files ) );
-		$badFileLookup = $services->getBadFileLookup();
+
+		$keys = [];
+		foreach ( $files as $f ) {
+			$keys[] = $f[0];
+		}
+		$fileObjs = $this->repoGroup->findFiles( $keys );
+
 		$ret = [];
-		foreach ( $files as $filename => $dims ) {
+		foreach ( $files as $f ) {
+			$filename = $f[0];
+			$dims = $f[1];
+
 			/** @var File $file */
 			$file = $fileObjs[$filename] ?? null;
 			if ( !$file ) {
-				$ret[$filename] = null;
+				$ret[] = null;
 				continue;
 			}
 
+			// See Linker::makeImageLink; 'page' is a key in $handlerParams
+			// core uses 'false' as the default then casts to (int) => 0
+			$pageNum = $dims['page'] ?? 0;
+
 			$result = [
-				'width' => $file->getWidth(),
-				'height' => $file->getHeight(),
+				'width' => $file->getWidth( $pageNum ),
+				'height' => $file->getHeight( $pageNum ),
 				'size' => $file->getSize(),
 				'mediatype' => $file->getMediaType(),
 				'mime' => $file->getMimeType(),
 				'url' => $file->getFullUrl(),
 				'mustRender' => $file->mustRender(),
-				'badFile' => $badFileLookup->isBadFile( $filename, $page ?: false ),
+				'badFile' => $this->badFileLookup->isBadFile( $filename, $page ?: false ),
 			];
 
 			$length = $file->getLength();
@@ -190,7 +233,7 @@ class DataAccess implements IDataAccess {
 				$dims['thumbtime'] = $dims['seek'];
 			}
 
-			$txopts = $this->makeTransformOptions( $file, $dims );
+			$txopts = $this->makeTransformOptions( $pageConfig, $file, $dims );
 			$mto = $file->transform( $txopts );
 			if ( $mto ) {
 				if ( $mto->isError() && $mto instanceof MediaTransformError ) {
@@ -208,31 +251,12 @@ class DataAccess implements IDataAccess {
 					}
 
 					// Proposed MediaTransformOutput serialization method for T51896 etc.
-					// Note that getAPIData() returns wfExpandUrl(), which
-					// doesn't respect the wiki's protocol preferences --
-					// instead it uses the protocol used for the API request
+					// Note that getAPIData(['fullurl']) would return
+					// wfExpandUrl(), which wouldn't respect the wiki's
+					// protocol preferences -- instead it would use the
+					// protocol used for the API request.
 					if ( is_callable( [ $mto, 'getAPIData' ] ) ) {
 						$result['thumbdata'] = $mto->getAPIData( [ 'withhash' ] );
-						// During a transitional period, additionally strip
-						// protocol from the result.
-						// FIXME: remove once
-						// Ib9e30c7734ea266e6be8dd5dd425bf2f7d40100f
-						// is merged.
-						$stripProto = function ( array &$arr, $key = 'src' ): void {
-							foreach ( $arr as &$item ) {
-								if ( !empty( $item[$key] ) ) {
-									$item[$key] = preg_replace(
-										'#^https?://#', '//', $item[$key]
-									);
-								}
-							}
-						};
-						if ( isset( $result['thumbdata']['derivatives'] ) ) {
-							$stripProto( $result['thumbdata']['derivatives'] );
-						}
-						if ( isset( $result['thumbdata']['timedtext'] ) ) {
-							$stripProto( $result['thumbdata']['timedtext'] );
-						}
 					}
 
 					$result['thumburl'] = $mto->getUrl();
@@ -243,7 +267,7 @@ class DataAccess implements IDataAccess {
 				$result['thumberror'] = "Presumably, invalid parameters, despite validation.";
 			}
 
-			$ret[$filename] = $result;
+			$ret[] = $result;
 		}
 
 		return $ret;
@@ -258,73 +282,97 @@ class DataAccess implements IDataAccess {
 	 * @return Parser
 	 */
 	private function prepareParser( IPageConfig $pageConfig, int $outputType ) {
+		'@phan-var PageConfig $pageConfig'; // @var PageConfig $pageConfig
 		// Clear the state only when the PageConfig changes, so that Parser's internal caches can
 		// be retained. This should also provide better compatibility with extension tags.
 		$clearState = $this->previousPageConfig !== $pageConfig;
 		$this->previousPageConfig = $pageConfig;
 		$this->parser->startExternalParse(
-			Title::newFromText( $pageConfig->getTitle() ), $this->parserOptions,
+			Title::newFromText( $pageConfig->getTitle() ), $pageConfig->getParserOptions(),
 			$outputType, $clearState, $pageConfig->getRevisionId() );
 		$this->parser->resetOutput();
+
+		// Retain a PPFrame object between preprocess requests since it contains
+		// some useful caches.
+		if ( $clearState ) {
+			$this->ppFrame = $this->parser->getPreprocessor()->newFrame();
+		}
 		return $this->parser;
 	}
 
 	/** @inheritDoc */
 	public function doPst( IPageConfig $pageConfig, string $wikitext ): string {
+		'@phan-var PageConfig $pageConfig'; // @var PageConfig $pageConfig
 		// This could use prepareParser(), but it's only called once per page,
 		// so it's not essential.
 		$titleObj = Title::newFromText( $pageConfig->getTitle() );
-		return ContentHandler::makeContent( $wikitext, $titleObj, CONTENT_MODEL_WIKITEXT )
-			->preSaveTransform( $titleObj, $this->parserOptions->getUser(), $this->parserOptions )
-			->serialize();
+		$user = $pageConfig->getParserOptions()->getUserIdentity();
+		$content = ContentHandler::makeContent( $wikitext, $titleObj, CONTENT_MODEL_WIKITEXT );
+		return $this->contentTransformer->preSaveTransform(
+			$content,
+			$titleObj,
+			$user,
+			$pageConfig->getParserOptions()
+		)->serialize();
 	}
 
 	/** @inheritDoc */
-	public function parseWikitext( IPageConfig $pageConfig, string $wikitext ): array {
+	public function parseWikitext(
+		IPageConfig $pageConfig,
+		ContentMetadataCollector $metadata,
+		string $wikitext
+	): string {
 		$parser = $this->prepareParser( $pageConfig, Parser::OT_HTML );
 		$html = $parser->parseExtensionTagAsTopLevelDoc( $wikitext );
+		// XXX: Ideally we will eventually have the legacy parser use our
+		// ContentMetadataCollector instead of having a new ParserOutput
+		// created (implicitly in ::prepareParser()/Parser::resetOutput() )
+		// which we then have to manually merge.
 		$out = $parser->getOutput();
 		$out->setText( $html );
-		return [
-			'html' => $out->getText( [ 'unwrap' => true ] ),
-			'modules' => array_values( array_unique( $out->getModules() ) ),
-			'modulescripts' => [], // $out->getModuleScripts() is deprecated and always returns []
-			'modulestyles' => array_values( array_unique( $out->getModuleStyles() ) ),
-			'categories' => $out->getCategories(),
-		];
+		$out->collectMetadata( $metadata ); # merges $out into $metadata
+		return $out->getText( [ 'unwrap' => true ] ); # HTML
 	}
 
 	/** @inheritDoc */
-	public function preprocessWikitext( IPageConfig $pageConfig, string $wikitext ): array {
+	public function preprocessWikitext(
+		IPageConfig $pageConfig,
+		ContentMetadataCollector $metadata,
+		string $wikitext
+	): string {
 		$parser = $this->prepareParser( $pageConfig, Parser::OT_PREPROCESS );
-		$out = $parser->getOutput();
-		$wikitext = $parser->replaceVariables( $wikitext );
+		$this->hookContainer->run(
+			'ParserBeforePreprocess',
+			[ $parser, &$wikitext, $parser->getStripState() ]
+		);
+		$wikitext = $parser->replaceVariables( $wikitext, $this->ppFrame );
+		// FIXME (T289545): StripState markers protect content that need to be protected from further
+		// "wikitext processing". So, where the result has strip state markers, we actually
+		// need to tunnel this content through rather than unwrap and let it go through the
+		// rest of the parsoid pipeline. For example, some parser functions might return HTML
+		// not wikitext, and where the content might contain wikitext characters, we are now
+		// going to potentially mangle that output.
 		$wikitext = $parser->getStripState()->unstripBoth( $wikitext );
-		return [
-			'wikitext' => $wikitext,
-			'modules' => array_values( array_unique( $out->getModules() ) ),
-			'modulescripts' => [], // $out->getModuleScripts() is deprecated and always returns []
-			'modulestyles' => array_values( array_unique( $out->getModuleStyles() ) ),
-			'categories' => $out->getCategories(),
-			'properties' => $out->getProperties()
-		];
+
+		// XXX: Ideally we will eventually have the legacy parser use our
+		// ContentMetadataCollector instead of having an new ParserOutput
+		// created (implicitly in ::prepareParser()/Parser::resetOutput() )
+		// which we then have to manually merge.
+		$out = $parser->getOutput();
+		$out->collectMetadata( $metadata ); # merges $out into $metadata
+		return $wikitext;
 	}
 
 	/** @inheritDoc */
-	public function fetchPageContent(
-		IPageConfig $pageConfig, string $title, int $oldid = 0
+	public function fetchTemplateSource(
+		IPageConfig $pageConfig, string $title
 	): ?IPageContent {
+		'@phan-var PageConfig $pageConfig'; // @var PageConfig $pageConfig
 		$titleObj = Title::newFromText( $title );
 
-		if ( $oldid ) {
-			$revRecord = $this->revStore->getRevisionByTitle( $titleObj, $oldid );
-		} else {
-			$revRecord = call_user_func(
-				$this->parserOptions->getCurrentRevisionRecordCallback(),
-				$titleObj,
-				$this->parser
-			);
-		}
+		// Use the PageConfig to take advantage of custom template
+		// fetch hooks like FlaggedRevisions, etc.
+		$revRecord = $pageConfig->fetchRevisionRecordOfTemplate( $titleObj );
 
 		return $revRecord ? new PageContent( $revRecord ) : null;
 	}
@@ -332,8 +380,10 @@ class DataAccess implements IDataAccess {
 	/** @inheritDoc */
 	public function fetchTemplateData( IPageConfig $pageConfig, string $title ): ?array {
 		$ret = [];
-		// @todo: Document this hook in MediaWiki
-		Hooks::runWithoutAbort( 'ParserFetchTemplateData', [ [ $title ], &$ret ] );
+		// @todo: Document this hook in MediaWiki / Extension:TemplateData
+		$this->hookContainer->run(
+			'ParserFetchTemplateData', [ [ $title ], &$ret ]
+		);
 
 		// Cast value to array since the hook returns this as a stdclass
 		$tplData = $ret[$title] ?? null;
@@ -358,8 +408,10 @@ class DataAccess implements IDataAccess {
 
 		// Only send the request if it the latest revision
 		if ( $revId !== null && $revId === $latest ) {
-			// @todo: Document this hook in MediaWiki
-			Hooks::runWithoutAbort( 'ParserLogLinterData', [ $title, $revId, $lints ] );
+			// @todo: Document this hook in MediaWiki / Extension:Linter
+			$this->hookContainer->run(
+				'ParserLogLinterData', [ $title, $revId, $lints ]
+			);
 		}
 	}
 

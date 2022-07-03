@@ -1,10 +1,12 @@
 {
 	"@metadata": {
 		"authors": [
+			"Chadyka",
 			"Dim Grits",
 			"Eleferen",
 			"Facenapalm",
 			"Kaganer",
+			"Kareyac",
 			"Lemondoge",
 			"MaxBioHazard",
 			"MaxSem",
@@ -133,7 +135,7 @@
 	"exif-countrycodecreated": "Код страны, где была сделана фотография",
 	"exif-provinceorstatecreated": "Область, провинция или штат, где была сделана фотография",
 	"exif-citycreated": "Город, где была сделана фотография",
-	"exif-sublocationcreated": "Район города, где была сделана фоторафия",
+	"exif-sublocationcreated": "Район города, где была сделана фотография",
 	"exif-worldregiondest": "Изображённый регион мира",
 	"exif-countrydest": "Изображённая страна",
 	"exif-countrycodedest": "Код изображённой страны",
@@ -204,7 +206,6 @@
 	"exif-photometricinterpretation-3": "Цветовая палитра",
 	"exif-photometricinterpretation-4": "Маска прозрачности",
 	"exif-photometricinterpretation-5": "Разделены (вероятно CMYK)",
-	"exif-photometricinterpretation-8": "CIE L*a*b*",
 	"exif-photometricinterpretation-9": "CIE L*a*b* (ICC-кодирование)",
 	"exif-photometricinterpretation-10": "CIE L*a*b* (ITU-кодирование)",
 	"exif-unknowndate": "Неизвестная дата",
@@ -370,5 +371,17 @@
 	"exif-urgency-normal": "Обычная ($1)",
 	"exif-urgency-low": "Низкая ($1)",
 	"exif-urgency-high": "Высокая ($1)",
-	"exif-urgency-other": "Определённый пользователем приоритет ($1)"
+	"exif-urgency-other": "Определённый пользователем приоритет ($1)",
+	"exif-firstphotodate": "Дата первой фотографии",
+	"exif-lastphotodate": "Дата последней фотографии",
+	"exif-projectiontype": "Тип проекции",
+	"exif-usepanoramaviewer": "Использовать программу просмотра панорам",
+	"exif-usepanoramaviewer-true": "Да",
+	"exif-usepanoramaviewer-false": "Нет",
+	"exif-exposurelockused-true": "Да",
+	"exif-exposurelockused-false": "Нет",
+	"exif-croppedareaimagewidthpixels": "Обрезанная ширина панорамы",
+	"exif-croppedareaimageheightpixels": "Обрезанная высота панорамы",
+	"exif-fullpanowidthpixels": "Полная ширина панорамы",
+	"exif-fullpanoheightpixels": "Полная высота панорамы"
 }

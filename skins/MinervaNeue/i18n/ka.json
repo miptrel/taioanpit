@@ -8,6 +8,7 @@
 			"Tokoko"
 		]
 	},
+	"minerva-talk-add-topic": "თემის დამატება",
 	"mobile-frontend-editor-edit": "რედაქტირება",
 	"mobile-frontend-editor-redlink-create": "გვერდის შექმნა",
 	"mobile-frontend-editor-redlink-explain": "ეს გვერდი ჯერ არ შექმნილა.",
@@ -16,7 +17,6 @@
 	"mobile-frontend-home-button": "მთავარი",
 	"mobile-frontend-language-article-heading": "სხვა ენაზე წაკითხვა",
 	"mobile-frontend-languages-not-available": "ეს გვერდი სხვა ენებზე ხელმისაწვდომი არაა.",
-	"mobile-frontend-logged-in-homepage-notification": "მოგესალმებით, $1!",
 	"mobile-frontend-main-menu-button-tooltip": "მთავარი მენიუს გახსნა",
 	"mobile-frontend-main-menu-contributions": "წვლილი",
 	"mobile-frontend-main-menu-login": "შესვლა",
@@ -38,5 +38,6 @@
 	"mobile-frontend-user-newmessages": "განხილვის გვერდზე ახალი შეტყობინებები გაქვთ",
 	"mobile-frontend-user-page-contributions": "წვლილი",
 	"mobile-frontend-user-page-member-since": "წევრი $1-დან",
-	"mobile-frontend-user-page-talk": "განხილვა"
+	"mobile-frontend-user-page-talk": "განხილვა",
+	"minerva-page-actions-overflow": "მეტი"
 }

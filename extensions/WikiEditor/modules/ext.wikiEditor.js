@@ -3,15 +3,7 @@
  */
 
 ( function () {
-	var editingSessionId, logEditEvent, logEditFeature,
-		actionPrefixMap = {
-			firstChange: 'first_change',
-			saveIntent: 'save_intent',
-			saveAttempt: 'save_attempt',
-			saveSuccess: 'save_success',
-			saveFailure: 'save_failure'
-		},
-		trackdebug = !!mw.util.getParamValue( 'trackdebug' );
+	var editingSessionId;
 
 	// This sets $.wikiEditor and $.fn.wikiEditor
 	require( './jquery.wikiEditor.js' );
@@ -24,29 +16,28 @@
 	}
 
 	function sampledLogger( schema, callback ) {
+		var trackdebug = !!mw.util.getParamValue( 'trackdebug' );
 		return function () {
-			var args;
 			if ( mw.loader.getState( 'ext.eventLogging' ) === null ) {
 				return;
 			}
-			args = Array.prototype.slice.call( arguments );
+			var args = Array.prototype.slice.call( arguments );
 
 			mw.loader.using( [ 'ext.eventLogging' ] ).done( function () {
 				// Sampling
 				// We have to do this on the client too because the unload handler
 				// can cause an editingSessionId to be generated on the client
 				// Not using mw.eventLog.inSample() because we need to be able to pass our own editingSessionId
-				var data,
-					inSample = mw.eventLog.randomTokenMatch(
-						1 / mw.config.get( 'wgWMESchemaEditAttemptStepSamplingRate' ),
-						editingSessionId
-					);
+				var inSample = mw.eventLog.randomTokenMatch(
+					1 / mw.config.get( 'wgWMESchemaEditAttemptStepSamplingRate' ),
+					editingSessionId
+				);
 
 				if ( !inSample && !mw.config.get( 'wgWMESchemaEditAttemptStepOversample' ) && !trackdebug ) {
 					return;
 				}
 
-				data = callback.apply( this, [ inSample ].concat( args ) );
+				var data = callback.apply( this, [ inSample ].concat( args ) );
 
 				if ( trackdebug ) {
 					log( schema, data );
@@ -57,7 +48,36 @@
 		};
 	}
 
-	logEditEvent = sampledLogger( 'EditAttemptStep', function ( inSample, action, data ) {
+	function addABTestData( data, addToken ) {
+		// DiscussionTools New Topic A/B test for logged out users
+		if ( !mw.config.get( 'wgDiscussionToolsABTest' ) ) {
+			return;
+		}
+		if ( mw.user.isAnon() ) {
+			var tokenData = mw.storage.getObject( 'DTNewTopicABToken' );
+			if ( !tokenData ) {
+				return;
+			}
+			var anonid = parseInt( tokenData.token.slice( 0, 8 ), 16 );
+			data.bucket = anonid % 2 === 0 ? 'test' : 'control';
+			if ( addToken ) {
+				// eslint-disable-next-line camelcase
+				data.anonymous_user_token = tokenData.token;
+			}
+		} else if ( mw.user.options.get( 'discussiontools-abtest2' ) ) {
+			data.bucket = mw.user.options.get( 'discussiontools-abtest2' );
+		}
+	}
+
+	var actionPrefixMap = {
+		firstChange: 'first_change',
+		saveIntent: 'save_intent',
+		saveAttempt: 'save_attempt',
+		saveSuccess: 'save_success',
+		saveFailure: 'save_failure'
+	};
+
+	var logEditEvent = sampledLogger( 'EditAttemptStep', function ( inSample, action, data ) {
 		var actionPrefix = actionPrefixMap[ action ] || action;
 
 		/* eslint-disable camelcase */
@@ -74,7 +94,7 @@
 			page_id: mw.config.get( 'wgArticleId' ),
 			page_title: mw.config.get( 'wgPageName' ),
 			page_ns: mw.config.get( 'wgNamespaceNumber' ),
-			revision_id: mw.config.get( 'wgRevisionId' ),
+			revision_id: mw.config.get( 'wgRevisionId' ) || +$( 'input[name=parentRevId]' ).val() || 0,
 			user_id: mw.user.getId(),
 			user_editcount: mw.config.get( 'wgUserEditCount', 0 ),
 			mw_version: mw.config.get( 'wgVersion' )
@@ -83,6 +103,8 @@
 		if ( mw.user.isAnon() ) {
 			data.user_class = 'IP';
 		}
+
+		addABTestData( data, true );
 
 		// Schema's kind of a mess of special properties
 		if ( data.action === 'init' || data.action === 'abort' || data.action === 'saveFailure' ) {
@@ -104,9 +126,9 @@
 		return data;
 	} );
 
-	logEditFeature = sampledLogger( 'VisualEditorFeatureUse', function ( inSample, feature, action ) {
+	var logEditFeature = sampledLogger( 'VisualEditorFeatureUse', function ( inSample, feature, action ) {
 		/* eslint-disable camelcase */
-		return {
+		var data = {
 			feature: feature,
 			action: action,
 			editingSessionId: editingSessionId,
@@ -116,16 +138,17 @@
 			integration: 'page',
 			editor_interface: 'wikitext'
 		};
+		addABTestData( data );
 		/* eslint-enable camelcase */
+		return data;
 	} );
 
 	function logAbort( switchingToVE, unmodified ) {
-		var abortType;
-
 		if ( switchingToVE ) {
 			logEditFeature( 'editor-switch', 'visual-desktop' );
 		}
 
+		var abortType;
 		if ( switchingToVE && unmodified ) {
 			abortType = 'switchnochange';
 		} else if ( switchingToVE ) {
@@ -144,8 +167,10 @@
 	$( function () {
 		var $textarea = $( '#wpTextbox1' ),
 			$editingSessionIdInput = $( '#editingStatsId' ),
-			origText = $textarea.val(),
-			submitting, onUnloadFallback, dialogsConfig, readyTime;
+			origText = $textarea.val();
+
+		// T263505, T249038
+		$( '#wikieditorUsed' ).val( 'yes' );
 
 		if ( $editingSessionIdInput.length ) {
 			editingSessionId = $editingSessionIdInput.val();
@@ -156,7 +181,7 @@
 				// fall back to the timestamp when the page loaded for those
 				// that don't, we just ignore them, so as to not skew the
 				// results towards better-performance in those cases.
-				readyTime = Date.now();
+				var readyTime = Date.now();
 				logEditEvent( 'ready', {
 					timing: readyTime - window.performance.timing.navigationStart
 				} );
@@ -170,20 +195,28 @@
 					} );
 				} );
 			}
-			$textarea.closest( 'form' ).on( 'submit', function () {
+			var $form = $textarea.closest( 'form' );
+			if ( mw.user.options.get( 'uselivepreview' ) ) {
+				$form.find( '#wpPreview' ).on( 'click', function () {
+					logEditFeature( 'preview', 'preview-live' );
+				} );
+			}
+
+			var submitting;
+			$form.on( 'submit', function () {
 				submitting = true;
 			} );
-			onUnloadFallback = window.onunload;
+			var onUnloadFallback = window.onunload;
 
 			window.onunload = function () {
-				var fallbackResult,
-					unmodified = mw.config.get( 'wgAction' ) !== 'submit' && origText === $textarea.val(),
+				var unmodified = mw.config.get( 'wgAction' ) !== 'submit' && origText === $textarea.val(),
 					caVeEdit = $( '#ca-ve-edit' )[ 0 ],
 					switchingToVE = caVeEdit && (
 						document.activeElement === caVeEdit ||
 						$.contains( caVeEdit, document.activeElement )
 					);
 
+				var fallbackResult;
 				if ( onUnloadFallback ) {
 					fallbackResult = onUnloadFallback();
 				}
@@ -217,14 +250,19 @@
 		$( '#toolbar' ).remove();
 		// Add toolbar module
 		// TODO: Implement .wikiEditor( 'remove' )
+		mw.addWikiEditor( $textarea );
+	} );
+
+	mw.addWikiEditor = function ( $textarea ) {
 		$textarea.wikiEditor(
 			'addModule', require( './jquery.wikiEditor.toolbar.config.js' )
 		);
 
-		dialogsConfig = require( './jquery.wikiEditor.dialogs.config.js' );
+		var dialogsConfig = require( './jquery.wikiEditor.dialogs.config.js' );
 		// Replace icons
 		dialogsConfig.replaceIcons( $textarea );
 		// Add dialogs module
 		$textarea.wikiEditor( 'addModule', dialogsConfig.getDefaultConfig() );
-	} );
+
+	};
 }() );

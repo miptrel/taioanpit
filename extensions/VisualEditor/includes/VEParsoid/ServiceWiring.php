@@ -17,10 +17,14 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
+// phpcs:disable MediaWiki.WhiteSpace.SpaceBeforeSingleLineComment.NewLineComment
+
+use MediaWiki\Config\ServiceOptions;
 use MediaWiki\MediaWikiServices;
 use VEParsoid\Config\DataAccess as MWDataAccess;
-use VEParsoid\Config\PageConfigFactory;
+use VEParsoid\Config\PageConfigFactory as MWPageConfigFactory;
 use VEParsoid\Config\SiteConfig as MWSiteConfig;
+use VEParsoid\ParsoidServices;
 use Wikimedia\Parsoid\Config\Api\DataAccess as ApiDataAccess;
 use Wikimedia\Parsoid\Config\Api\SiteConfig as ApiSiteConfig;
 use Wikimedia\Parsoid\Config\DataAccess;
@@ -29,65 +33,62 @@ use Wikimedia\Parsoid\Config\SiteConfig;
 global $wgVisualEditorParsoidAutoConfig;
 if (
 	ExtensionRegistry::getInstance()->isLoaded( 'Parsoid' ) ||
-	!$wgVisualEditorParsoidAutoConfig
+	!$wgVisualEditorParsoidAutoConfig ||
+	// Compatibility: we're going to move this code to core eventually; this
+	// ensures we yield gracefully to core's implementation when it exists.
+	class_exists( '\MediaWiki\Parser\Parsoid\ParsoidServices' )
 ) {
 	return [];
 }
 
 return [
 
-	'ParsoidSettings' => function ( MediaWikiServices $services ): array {
-		# Unified location for default parsoid settings.
-
-		$veConfig = $services->getConfigFactory()
-			->makeConfig( 'visualeditor' );
-		$parsoidSettings = [
-			# Default parsoid settings, for 'no config' install.
-			'useSelser' => true,
-		];
-		try {
-			$parsoidSettings =
-				$veConfig->get( 'VisualEditorParsoidSettings' )
-				+ $parsoidSettings;
-		} catch ( ConfigException $e ) {
-			/* Config option isn't defined, use defaults */
-		}
-		return $parsoidSettings;
-	},
-
-	'ParsoidSiteConfig' => function ( MediaWikiServices $services ): SiteConfig {
-		$parsoidSettings = $services->get( 'ParsoidSettings' );
+	'ParsoidSiteConfig' => static function ( MediaWikiServices $services ): SiteConfig {
+		$parsoidSettings = ( new ParsoidServices( $services ) )
+			->getParsoidSettings(); # use fallback chain for parsoid settings
 		if ( !empty( $parsoidSettings['debugApi'] ) ) {
 			return ApiSiteConfig::fromSettings( $parsoidSettings );
 		}
-		return new MWSiteConfig();
+		$mainConfig = $services->getMainConfig();
+		return new MWSiteConfig(
+			new ServiceOptions( MWSiteConfig::CONSTRUCTOR_OPTIONS, $mainConfig ),
+			$parsoidSettings,
+			$services->getObjectFactory(),
+			$services->getContentLanguage(),
+			$services->getStatsdDataFactory(),
+			$services->getMagicWordFactory(),
+			$services->getNamespaceInfo(),
+			$services->getSpecialPageFactory(),
+			$services->getInterwikiLookup(),
+			$services->getUserOptionsLookup(),
+			$services->getLanguageFactory(),
+			$services->getLanguageConverterFactory(),
+			$services->getLanguageNameUtils(),
+			// These arguments are temporary and will be removed once
+			// better solutions are found.
+			$services->getParser(), // T268776
+			$mainConfig, // T268777
+			$services->getHookContainer() // T300546
+		);
 	},
 
-	'ParsoidPageConfigFactory' => function ( MediaWikiServices $services ): PageConfigFactory {
-		return new PageConfigFactory( $services->getRevisionStore(), $services->getParser(),
-			$services->get( '_ParsoidParserOptions' ), $services->getSlotRoleRegistry() );
+	'ParsoidPageConfigFactory' => static function ( MediaWikiServices $services ): MWPageConfigFactory {
+		return new MWPageConfigFactory( $services->getRevisionStore(),
+			$services->getSlotRoleRegistry() );
 	},
 
-	'ParsoidDataAccess' => function ( MediaWikiServices $services ): DataAccess {
-		$parsoidSettings = $services->get( 'ParsoidSettings' );
+	'ParsoidDataAccess' => static function ( MediaWikiServices $services ): DataAccess {
+		$parsoidSettings = ( new ParsoidServices( $services ) )
+			->getParsoidSettings(); # use fallback chain for parsoid settings
 		if ( !empty( $parsoidSettings['debugApi'] ) ) {
 			return ApiDataAccess::fromSettings( $parsoidSettings );
 		}
-		return new MWDataAccess( $services->getRevisionStore(), $services->getParser(),
-			$services->get( '_ParsoidParserOptions' ) );
+		return new MWDataAccess(
+			$services->getRepoGroup(),
+			$services->getBadFileLookup(),
+			$services->getHookContainer(),
+			$services->getContentTransformer(),
+			$services->getParserFactory() // *legacy* parser factory
+		);
 	},
-
-	'_ParsoidParserOptions' => function ( MediaWikiServices $services ): ParserOptions {
-		// phpcs:ignore MediaWiki.Usage.DeprecatedGlobalVariables.Deprecated$wgUser
-		global $wgUser;
-
-		// Pass a dummy user: Parsoid's parses don't use the user context right now
-		// and all user state is expected to be introduced as a post-parse transformation
-		// It is unclear if wikitext supports this model. But, given that Parsoid/JS
-		// operated in this fashion, for now, Parsoid/PHP will as well with the caveat below.
-		// ParserOptions used to default to $wgUser if we passed in null here (and new User()
-		// if $wgUser was null as it would be in most background job parsing contexts).
-		return ParserOptions::newCanonical( $wgUser ?? new User() );
-	},
-
 ];

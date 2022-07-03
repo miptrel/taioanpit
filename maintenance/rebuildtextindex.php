@@ -50,7 +50,7 @@ class RebuildTextIndex extends Maintenance {
 
 	public function execute() {
 		// Shouldn't be needed for Postgres
-		$dbw = $this->getDB( DB_MASTER );
+		$dbw = $this->getDB( DB_PRIMARY );
 		if ( $dbw->getType() == 'postgres' ) {
 			$this->fatalError( "This script is not needed when using Postgres.\n" );
 		}
@@ -79,9 +79,9 @@ class RebuildTextIndex extends Maintenance {
 	 * Populates the search index with content from all pages
 	 */
 	protected function populateSearchIndex() {
-		$dbw = $this->getDB( DB_MASTER );
+		$dbw = $this->getDB( DB_PRIMARY );
 		$res = $dbw->select( 'page', 'MAX(page_id) AS count', [], __METHOD__ );
-		$s = $dbw->fetchObject( $res );
+		$s = $res->fetchObject();
 		$count = $s->count;
 		$this->output( "Rebuilding index fields for {$count} pages...\n" );
 		$n = 0;
@@ -105,6 +105,12 @@ class RebuildTextIndex extends Maintenance {
 			);
 
 			foreach ( $res as $s ) {
+
+				// T268673 Prevent failure of WikiPage.php: Invalid or virtual namespace -1 given
+				if ( $s->page_namespace < 0 ) {
+					continue;
+				}
+
 				$title = Title::makeTitle( $s->page_namespace, $s->page_title );
 				try {
 					$revRecord = $revStore->newRevisionFromRow( $s );
@@ -125,7 +131,7 @@ class RebuildTextIndex extends Maintenance {
 	 * (MySQL only) Drops fulltext index before populating the table.
 	 */
 	private function dropMysqlTextIndex() {
-		$dbw = $this->getDB( DB_MASTER );
+		$dbw = $this->getDB( DB_PRIMARY );
 		$searchindex = $dbw->tableName( 'searchindex' );
 		if ( $dbw->indexExists( 'searchindex', 'si_title', __METHOD__ ) ) {
 			$this->output( "Dropping index...\n" );
@@ -138,7 +144,7 @@ class RebuildTextIndex extends Maintenance {
 	 * (MySQL only) Adds back fulltext index after populating the table.
 	 */
 	private function createMysqlTextIndex() {
-		$dbw = $this->getDB( DB_MASTER );
+		$dbw = $this->getDB( DB_PRIMARY );
 		$searchindex = $dbw->tableName( 'searchindex' );
 		$this->output( "\nRebuild the index...\n" );
 		foreach ( [ 'si_title', 'si_text' ] as $field ) {
@@ -151,7 +157,7 @@ class RebuildTextIndex extends Maintenance {
 	 * Deletes everything from search index.
 	 */
 	private function clearSearchIndex() {
-		$dbw = $this->getDB( DB_MASTER );
+		$dbw = $this->getDB( DB_PRIMARY );
 		$this->output( 'Clearing searchindex table...' );
 		$dbw->delete( 'searchindex', '*', __METHOD__ );
 		$this->output( "Done\n" );

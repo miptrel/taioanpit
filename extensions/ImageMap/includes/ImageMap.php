@@ -18,7 +18,7 @@
  * Coordinates are relative to the source image, not the thumbnail.
  */
 
-namespace MediaWiki\Extensions\ImageMap;
+namespace MediaWiki\Extension\ImageMap;
 
 use ConfigFactory;
 use DOMDocument;
@@ -29,16 +29,16 @@ use OutputPage;
 use Parser;
 use Sanitizer;
 use Title;
+use Wikimedia\AtEase\AtEase;
 use Xml;
 
 class ImageMap {
-	public static $id = 0;
 
-	const TOP_RIGHT = 0;
-	const BOTTOM_RIGHT = 1;
-	const BOTTOM_LEFT = 2;
-	const TOP_LEFT = 3;
-	const NONE = 4;
+	private const TOP_RIGHT = 0;
+	private const BOTTOM_RIGHT = 1;
+	private const BOTTOM_LEFT = 2;
+	private const TOP_LEFT = 3;
+	private const NONE = 4;
 
 	/**
 	 * @param Parser $parser
@@ -53,9 +53,10 @@ class ImageMap {
 	 * @param Parser $parser
 	 * @return string HTML (Image map, or error message)
 	 */
-	public static function render( $input, $params, $parser ) {
+	public static function render( $input, $params, Parser $parser ) {
 		global $wgUrlProtocols, $wgNoFollowLinks;
 		$config = ConfigFactory::getDefaultInstance()->makeConfig( 'main' );
+		$enableLegacyMediaDOM = $config->get( 'ParserEnableLegacyMediaDOM' );
 
 		$lines = explode( "\n", $input );
 
@@ -66,9 +67,9 @@ class ImageMap {
 		$thumbWidth = 0;
 		$thumbHeight = 0;
 		$imageTitle = null;
-		$lineNum = 0;
 		$mapHTML = '';
 		$links = [];
+		$explicitNone = false;
 
 		// Define canonical desc types to allow i18n of 'imagemap_desc_types'
 		$descTypesCanonical = 'top-right, bottom-right, bottom-left, top-left, none';
@@ -79,12 +80,12 @@ class ImageMap {
 		$services = MediaWikiServices::getInstance();
 		$repoGroup = $services->getRepoGroup();
 		$badFileLookup = $services->getBadFileLookup();
-		foreach ( $lines as $line ) {
-			++$lineNum;
+		foreach ( $lines as $lineNum => $line ) {
+			$lineNum++;
 			$externLink = false;
 
 			$line = trim( $line );
-			if ( $line == '' || $line[0] == '#' ) {
+			if ( $line === '' || $line[0] === '#' ) {
 				continue;
 			}
 
@@ -94,12 +95,8 @@ class ImageMap {
 				// The first line should have an image specification on it
 				// Extract it and render the HTML
 				$bits = explode( '|', $line, 2 );
-				if ( count( $bits ) == 1 ) {
-					$image = $bits[0];
-					$options = '';
-				} else {
-					list( $image, $options ) = $bits;
-				}
+				$image = $bits[0];
+				$options = $bits[1] ?? '';
 				$imageTitle = Title::newFromText( $image );
 				if ( !$imageTitle || !$imageTitle->inNamespace( NS_FILE ) ) {
 					return self::error( 'imagemap_no_image' );
@@ -108,16 +105,24 @@ class ImageMap {
 					return self::error( 'imagemap_bad_image' );
 				}
 				// Parse the options so we can use links and the like in the caption
-				$parsedOptions = $parser->recursiveTagParse( $options );
+				$parsedOptions = $options === '' ? '' : $parser->recursiveTagParse( $options );
+
+				if ( !$enableLegacyMediaDOM ) {
+					$explicitNone = preg_match( '/(^|\|)none(\||$)/D', $parsedOptions );
+					if ( !$explicitNone ) {
+						$parsedOptions .= '|none';
+					}
+				}
+
 				$imageHTML = $parser->makeImage( $imageTitle, $parsedOptions );
 				$parser->replaceLinkHolders( $imageHTML );
 				$imageHTML = $parser->getStripState()->unstripBoth( $imageHTML );
 				$imageHTML = Sanitizer::normalizeCharReferences( $imageHTML );
 
 				$domDoc = new DOMDocument();
-				\Wikimedia\suppressWarnings();
+				AtEase::suppressWarnings();
 				$ok = $domDoc->loadXML( $imageHTML );
-				\Wikimedia\restoreWarnings();
+				AtEase::restoreWarnings();
 				if ( !$ok ) {
 					return self::error( 'imagemap_invalid_image' );
 				}
@@ -148,18 +153,18 @@ class ImageMap {
 
 			// Handle desc spec
 			$cmd = strtok( $line, " \t" );
-			if ( $cmd == 'desc' ) {
+			if ( $cmd === 'desc' ) {
 				$typesText = wfMessage( 'imagemap_desc_types' )->inContentLanguage()->text();
-				if ( $descTypesCanonical != $typesText ) {
+				if ( $descTypesCanonical !== $typesText ) {
 					// i18n desc types exists
 					$typesText = $descTypesCanonical . ', ' . $typesText;
 				}
 				$types = array_map( 'trim', explode( ',', $typesText ) );
-				$type = trim( strtok( '' ) );
+				$type = trim( strtok( '' ) ?: '' );
 				$descType = array_search( $type, $types );
 				if ( $descType > 4 ) {
 					// A localized descType is used. Subtract 5 to reach the canonical desc type.
-					$descType = $descType - 5;
+					$descType -= 5;
 				}
 				// <0? In theory never, but paranoia...
 				if ( $descType === false || $descType < 0 ) {
@@ -246,26 +251,26 @@ class ImageMap {
 				if ( $wgNoFollowLinks ) {
 					$attribs['rel'] = 'nofollow';
 				}
-			} elseif ( $title->getFragment() != '' && $title->getPrefixedDBkey() == '' ) {
+			} elseif ( $title->getFragment() !== '' && $title->getPrefixedDBkey() === '' ) {
 				// XXX: kluge to handle [[#Fragment]] links, should really fix getLocalURL()
 				// in Title.php to return an empty string in this case
 				$attribs['href'] = $title->getFragmentForURL();
 			} else {
 				$attribs['href'] = $title->getLocalURL() . $title->getFragmentForURL();
 			}
-			if ( $shape != 'default' ) {
+			if ( $shape !== 'default' ) {
 				$attribs['shape'] = $shape;
 			}
 			if ( $coords ) {
 				$attribs['coords'] = implode( ',', $coords );
 			}
-			if ( $alt != '' ) {
-				if ( $shape != 'default' ) {
+			if ( $alt !== '' ) {
+				if ( $shape !== 'default' ) {
 					$attribs['alt'] = $alt;
 				}
 				$attribs['title'] = $alt;
 			}
-			if ( $shape == 'default' ) {
+			if ( $shape === 'default' ) {
 				$defaultLinkAttribs = $attribs;
 			} else {
 				// @phan-suppress-next-line SecurityCheck-DoubleEscaped
@@ -282,7 +287,7 @@ class ImageMap {
 			return self::error( 'imagemap_no_image' );
 		}
 
-		if ( $mapHTML == '' ) {
+		if ( $mapHTML === '' ) {
 			// no areas defined, default only. It's not a real imagemap, so we do not need some tags
 			$realmap = false;
 		}
@@ -300,44 +305,90 @@ class ImageMap {
 			$imageNode->setAttribute( 'usemap', "#$mapName" );
 		}
 
-		// Add a surrounding div, remove the default link to the description page
-		$anchor = $imageNode->parentNode;
-		$parent = $anchor->parentNode;
-		$div = $parent->insertBefore( new DOMElement( 'div' ), $anchor );
-		$div->setAttribute( 'class', 'noresize' );
-		if ( $defaultLinkAttribs ) {
-			$defaultAnchor = $div->appendChild( new DOMElement( 'a' ) );
-			foreach ( $defaultLinkAttribs as $name => $value ) {
-				$defaultAnchor->setAttribute( $name, $value );
-			}
-			$imageParent = $defaultAnchor;
-		} else {
-			$imageParent = $div;
-		}
-
-		// Add the map HTML to the div
-		// We used to add it before the div, but that made tidy unhappy
-		if ( $mapHTML != '' ) {
+		if ( $mapHTML !== '' ) {
 			$mapDoc = new DOMDocument();
 			$mapDoc->loadXML( $mapHTML );
 			$mapNode = $domDoc->importNode( $mapDoc->documentElement, true );
-			$div->appendChild( $mapNode );
 		}
 
-		$imageParent->appendChild( $imageNode->cloneNode( true ) );
-		$parent->removeChild( $anchor );
+		$div = null;
+
+		if ( $enableLegacyMediaDOM ) {
+			// Add a surrounding div, remove the default link to the description page
+			$anchor = $imageNode->parentNode;
+			$parent = $anchor->parentNode;
+
+			// Handle cases where there are no anchors, like `|link=`
+			if ( $anchor instanceof DOMDocument ) {
+				$parent = $anchor;
+				$anchor = $imageNode;
+			}
+
+			$div = $parent->insertBefore( new DOMElement( 'div' ), $anchor );
+			$div->setAttribute( 'class', 'noresize' );
+			if ( $defaultLinkAttribs ) {
+				$defaultAnchor = $div->appendChild( new DOMElement( 'a' ) );
+				foreach ( $defaultLinkAttribs as $name => $value ) {
+					$defaultAnchor->setAttribute( $name, $value );
+				}
+				$imageParent = $defaultAnchor;
+			} else {
+				$imageParent = $div;
+			}
+
+			// Add the map HTML to the div
+			// We used to add it before the div, but that made tidy unhappy
+			if ( isset( $mapNode ) ) {
+				$div->appendChild( $mapNode );
+			}
+
+			$imageParent->appendChild( $imageNode->cloneNode( true ) );
+			$parent->removeChild( $anchor );
+		} else {
+			$anchor = $imageNode->parentNode;
+			$wrapper = $anchor->parentNode;
+
+			$classes = $wrapper->getAttribute( 'class' );
+
+			// For T22030
+			$classes .= ( $classes ? ' ' : '' ) . 'noresize';
+
+			// Remove that class if it was only added while forcing a block
+			if ( !$explicitNone ) {
+				$classes = trim( preg_replace( '/ ?mw-halign-none/', '', $classes ) );
+			}
+
+			$wrapper->setAttribute( 'class', $classes );
+
+			if ( $defaultLinkAttribs ) {
+				$imageParent = $wrapper->ownerDocument->createElement( 'a' );
+				foreach ( $defaultLinkAttribs as $name => $value ) {
+					$imageParent->setAttribute( $name, $value );
+				}
+			} else {
+				$imageParent = new DOMElement( 'span' );
+			}
+			$wrapper->insertBefore( $imageParent, $anchor );
+
+			if ( isset( $mapNode ) ) {
+				$wrapper->insertBefore( $mapNode, $anchor );
+			}
+
+			$imageParent->appendChild( $imageNode->cloneNode( true ) );
+			$wrapper->removeChild( $anchor );
+		}
 
 		// Determine whether a "magnify" link is present
 		$xpath = new DOMXPath( $domDoc );
 		$magnify = $xpath->query( '//div[@class="magnify"]' );
-		if ( !$magnify->length && $descType != self::NONE ) {
+		if ( $enableLegacyMediaDOM && !$magnify->length && $descType !== self::NONE ) {
 			// Add image description link
-			if ( $descType == self::TOP_LEFT || $descType == self::BOTTOM_LEFT ) {
+			if ( $descType === self::TOP_LEFT || $descType === self::BOTTOM_LEFT ) {
 				$marginLeft = 0;
 			} else {
 				$marginLeft = $thumbWidth - 20;
 			}
-			if ( $descType == self::TOP_LEFT || $descType == self::TOP_RIGHT ) {
+			if ( $descType === self::TOP_LEFT || $descType === self::TOP_RIGHT ) {
 				$marginTop = -$thumbHeight;
 				// 1px hack for IE, to stop it poking out the top
 				$marginTop += 1;
@@ -378,9 +429,9 @@ class ImageMap {
 
 		// Register links
 		foreach ( $links as $title ) {
-			if ( $title->isExternal() || $title->getNamespace() == NS_SPECIAL ) {
+			if ( $title->isExternal() || $title->getNamespace() === NS_SPECIAL ) {
 				// Don't register special or interwiki links...
-			} elseif ( $title->getNamespace() == NS_MEDIA ) {
+			} elseif ( $title->getNamespace() === NS_MEDIA ) {
 				// Regular Media: links are recorded as image usages
 				$parser->getOutput()->addImage( $title->getDBkey() );
 			} else {

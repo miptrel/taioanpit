@@ -1,6 +1,7 @@
 {
 	"@metadata": {
 		"authors": [
+			"Kizule",
 			"Milicevic01",
 			"Obsuser",
 			"Srdjan m",
@@ -20,7 +21,6 @@
 	"mobile-frontend-home-button": "Početna",
 	"mobile-frontend-language-article-heading": "Jezik",
 	"mobile-frontend-languages-not-available": "Ova stranica nije dostupna na drugim jezicima.",
-	"mobile-frontend-logged-in-homepage-notification": "{{GENDER:$1|Dobro došli}}, $1!",
 	"mobile-frontend-main-menu-button-tooltip": "Otvorite glavni meni",
 	"mobile-frontend-main-menu-contributions": "Doprinosi",
 	"mobile-frontend-main-menu-login": "Prijava",
@@ -44,7 +44,7 @@
 	"mobile-frontend-talk-back-to-projectpage": "Vrati me na stranicu projekta „$1”.",
 	"mobile-frontend-talk-back-to-userpage": "Vrati me na stranicu {{GENDER:$1|korisnika|korisnice}} „$1”.",
 	"mobile-frontend-user-button-tooltip": "Prikažite obaveštenja",
-	"mobile-frontend-user-newmessages": "Imate nove poruke na stranici za razgovor",
+	"mobile-frontend-user-newmessages": "Imate nove poruke",
 	"mobile-frontend-user-page-contributions": "Doprinosi",
 	"mobile-frontend-user-page-member-since": "{{GENDER:$2|Pridružio|Pridružila|Pridružio/la}} se na datum $1",
 	"mobile-frontend-user-page-talk": "Razgovor",
@@ -67,8 +67,8 @@
 	"skinname-minerva": "Minerva (novo)",
 	"minerva-skin-desc": "Osetljiva tema prvenstveno za mobilnu upotrebu",
 	"skin-minerva-issue-learn-more": "Saznajte više",
-	"skin-minerva-mobile-option-MinervaShowCategoriesButton": "Kategorije",
-	"skin-minerva-mobile-option-MinervaShowCategoriesButton-description": "Prikazuje kategorije stranica",
+	"skin-minerva-mobile-option-MinervaShowCategories": "Kategorije",
+	"skin-minerva-mobile-option-MinervaShowCategories-description": "Prikazuje kategorije stranica",
 	"skin-minerva-mobile-option-MinervaPageIssuesNewTreatment": "Poboljšan tretman problema sa stranicom",
 	"skin-minerva-mobile-option-MinervaPageIssuesNewTreatment-description": "Problemi sa stranicom (Šablon:ambox) biće umetnuti u članak.",
 	"skin-minerva-recentchanges-warning-enhanced-not-supported": "Nažalost, grupisanje rezultata po stranici nije dostupno na mobilnom uređaju. Ako želite da koristite funkciju grupisanja po stranici, posetite veb lokaciju radne površine."

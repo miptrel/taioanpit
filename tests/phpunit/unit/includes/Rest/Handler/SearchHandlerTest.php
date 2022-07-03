@@ -6,12 +6,19 @@ use HashConfig;
 use InvalidArgumentException;
 use Language;
 use MediaWiki\Linker\LinkTarget;
+use MediaWiki\Page\PageIdentity;
+use MediaWiki\Page\PageIdentityValue;
+use MediaWiki\Page\PageStore;
+use MediaWiki\Page\ProperPageIdentity;
+use MediaWiki\Page\RedirectLookup;
 use MediaWiki\Permissions\PermissionManager;
 use MediaWiki\Rest\Handler\SearchHandler;
 use MediaWiki\Rest\LocalizedHttpException;
 use MediaWiki\Rest\RequestData;
 use MediaWiki\Search\Entity\SearchResultThumbnail;
+use MediaWiki\Tests\Unit\DummyServicesTrait;
 use MockSearchResultSet;
+use MockTitleTrait;
 use PHPUnit\Framework\MockObject\MockObject;
 use SearchEngine;
 use SearchEngineFactory;
@@ -20,7 +27,7 @@ use SearchResultSet;
 use SearchSuggestion;
 use SearchSuggestionSet;
 use Status;
-use User;
+use TitleFormatter;
 use Wikimedia\Message\MessageValue;
 
 /**
@@ -28,7 +35,9 @@ use Wikimedia\Message\MessageValue;
  */
 class SearchHandlerTest extends \MediaWikiUnitTestCase {
 
+	use DummyServicesTrait;
 	use HandlerTestTrait;
+	use MockTitleTrait;
 
 	/**
 	 * @var SearchEngine|MockObject|null
@@ -36,10 +45,14 @@ class SearchHandlerTest extends \MediaWikiUnitTestCase {
 	private $searchEngine = null;
 
 	/**
-	 * @param $query
+	 * @param string $query
 	 * @param SearchResultSet|Status $titleResult
 	 * @param SearchResultSet|Status $textResult
 	 * @param SearchSuggestionSet|null $completionResult
+	 * @param PermissionManager|null $permissionManager
+	 * @param RedirectLookup|null $redirectLookup
+	 * @param PageStore|null $pageStore
+	 * @param TitleFormatter|null $mockTitleFormatter
 	 *
 	 * @return SearchHandler
 	 */
@@ -47,7 +60,11 @@ class SearchHandlerTest extends \MediaWikiUnitTestCase {
 		$query,
 		$titleResult,
 		$textResult,
-		$completionResult = null
+		$completionResult = null,
+		$permissionManager = null,
+		$redirectLookup = null,
+		$pageStore = null,
+		$mockTitleFormatter = null
 	) {
 		$config = new HashConfig( [
 			'SearchType' => 'test',
@@ -61,14 +78,26 @@ class SearchHandlerTest extends \MediaWikiUnitTestCase {
 		$hookContainer = $this->createHookContainer();
 		$searchEngineConfig = new \SearchEngineConfig( $config, $language, $hookContainer, [] );
 
-		/** @var PermissionManager|MockObject $permissionManager */
-		$permissionManager = $this->createNoOpMock(
-			PermissionManager::class, [ 'quickUserCan' ]
-		);
-		$permissionManager->method( 'quickUserCan' )
-			->willReturnCallback( function ( $action, User $user, LinkTarget $page ) {
-				return !preg_match( '/Forbidden/', $page->getText() );
-			} );
+		if ( !$permissionManager ) {
+			$permissionManager = $this->createMock( PermissionManager::class );
+			$permissionManager->method( 'isEveryoneAllowed' )
+				->with( 'read' )
+				->willReturn( true );
+		}
+		if ( !$pageStore ) {
+			$pageStore = $this->createMock( PageStore::class );
+		}
+
+		// Our mock RedirectLookup defaults to not finding a redirect for our given page
+		if ( !$redirectLookup ) {
+			$redirectLookup = $this->createMock( RedirectLookup::class );
+			$redirectLookup->method( 'getRedirectTarget' )
+				->willReturn( null );
+		}
+
+		if ( !$mockTitleFormatter ) {
+			$mockTitleFormatter = $this->getDummyTitleFormatter();
+		}
 
 		/** @var SearchEngine|MockObject $searchEngine */
 		$this->searchEngine = $this->createMock( SearchEngine::class );
@@ -92,9 +121,12 @@ class SearchHandlerTest extends \MediaWikiUnitTestCase {
 
 		return new SearchHandler(
 			$config,
-			$permissionManager,
 			$searchEngineFactory,
-			$searchEngineConfig
+			$searchEngineConfig,
+			$permissionManager,
+			$redirectLookup,
+			$pageStore,
+			$mockTitleFormatter
 		);
 	}
 
@@ -128,11 +160,14 @@ class SearchHandlerTest extends \MediaWikiUnitTestCase {
 
 	/**
 	 * @param string $pageName
+	 * @param MockObject|null $title
 	 *
 	 * @return SearchSuggestion
 	 */
-	private function makeMockSearchSuggestion( $pageName ) {
-		$title = $this->makeMockTitle( $pageName );
+	private function makeMockSearchSuggestion( $pageName, $title = null ) {
+		if ( !$title ) {
+			$title = $this->makeMockTitle( $pageName );
+		}
 
 		/** @var SearchSuggestion|MockObject $suggestion */
 		$suggestion = $this->createNoOpMock(
@@ -162,10 +197,12 @@ class SearchHandlerTest extends \MediaWikiUnitTestCase {
 
 		$query = 'foo';
 		$request = new RequestData( [ 'queryParams' => [ 'q' => $query ] ] );
-
 		$handler = $this->newHandler( $query, $titleResults, $textResults );
 		$config = [ 'mode' => SearchHandler::FULLTEXT_MODE ];
-		$data = $this->executeHandlerAndGetBodyData( $handler, $request, $config );
+		$data = $this->executeHandlerAndGetBodyData( $handler, $request, $config, [], [], [],
+			$this->mockAnonAuthority( static function ( string $permission, ?PageIdentity $target ) {
+				return $target && !preg_match( '/Forbidden/', $target->getDBkey() );
+			} ) );
 
 		$this->assertArrayHasKey( 'pages', $data );
 		$this->assertCount( 4, $data['pages'] );
@@ -192,7 +229,8 @@ class SearchHandlerTest extends \MediaWikiUnitTestCase {
 		$query = 'foo';
 		$request = new RequestData( [ 'queryParams' => [ 'q' => $query ] ] );
 
-		$handler = $this->newHandler( $query, $titleResults, $textResults, $completionResults );
+		$handler = $this->newHandler(
+			$query, $titleResults, $textResults, $completionResults );
 		$config = [ 'mode' => SearchHandler::COMPLETION_MODE ];
 		$response = $this->executeHandler( $handler, $request, $config );
 
@@ -209,6 +247,27 @@ class SearchHandlerTest extends \MediaWikiUnitTestCase {
 		$this->assertSame( 'Frob', $data['pages'][0]['excerpt'] );
 		$this->assertSame( 'Frobnitz', $data['pages'][1]['title'] );
 		$this->assertSame( 'Frobnitz', $data['pages'][1]['excerpt'] );
+	}
+
+	public function testCompletionSearchNotCachedForPublicPages() {
+		$titleResults = new MockSearchResultSet( [] );
+		$textResults = new MockSearchResultSet( [] );
+		$completionResults = new SearchSuggestionSet( [] );
+
+		$query = 'foo';
+		$request = new RequestData( [ 'queryParams' => [ 'q' => $query ] ] );
+
+		$permissionManager = $this->createMock( PermissionManager::class );
+		$permissionManager->method( 'isEveryoneAllowed' )
+			->with( 'read' )
+			->willReturn( false );
+
+		$handler = $this->newHandler( $query, $titleResults, $textResults, $completionResults, $permissionManager );
+		$config = [ 'mode' => SearchHandler::COMPLETION_MODE ];
+
+		$response = $this->executeHandler( $handler, $request, $config );
+		$this->assertSame( 'no-store, max-age=0', $response->getHeaderLine( 'Cache-Control' ) );
+		$this->assertSame( 200, $response->getStatusCode() );
 	}
 
 	public function testExecute_limit() {
@@ -371,6 +430,9 @@ class SearchHandlerTest extends \MediaWikiUnitTestCase {
 
 		$this->assertArrayHasKey( 'description', $data['pages'][0] );
 		$this->assertNull( $data['pages'][0][ 'description' ] );
+
+		$this->assertArrayHasKey( 'matched_title', $data['pages'][0] );
+		$this->assertNull( $data['pages'][0][ 'matched_title' ] );
 	}
 
 	public function testExecute_augmentedFieldsDescriptionAndThumbnailProvided() {
@@ -388,13 +450,13 @@ class SearchHandlerTest extends \MediaWikiUnitTestCase {
 
 		$data = $this->executeHandlerAndGetBodyData( $handler, $request, [], [
 			'SearchResultProvideDescription' =>
-				function ( array $pageIdentities, array &$result ) {
+				static function ( array $pageIdentities, array &$result ) {
 					foreach ( $pageIdentities as $pageId => $pageIdentity ) {
 						$result[ $pageId ] = 'Description_' . $pageIdentity->getId();
 					}
 				},
 			'SearchResultProvideThumbnail' =>
-				function ( array $pageIdentities, array &$result ) {
+				static function ( array $pageIdentities, array &$result ) {
 					foreach ( $pageIdentities as $pageId => $pageIdentity ) {
 						$result[ $pageId ] = new SearchResultThumbnail(
 							'image/png',
@@ -421,6 +483,115 @@ class SearchHandlerTest extends \MediaWikiUnitTestCase {
 		$this->assertSame( 500, $data['pages'][0][ 'thumbnail' ]['duration'] );
 		$this->assertArrayHasKey( 'description', $data['pages'][0] );
 		$this->assertSame( 'Description_1', $data['pages'][0][ 'description' ] );
+	}
+
+	/**
+	 * Tests the case where a search term matches a page with a redirect.
+	 */
+	public function testExecute_ResolvesRedirect() {
+		$textResults = new MockSearchResultSet( [
+			$this->makeMockSearchResult( 'Foo Redirect Source' ),
+			$this->makeMockSearchResult( 'FooBarBaz' ),
+		] );
+
+		$pageTarget = new PageIdentityValue( 1, NS_MAIN, 'Foo_Redirect_Target', PageIdentityValue::LOCAL );
+
+		$mockRedirectLinkTarget = $this->createMock( LinkTarget::class );
+		$mockPageStore = $this->createMock( PageStore::class );
+		$mockPageStore->method( 'getPageForLink' )->willReturn( $pageTarget );
+		$mockRedirectLookup = $this->createMock( RedirectLookup::class );
+
+		$mockRedirectLookup->expects( $this->at( 0 ) ) // first call has a redirect,
+		->method( 'getRedirectTarget' )
+			->willReturn( $mockRedirectLinkTarget );
+		$mockRedirectLookup->expects( $this->at( 1 ) ) // second call does not
+		->method( 'getRedirectTarget' )
+			->willReturn( null );
+
+		$query = 'foo';
+		$request = new RequestData( [ 'queryParams' => [ 'q' => $query ] ] );
+
+		$config = [];
+		$handler = $this->newHandler(
+			$query, null, $textResults, null, null,
+			$mockRedirectLookup, $mockPageStore
+		);
+
+		$data = $this->executeHandlerAndGetBodyData( $handler, $request, $config, [] );
+
+		$this->assertCount( 2, $data['pages'] );
+		$this->assertArrayHasKey( 'matched_title', $data['pages'][0] );
+		$this->assertArrayHasKey( 'matched_title', $data['pages'][1] );
+
+		$this->assertSame( 'Foo Redirect Source', $data['pages'][0]['matched_title'] );
+		$this->assertSame( 'Foo Redirect Target', $data['pages'][0]['title'] );
+		$this->assertSame( null, $data['pages'][1]['matched_title'] );
+	}
+
+	/**
+	 * Tests the case where a search term matches both the redirect source and the redirect target page.
+	 * We expect to remove the redirect source, and keep the redirect target.
+	 */
+	public function testExecute_RemovesDuplicateRedirectAndSource() {
+		$pageTarget = $this->createMock( ProperPageIdentity::class );
+		$pageTarget->method( 'getID' )->willReturn( 10 );
+		$pageTarget->method( 'getDBKey' )->willReturn( 'Foo_Redirect_Target' );
+
+		$mockRedirectLinkTarget = $this->createMock( LinkTarget::class );
+		$mockPageStore = $this->createMock( PageStore::class );
+		$mockPageStore->method( 'getPageForLink' )->willReturn( $pageTarget );
+		$mockRedirectLookup = $this->createMock( RedirectLookup::class );
+
+		$mockRedirectLookup->expects( $this->at( 0 ) ) // first call has a redirect,
+		->method( 'getRedirectTarget' )
+			->willReturn( $mockRedirectLinkTarget );
+		$mockRedirectLookup->expects( $this->at( 1 ) ) // second call does not
+		->method( 'getRedirectTarget' )
+			->willReturn( null );
+
+		$mockTitle = $this->makeMockTitle( 'Foo Redirect Target', [ 'id' => 10 ] );
+		$completionConfig = [ 'mode' => SearchHandler::COMPLETION_MODE ];
+		$completionResults = new SearchSuggestionSet( [
+			$this->makeMockSearchSuggestion( 'Foo Redirect Source', $mockTitle ),
+			$this->makeMockSearchSuggestion( 'Foo Redirect Target', $mockTitle ),
+		] );
+		$query = 'foo';
+		$request = new RequestData( [ 'queryParams' => [ 'q' => $query ] ] );
+
+		$handler = $this->newHandler(
+			$query, null, null, $completionResults, null,
+			$mockRedirectLookup, $mockPageStore
+		);
+
+		$data = $this->executeHandlerAndGetBodyData( $handler, $request, $completionConfig, [] );
+
+		$this->assertCount( 1, $data['pages'] );
+		$this->assertArrayHasKey( 'matched_title', $data['pages'][0] );
+
+		$this->assertSame( 'Foo Redirect Target', $data['pages'][0]['title'] );
+	}
+
+	public function testExecute_NonProperPage() {
+		$page = $this->makeMockTitle( 'Blankpage', [ 'namespace' => NS_SPECIAL ] );
+		$result = $this->createNoOpMock(
+			SearchResult::class,
+			[ 'getTitle', 'isBrokenTitle', 'isMissingRevision' ]
+		);
+		$result->method( 'getTitle' )->willReturn( $page );
+		$textResults = new MockSearchResultSet( [ $result ] );
+
+		$query = 'foo';
+
+		$request = new RequestData( [ 'queryParams' => [ 'q' => $query ] ] );
+		$handler = $this->newHandler(
+			$query,
+			null,
+			$textResults
+		);
+
+		$data = $this->executeHandlerAndGetBodyData( $handler, $request );
+		$this->assertArrayHasKey( 'pages', $data );
+		$this->assertCount( 0, $data['pages'] );
 	}
 
 	public function testExecute_NullResults() {

@@ -7,7 +7,8 @@
 			"Jorn Ari",
 			"Mads Haupt",
 			"Saederup92",
-			"Tjernobyl"
+			"Tjernobyl",
+			"Weblars"
 		]
 	},
 	"minerva-last-modified-date": "Sidst redigeret den $1, klokken $2",
@@ -22,7 +23,6 @@
 	"mobile-frontend-home-button": "Hjem",
 	"mobile-frontend-language-article-heading": "Sprog",
 	"mobile-frontend-languages-not-available": "Denne side er ikke tilgængelig på andre sprog.",
-	"mobile-frontend-logged-in-homepage-notification": "{{GENDER:$1|Velkommen}}, $1!",
 	"mobile-frontend-main-menu-button-tooltip": "Åbn hovedmenuen",
 	"mobile-frontend-main-menu-contributions": "Bidrag",
 	"mobile-frontend-main-menu-login": "Log på",
@@ -50,13 +50,27 @@
 	"mobile-frontend-user-page-contributions": "Bidrag",
 	"mobile-frontend-user-page-member-since": "{{GENDER:$2|Medlem siden}} $1",
 	"mobile-frontend-user-page-talk": "Diskussion",
+	"minerva-user-menu-button": "Brugermenu",
+	"minerva-user-navigation": "Brugernavigation",
+	"minerva-page-actions-overflow": "Mere",
 	"minerva-page-actions-info": "Oplysninger om siden",
 	"minerva-page-actions-backlinks": "Hvad henviser hertil",
+	"minerva-page-actions-cite": "Referér til denne side",
+	"minerva-page-actions-move": "Flyt",
+	"minerva-page-actions-delete": "Slet",
+	"minerva-page-actions-protect": "Beskyt",
 	"minerva-page-actions-user-groups": "Brugergrupper",
+	"minerva-page-actions-wikibase": "{{WBREPONAME}}-emne",
 	"minerva-page-actions-language-switcher": "Sprog",
 	"minerva-page-actions-history": "Historik",
+	"minerva-talk-explained": "Aktive diskussioner",
+	"minerva-talk-explained-empty": "Det er ingen diskussioner på denne side.",
+	"minerva-talk-full-page": "Læs som wikiside",
+	"minerva-talk-topic-feedback": "Nyt emne blev tilføjet diskusionssiden!",
+	"minerva-talk-reply-success": "Dit svar blev gemt på diskussionsiden.",
 	"minerva-skin-desc": "Et hurtigt mobilt tema",
 	"skin-minerva-issue-learn-more": "Lær mere",
-	"skin-minerva-mobile-option-MinervaShowCategoriesButton": "Kategorier",
-	"skin-minerva-mobile-option-MinervaShowCategoriesButton-description": "Vis sidens kategorier"
+	"skin-minerva-mobile-option-MinervaShowCategories": "Kategorier",
+	"skin-minerva-mobile-option-MinervaShowCategories-description": "Vis sidens kategorier",
+	"skin-minerva-recentchanges-warning-enhanced-not-supported": "Desværre er gruppering af resultater ikke tilgængelig i mobilvisning. Denne funktion findes kun i den normale udgave af hjemmesiden."
 }

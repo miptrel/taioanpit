@@ -213,10 +213,10 @@
 
 			this.fetchThumbnailForLightboxImage(
 				image, imageWidths.real
-			).then( function ( thumbnail, image ) {
+			).then( function ( thumbnail, image2 ) {
 				// eslint-disable-next-line mediawiki/class-doc
-				image.className = ext;
-				viewer.setImage( ui, thumbnail, image, imageWidths );
+				image2.className = ext;
+				viewer.setImage( ui, thumbnail, image2, imageWidths );
 			}, function ( error ) {
 				viewer.ui.canvas.showError( error );
 			} );
@@ -499,7 +499,7 @@
 		if ( !size.width || !size.height ) {
 			if ( recursion ) {
 				// this should not be possible, but an infinite recursion is nasty
-				// business, so we make a sanity check
+				// business, so we make a sense check
 				throw new Error( 'MediaViewer internal error: displayPlaceholderThumbnail recursion' );
 			}
 			this.imageInfoProvider.get( image.filePageTitle ).done( function ( imageInfo ) {
@@ -916,8 +916,8 @@
 		function route( fileName ) {
 			var fileTitle;
 			comingFromHashChange = true;
-			fileName = decodeURIComponent( fileName );
 			try {
+				fileName = decodeURIComponent( fileName );
 				fileTitle = new mw.Title( fileName );
 				this.loadImageByTitle( fileTitle );
 			} catch ( err ) {

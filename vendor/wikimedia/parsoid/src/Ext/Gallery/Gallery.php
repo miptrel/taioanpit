@@ -3,9 +3,11 @@ declare( strict_types = 1 );
 
 namespace Wikimedia\Parsoid\Ext\Gallery;
 
-use DOMDocument;
-use DOMElement;
 use stdClass;
+use Wikimedia\Parsoid\Core\MediaStructure;
+use Wikimedia\Parsoid\DOM\DocumentFragment;
+use Wikimedia\Parsoid\DOM\Element;
+use Wikimedia\Parsoid\DOM\Text;
 use Wikimedia\Parsoid\Ext\DOMDataUtils;
 use Wikimedia\Parsoid\Ext\DOMUtils;
 use Wikimedia\Parsoid\Ext\ExtensionModule;
@@ -39,7 +41,6 @@ class Gallery extends ExtensionTagHandler implements ExtensionModule {
 					'handler' => self::class,
 				]
 			],
-			'styles' => [ 'mediawiki.page.gallery.styles' ]
 		];
 	}
 
@@ -47,16 +48,12 @@ class Gallery extends ExtensionTagHandler implements ExtensionModule {
 	 * Parse the gallery caption.
 	 * @param ParsoidExtensionAPI $extApi
 	 * @param array $extArgs
-	 * @return DOMElement|null
+	 * @return ?DocumentFragment
 	 */
-	private function pCaption( ParsoidExtensionAPI $extApi, array $extArgs ): ?DOMElement {
-		$doc = $extApi->extArgToDOM( $extArgs, 'caption' );
-		if ( !$doc ) {
-			return null;
-		}
-
-		$body = DOMCompat::getBody( $doc );
-		return $body;
+	private function pCaption(
+		ParsoidExtensionAPI $extApi, array $extArgs
+	): ?DocumentFragment {
+		return $extApi->extArgToDOM( $extArgs, 'caption' );
 	}
 
 	/**
@@ -85,22 +82,21 @@ class Gallery extends ExtensionTagHandler implements ExtensionModule {
 
 		$imageOpts = [
 			"|{$mode->dimensions( $opts )}",
-			// NOTE: We add "none" here so that this renders in the block form
-			// (ie. figure) for an easier structure to manipulate.
-			'|none',
 			[ $imageOptStr, $lineStartOffset + strlen( $titleStr ) ],
 		];
 
-		$thumb = $extApi->renderMedia( $titleStr, $imageOpts );
-		if ( !$thumb || $thumb->nodeName !== 'figure' ) {
+		$thumb = $extApi->renderMedia(
+			$titleStr, $imageOpts, $error,
+			// Force block for an easier structure to manipulate, otherwise
+			// we have to pull the caption out of the data-mw
+			true
+		);
+		if ( !$thumb || DOMCompat::nodeName( $thumb ) !== 'figure' ) {
 			return null;
 		}
 
 		$doc = $thumb->ownerDocument;
-		$rdfaType = $thumb->getAttribute( 'typeof' );
-
-		// Detach from document
-		DOMCompat::remove( $thumb );
+		$rdfaType = $thumb->getAttribute( 'typeof' ) ?? '';
 
 		// Detach figcaption as well
 		$figcaption = DOMCompat::querySelector( $thumb, 'figcaption' );
@@ -131,7 +127,7 @@ class Gallery extends ExtensionTagHandler implements ExtensionModule {
 			 $capChild !== null;
 			 $capChild = $capChild->nextSibling ) {
 			if (
-				DOMUtils::isText( $capChild ) &&
+				$capChild instanceof Text &&
 				preg_match( '/^\s*$/D', $capChild->nodeValue )
 			) {
 				// skip blank text nodes
@@ -148,15 +144,15 @@ class Gallery extends ExtensionTagHandler implements ExtensionModule {
 	/** @inheritDoc */
 	public function sourceToDom(
 		ParsoidExtensionAPI $extApi, string $content, array $args
-	): DOMDocument {
+	): DocumentFragment {
 		$attrs = $extApi->extArgsToArray( $args );
 		$opts = new Opts( $extApi, $attrs );
 
-		$offset = $extApi->getExtTagOffsets()->innerStart();
+		$offset = $extApi->extTag->getOffsets()->innerStart();
 
 		// Prepare the lines for processing
 		$lines = explode( "\n", $content );
-		$lines = array_map( function ( $line ) use ( &$offset ) {
+		$lines = array_map( static function ( $line ) use ( &$offset ) {
 				$lineObj = [ 'line' => $line, 'offset' => $offset ];
 				$offset += strlen( $line ) + 1; // For the nl
 				return $lineObj;
@@ -170,22 +166,23 @@ class Gallery extends ExtensionTagHandler implements ExtensionModule {
 		}, $lines );
 
 		// Drop invalid lines like "References: 5."
-		$lines = array_filter( $lines, function ( $lineObj ) {
+		$lines = array_filter( $lines, static function ( $lineObj ) {
 			return $lineObj !== null;
 		} );
 
 		$mode = Mode::byName( $opts->mode );
-		$doc = $mode->render( $extApi, $opts, $caption, $lines );
-		return $doc;
+		$extApi->addModules( $mode->getModules() );
+		$extApi->addModuleStyles( $mode->getModuleStyles() );
+		return $mode->render( $extApi, $opts, $caption, $lines );
 	}
 
 	/**
 	 * @param ParsoidExtensionAPI $extApi
-	 * @param DOMElement $node
+	 * @param Element $node
 	 * @return string
 	 */
 	private function contentHandler(
-		ParsoidExtensionAPI $extApi, DOMElement $node
+		ParsoidExtensionAPI $extApi, Element $node
 	): string {
 		$content = "\n";
 		for ( $child = $node->firstChild; $child; $child = $child->nextSibling ) {
@@ -194,7 +191,7 @@ class Gallery extends ExtensionTagHandler implements ExtensionModule {
 				DOMUtils::assertElt( $child );
 				// Ignore if it isn't a "gallerybox"
 				if (
-					$child->nodeName !== 'li' ||
+					DOMCompat::nodeName( $child ) !== 'li' ||
 					$child->getAttribute( 'class' ) !== 'gallerybox'
 				) {
 					break;
@@ -203,28 +200,25 @@ class Gallery extends ExtensionTagHandler implements ExtensionModule {
 				if ( !$thumb ) {
 					break;
 				}
-				// FIXME: The below would benefit from a refactoring that
-				// assumes the figure structure, as in the link handler.
-				$elt = DOMUtils::selectMediaElt( $thumb );
-				if ( $elt ) {
-					// FIXME: Should we preserve the original namespace?  See T151367
-					if ( $elt->hasAttribute( 'resource' ) ) {
-						$resource = $elt->getAttribute( 'resource' );
-						$content .= preg_replace( '#^\./#', '', $resource, 1 );
+				$ms = MediaStructure::parse( DOMUtils::firstNonSepChild( $thumb ) );
+				if ( $ms ) {
+					// FIXME: Dry all this out with T252246 / T262833
+					if ( $ms->hasResource() ) {
+						$resource = $ms->getResource();
+						$content .= PHPUtils::stripPrefix( $resource, './' );
 						// FIXME: Serializing of these attributes should
 						// match the link handler so that values stashed in
 						// data-mw aren't ignored.
-						if ( $elt->hasAttribute( 'alt' ) ) {
-							$alt = $elt->getAttribute( 'alt' );
+						if ( $ms->hasAlt() ) {
+							$alt = $ms->getAlt();
 							$content .= '|alt=' .
 								$extApi->escapeWikitext( $alt, $child, $extApi::IN_MEDIA );
 						}
-						// The first "a" is for the link, hopefully.
-						$a = DOMCompat::querySelector( $thumb, 'a' );
-						if ( $a && $a->hasAttribute( 'href' ) ) {
-							$href = $a->getAttribute( 'href' );
+						// FIXME: Handle missing media
+						if ( $ms->hasMediaUrl() && !$ms->isRedLink() ) {
+							$href = $ms->getMediaUrl();
 							if ( $href !== $resource ) {
-								$href = preg_replace( '#^\./#', '', $href, 1 );
+								$href = PHPUtils::stripPrefix( $href, './' );
 								$content .= '|link=' .
 									$extApi->escapeWikitext( $href, $child, $extApi::IN_MEDIA );
 							}
@@ -243,12 +237,14 @@ class Gallery extends ExtensionTagHandler implements ExtensionModule {
 					if ( $showfilename ) {
 						DOMCompat::remove( $showfilename ); // Destructive to the DOM!
 					}
-					$caption = $extApi->domChildrenToWikitext( $gallerytext,
-						$extApi::IN_IMG_CAPTION,
-						true /* singleLine */
+					$caption = $extApi->domChildrenToWikitext(
+						$gallerytext, $extApi::IN_IMG_CAPTION
 					);
 					// Drop empty captions
 					if ( !preg_match( '/^\s*$/D', $caption ) ) {
+						// Ensure that this only takes one line since gallery
+						// tag content is split by line
+						$caption = str_replace( "\n", ' ', $caption );
 						$content .= '|' . $caption;
 					}
 				}
@@ -268,7 +264,7 @@ class Gallery extends ExtensionTagHandler implements ExtensionModule {
 
 	/** @inheritDoc */
 	public function domToWikitext(
-		ParsoidExtensionAPI $extApi, DOMElement $node, bool $wrapperUnmodified
+		ParsoidExtensionAPI $extApi, Element $node, bool $wrapperUnmodified
 	) {
 		$dataMw = DOMDataUtils::getDataMw( $node );
 		$dataMw->attrs = $dataMw->attrs ?? new stdClass;
@@ -280,14 +276,13 @@ class Gallery extends ExtensionTagHandler implements ExtensionModule {
 			// `caption` from data-mw.
 			!is_string( $dataMw->attrs->caption ?? null )
 		) {
-			$dataMw->attrs->caption = $extApi->domChildrenToWikitext( $galcaption,
-				$extApi::IN_IMG_CAPTION | $extApi::IN_OPTION,
-				false /* singleLine */
+			$dataMw->attrs->caption = $extApi->domChildrenToWikitext(
+				$galcaption, $extApi::IN_IMG_CAPTION | $extApi::IN_OPTION
 			);
 		}
 		$startTagSrc = $extApi->extStartTagToWikitext( $node );
 
-		if ( !$dataMw->body ) {
+		if ( !isset( $dataMw->body ) ) {
 			return $startTagSrc; // We self-closed this already.
 		} else {
 			// FIXME: VE should signal to use the HTML by removing the
@@ -314,5 +309,13 @@ class Gallery extends ExtensionTagHandler implements ExtensionModule {
 			// and we prefer editing it there.
 			unset( $argDict->attrs->caption );
 		}
+	}
+
+	/** @inheritDoc */
+	public function diffHandler(
+		ParsoidExtensionAPI $extApi, callable $domDiff, Element $origNode,
+		Element $editedNode
+	): bool {
+		return call_user_func( $domDiff, $origNode, $editedNode );
 	}
 }

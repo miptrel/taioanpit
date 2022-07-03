@@ -3,10 +3,11 @@ declare( strict_types = 1 );
 
 namespace Wikimedia\Parsoid\Utils;
 
-use DOMElement;
-use DOMNode;
 use stdClass;
 use Wikimedia\Parsoid\Config\Env;
+use Wikimedia\Parsoid\DOM\DocumentFragment;
+use Wikimedia\Parsoid\DOM\Element;
+use Wikimedia\Parsoid\DOM\Node;
 use Wikimedia\Parsoid\Wt2Html\Wt2HtmlDOMProcessor;
 
 /**
@@ -34,21 +35,21 @@ class DOMTraverser implements Wt2HtmlDOMProcessor {
 	/**
 	 * Add a handler to the DOM traverser.
 	 *
-	 * @param string|null $nodeName An optional node name filter
+	 * @param ?string $nodeName An optional node name filter
 	 * @param callable $action A callback, called on each node we traverse that matches nodeName.
 	 *   Will be called with the following parameters:
-	 *   - DOMNode $node: the node being processed
+	 *   - Node $node: the node being processed
 	 *   - Env $env: the parser environment
 	 *   - array $options: (only passed if optional $passOptions is true)
 	 *        a closure of extra information passed to DOMTraverser::traverse
 	 *   - bool $atTopLevel: passed through from DOMTraverser::traverse
 	 *   - stdClass $tplInfo: Template information. See traverse().
-	 *   Return value: DOMNode|null|true.
+	 *   Return value: Node|null|true.
 	 *   - true: proceed normally
-	 *   - DOMNode: traversal will continue on the new node (further handlers will not be called
+	 *   - Node: traversal will continue on the new node (further handlers will not be called
 	 *     on the current node); after processing it and its siblings, it will continue with the
 	 *     next sibling of the closest ancestor which has one.
-	 *   - null: like the DOMNode case, except there is no new node to process before continuing.
+	 *   - null: like the Node case, except there is no new node to process before continuing.
 	 */
 	public function addHandler(
 		?string $nodeName, callable $action
@@ -60,17 +61,18 @@ class DOMTraverser implements Wt2HtmlDOMProcessor {
 	}
 
 	/**
-	 * @param DOMNode $node
+	 * @param Node $node
 	 * @param Env $env
 	 * @param array $options
 	 * @param bool $atTopLevel
-	 * @param stdClass|null $tplInfo
+	 * @param ?stdClass $tplInfo
 	 * @return bool|mixed
 	 */
 	private function callHandlers(
-		DOMNode $node, Env $env, array $options, bool $atTopLevel, ?stdClass $tplInfo
+		Node $node, Env $env, array $options, bool $atTopLevel,
+		?stdClass $tplInfo
 	) {
-		$name = $node->nodeName ?: '';
+		$name = DOMCompat::nodeName( $node );
 
 		foreach ( $this->handlers as $handler ) {
 			if ( $handler['nodeName'] === null || $handler['nodeName'] === $name ) {
@@ -102,21 +104,21 @@ class DOMTraverser implements Wt2HtmlDOMProcessor {
 	 * - `true`: continues regular processing on current node.
 	 *
 	 * @param Env $env
-	 * @param DOMNode $workNode The root node for the traversal.
+	 * @param Node $workNode The root node for the traversal.
 	 * @param array $options
 	 * @param bool $atTopLevel
-	 * @param stdClass|null $tplInfo Template information. When set, it must have all of these fields:
-	 *   - first: (DOMNode) first sibling
-	 *   - last: (DOMNode) last sibling
+	 * @param ?stdClass $tplInfo Template information. When set, it must have all of these fields:
+	 *   - first: (Node) first sibling
+	 *   - last: (Node) last sibling
 	 *   - dsr: field from Pasoid ino
 	 *   - clear: when set, the template will not be passed along for further processing
 	 */
 	public function traverse(
-		Env $env, DOMNode $workNode,
-		array $options = [], bool $atTopLevel = false, ?stdClass $tplInfo = null
+		Env $env, Node $workNode, array $options = [],
+		bool $atTopLevel = false, ?stdClass $tplInfo = null
 	) {
 		while ( $workNode !== null ) {
-			if ( $workNode instanceof DOMElement ) {
+			if ( $workNode instanceof Element ) {
 				// Identify the first template/extension node.
 				// You'd think the !tplInfo check isn't necessary since
 				// we don't have nested transclusions, however, you can
@@ -132,7 +134,7 @@ class DOMTraverser implements Wt2HtmlDOMProcessor {
 					// may have expanded ranges.
 					&& !WTUtils::isParsoidSectionTag( $workNode )
 				) {
-					$about = $workNode->getAttribute( 'about' );
+					$about = $workNode->getAttribute( 'about' ) ?? '';
 					$aboutSiblings = WTUtils::getAboutSiblings( $workNode, $about );
 					$tplInfo = (object)[
 						'first' => $workNode,
@@ -143,9 +145,13 @@ class DOMTraverser implements Wt2HtmlDOMProcessor {
 			}
 
 			// Call the handlers on this workNode
-			$possibleNext = $this->callHandlers(
-				$workNode, $env, $options, $atTopLevel, $tplInfo
-			);
+			if ( $workNode instanceof DocumentFragment ) {
+				$possibleNext = true;
+			} else {
+				$possibleNext = $this->callHandlers(
+					$workNode, $env, $options, $atTopLevel, $tplInfo
+				);
+			}
 
 			// We may have walked passed the last about sibling or want to
 			// ignore the template info in future processing.
@@ -155,8 +161,11 @@ class DOMTraverser implements Wt2HtmlDOMProcessor {
 
 			if ( $possibleNext === true ) {
 				// the 'continue processing' case
-				if ( DOMUtils::isElt( $workNode ) && $workNode->hasChildNodes() ) {
-					$this->traverse( $env, $workNode->firstChild, $options, $atTopLevel, $tplInfo );
+				if ( $workNode->hasChildNodes() ) {
+					$this->traverse(
+						$env, $workNode->firstChild, $options, $atTopLevel,
+						$tplInfo
+					);
 				}
 				$possibleNext = $workNode->nextSibling;
 			}
@@ -174,7 +183,7 @@ class DOMTraverser implements Wt2HtmlDOMProcessor {
 	 * @inheritDoc
 	 */
 	public function run(
-		Env $env, DOMElement $workNode, array $options = [], bool $atTopLevel = false
+		Env $env, Node $workNode, array $options = [], bool $atTopLevel = false
 	): void {
 		$this->traverse( $env, $workNode, $options, $atTopLevel );
 	}

@@ -1,4 +1,10 @@
 <?php
+
+namespace MediaWiki\Skin\Timeless;
+
+use ResourceLoaderContext;
+use ResourceLoaderSkinModule;
+
 /**
  * ResourceLoader module to set some LESS variables for the skin
  */
@@ -21,7 +27,7 @@ class TimelessVariablesModule extends ResourceLoaderSkinModule {
 			$backdrop = 'images/cat.svg';
 		}
 
-		$vars = array_merge(
+		return array_merge(
 			$vars,
 			[
 				'backdrop-image' => "url($backdrop)",
@@ -30,8 +36,6 @@ class TimelessVariablesModule extends ResourceLoaderSkinModule {
 				// +width cutoffs ...
 			]
 		);
-
-		return $vars;
 	}
 
 	/**

@@ -15,7 +15,7 @@ var busboy = require('connect-busboy');
 var Promise = require('../lib/utils/promise.js');
 
 // Get Parsoid limits.
-var optionsPath = path.resolve(__dirname, './mocha/test.config.yaml');
+var optionsPath = path.resolve(__dirname, './test.config.yaml');
 var optionsYaml = fs.readFileSync(optionsPath, 'utf8');
 var parsoidOptions = yaml.load(optionsYaml).services[0].conf;
 
@@ -563,8 +563,8 @@ var querySiteinfo = function(prefix, formatversion, cb) {
 };
 
 var parse = function(text, onlypst, formatversion) {
-	var fmt = (text) => {
-		return { text: (formatversion === 2) ? text : { "*": text } };
+	var fmt = (text2) => {
+		return { text: (formatversion === 2) ? text2 : { "*": text2 } };
 	};
 	// We're performing a subst
 	if (onlypst) {
@@ -612,7 +612,7 @@ var pageProps = function(titles) {
 		if (specialTitles.has(t)) { props.special = true; }
 		if (redirectTitles.has(t)) { props.redirect = true; }
 		if (disambigTitles.has(t)) {
-			props.pageprops = { disambiguation: true };
+			props.linkclasses = [ 'mw-disambig' ];
 		}
 		return props;
 	});
@@ -631,7 +631,7 @@ var availableActions = {
 		var formatversion = +(body.formatversion || 1);
 		if (body.meta === 'siteinfo') {
 			return querySiteinfo(prefix, formatversion, cb);
-		} else if (body.prop === "info|pageprops") {
+		} else if (body.prop === 'info' && body.inprop === 'linkclasses') {
 			console.assert(formatversion === 2);
 			return cb(null, {
 				query: {
@@ -791,7 +791,7 @@ var availableActions = {
 					// NOTE: Return early here since a null is acceptable.
 					return (ii !== null) ? ii.result : null;
 				case 'parse':
-					res = parse(b.text, /* onlypst*/false, formatversion);
+					res = parse(b.text, /* onlypst */false, formatversion);
 					break;
 				case 'pageprops':
 					res = pageProps(b.titles);

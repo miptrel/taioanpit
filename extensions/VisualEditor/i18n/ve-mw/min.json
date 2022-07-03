@@ -1,6 +1,7 @@
 {
 	"@metadata": {
 		"authors": [
+			"David Wadie Fisher-Freberg",
 			"Iwan Novirion",
 			"Jagwar",
 			"Matma Rex",
@@ -10,7 +11,7 @@
 	"collabpad-import-subtitle": "Diimpor dari $1",
 	"tooltip-ca-createsource": "Buek kode sumber laman ko",
 	"tooltip-ca-editsource": "Suntiang kode sumber laman ko",
-	"tooltip-ca-ve-edit": "Suntiang laman ko jo VisualEditor",
+	"tooltip-ca-ve-edit": "Suntiang laman ko",
 	"visualeditor-advancedsettings-tool": "Pangaturan lanjuik",
 	"visualeditor-autosave-modified-prompt-accept": "Lanjuik manyuntiang",
 	"visualeditor-autosave-modified-prompt-reject": "Mulai suntiangan baru",
@@ -120,12 +121,13 @@
 	"visualeditor-dialog-transclusion-add-content": "Tambah isi",
 	"visualeditor-dialog-transclusion-add-param": "Tambah informasi lainnyo",
 	"visualeditor-dialog-transclusion-add-template": "Tambah templat",
+	"visualeditor-dialog-transclusion-collapse-options": "Suruakan piliahan",
 	"visualeditor-dialog-transclusion-content": "Isi",
 	"visualeditor-dialog-transclusion-contextitem-description": "Dihasilkan dari: $1",
+	"visualeditor-dialog-transclusion-expand-options": "Caliak piliahan",
 	"visualeditor-dialog-transclusion-deprecated-parameter": "Bidang usang",
 	"visualeditor-dialog-transclusion-deprecated-parameter-description": "Bidang alah usang. $1",
 	"visualeditor-dialog-transclusion-loading": "Mamuek...",
-	"visualeditor-dialog-transclusion-multiple-mode": "Caliak piliahan",
 	"visualeditor-dialog-transclusion-options": "Piliahan",
 	"visualeditor-dialog-transclusion-param-default": "Baku: $1",
 	"visualeditor-dialog-transclusion-param-example": "mis. $1",
@@ -140,12 +142,9 @@
 	"visualeditor-dialog-transclusion-required-parameter-dialog-cancel": "Baliak",
 	"visualeditor-dialog-transclusion-required-parameter-dialog-ok": "Lanjuik taruih",
 	"visualeditor-dialog-transclusion-required-parameter-dialog-title": "{{PLURAL:$1|Bidang}} nan wajib diisi kosong",
-	"visualeditor-dialog-transclusion-single-mode": "Suruakan piliahan",
-	"visualeditor-dialog-transclusion-title": "Transklusi",
 	"visualeditor-dialogbutton-media-tooltip": "Media",
 	"visualeditor-dialogbutton-meta-tooltip": "Pangaturan laman",
 	"visualeditor-dialogbutton-template-tooltip": "Templat",
-	"visualeditor-dialogbutton-transclusion-tooltip": "Transklusi",
 	"visualeditor-donebutton-tooltip": "Salasai manyuntiang",
 	"visualeditor-editconflict": "Parubahan Sanak indak dapek disimpan dek konflik panyuntiangan. Apo {{GENDER:|Sanak}} nio manyalasaian konflik sacaro manual?",
 	"visualeditor-editingtabdialog-ok": "Gunoan panyuntiang nan ambo pakai pado suntiangan tarakhia",
@@ -270,7 +269,6 @@
 	"visualeditor-redirect-description": "Dialiahkan ka $1",
 	"visualeditor-savedialog-keyboard-shortcut-submit": "Takan $1 untuak manyimpan suntiangan.",
 	"visualeditor-savedialog-label-create": "Buek laman",
-	"visualeditor-savedialog-label-error": "Galat",
 	"visualeditor-savedialog-label-publish-short": "Simpan",
 	"visualeditor-savedialog-label-publish-short-start": "Simpan...",
 	"visualeditor-savedialog-label-report": "Laporkan masalah",
@@ -280,7 +278,6 @@
 	"visualeditor-savedialog-label-review-good": "Baliak ka formulir tasimpan",
 	"visualeditor-savedialog-label-save-short": "Simpan",
 	"visualeditor-savedialog-label-save-short-start": "Simpan...",
-	"visualeditor-savedialog-label-warning": "Paringatan",
 	"visualeditor-savedialog-review-nosummary": "Indak ado ikhtisar suntiangan",
 	"visualeditor-savedialog-review-visual": "Visual",
 	"visualeditor-savedialog-review-wikitext": "Teks wiki",
@@ -298,6 +295,5 @@
 	"visualeditor-title-error": "Judul indak sah.",
 	"visualeditor-usernamespacepagelink": "Project:Ruangnamo pangguno",
 	"visualeditor-version-label": "Versi",
-	"visualeditor-wikitext-progress": "Konversi teks wiki",
-	"visualeditor-wikitextconvert-plain": "Gunokan teks polos"
+	"visualeditor-wikitext-progress": "Konversi teks wiki"
 }

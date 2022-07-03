@@ -10,7 +10,7 @@ use Wikimedia\TestingAccessWrapper;
  * @covers SpecialWatchlist
  */
 class SpecialWatchlistTest extends SpecialPageTestBase {
-	protected function setUp() : void {
+	protected function setUp(): void {
 		parent::setUp();
 		$this->tablesUsed = [ 'watchlist' ];
 		$this->setTemporaryHook(
@@ -40,10 +40,16 @@ class SpecialWatchlistTest extends SpecialPageTestBase {
 	/**
 	 * Returns a new instance of the special page under test.
 	 *
-	 * @return SpecialPage
+	 * @return SpecialWatchlist
 	 */
 	protected function newSpecialPage() {
-		return new SpecialWatchlist();
+		$services = $this->getServiceContainer();
+		return new SpecialWatchlist(
+			$services->getWatchedItemStore(),
+			$services->getWatchlistManager(),
+			$services->getDBLoadBalancer(),
+			$services->getUserOptionsLookup()
+		);
 	}
 
 	public function testNotLoggedIn_throwsException() {
@@ -66,6 +72,7 @@ class SpecialWatchlistTest extends SpecialPageTestBase {
 		// $defaults and $allFalse are just to make the expected values below
 		// shorter by hiding the background.
 
+		/** @var SpecialWatchlist $page */
 		$page = TestingAccessWrapper::newFromObject(
 			$this->newSpecialPage()
 		);
@@ -107,8 +114,9 @@ class SpecialWatchlistTest extends SpecialPageTestBase {
 		$fauxRequest = new FauxRequest( $inputParams, /* $wasPosted= */ false );
 		$user = $this->getTestUser()->getUser();
 
+		$userOptionsManager = $this->getServiceContainer()->getUserOptionsManager();
 		foreach ( $preferences as $key => $value ) {
-			$user->setOption( $key, $value );
+			$userOptionsManager->setOption( $user, $key, $value );
 		}
 
 		$context->setRequest( $fauxRequest );

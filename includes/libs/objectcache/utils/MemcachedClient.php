@@ -68,6 +68,8 @@
 
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
+use Wikimedia\AtEase\AtEase;
+use Wikimedia\IPUtils;
 
 // {{{ class MemcachedClient
 /**
@@ -347,7 +349,7 @@ class MemcachedClient {
 		}
 
 		$sock = $this->get_sock( $key );
-		if ( !is_resource( $sock ) ) {
+		if ( !$sock ) {
 			return false;
 		}
 
@@ -389,7 +391,7 @@ class MemcachedClient {
 		}
 
 		$sock = $this->get_sock( $key );
-		if ( !is_resource( $sock ) ) {
+		if ( !$sock ) {
 			return false;
 		}
 
@@ -465,6 +467,8 @@ class MemcachedClient {
 	 * @return mixed
 	 */
 	public function get( $key, &$casToken = null ) {
+		$getToken = ( func_num_args() >= 2 );
+
 		if ( $this->_debug ) {
 			$this->_debugprint( "get($key)" );
 		}
@@ -480,7 +484,7 @@ class MemcachedClient {
 
 		$sock = $this->get_sock( $key );
 
-		if ( !is_resource( $sock ) ) {
+		if ( !$sock ) {
 			return false;
 		}
 
@@ -491,7 +495,8 @@ class MemcachedClient {
 			$this->stats['get'] = 1;
 		}
 
-		$cmd = "gets $key\r\n";
+		$cmd = $getToken ? "gets" : "get";
+		$cmd .= " $key\r\n";
 		if ( !$this->_fwrite( $sock, $cmd ) ) {
 			return false;
 		}
@@ -537,7 +542,7 @@ class MemcachedClient {
 		$socks = array();
 		foreach ( $keys as $key ) {
 			$sock = $this->get_sock( $key );
-			if ( !is_resource( $sock ) ) {
+			if ( !$sock ) {
 				continue;
 			}
 			$key = is_array( $key ) ? $key[1] : $key;
@@ -553,7 +558,7 @@ class MemcachedClient {
 		$gather = array();
 		// Send out the requests
 		foreach ( $socks as $sock ) {
-			$cmd = 'gets';
+			$cmd = 'get';
 			foreach ( $sock_keys[intval( $sock )] as $key ) {
 				$cmd .= ' ' . $key;
 			}
@@ -567,7 +572,7 @@ class MemcachedClient {
 		// Parse responses
 		$val = array();
 		foreach ( $gather as $sock ) {
-			$this->_load_items( $sock, $val, $casToken );
+			$this->_load_items( $sock, $val );
 		}
 
 		if ( $this->_debug ) {
@@ -607,7 +612,7 @@ class MemcachedClient {
 	 * @param int $exp (optional) Expiration time. This can be a number of seconds
 	 * to cache for (up to 30 days inclusive).  Any timespans of 30 days + 1 second or
 	 * longer must be the timestamp of the time at which the mapping should expire. It
-	 * is safe to use timestamps in all cases, regardless of exipration
+	 * is safe to use timestamps in all cases, regardless of expiration
 	 * eg: strtotime("+3 hour")
 	 *
 	 * @return bool
@@ -629,7 +634,7 @@ class MemcachedClient {
 	 * @return array Output array
 	 */
 	public function run_command( $sock, $cmd ) {
-		if ( !is_resource( $sock ) ) {
+		if ( !$sock ) {
 			return array();
 		}
 
@@ -663,7 +668,7 @@ class MemcachedClient {
 	 * @param int $exp (optional) Expiration time. This can be a number of seconds
 	 * to cache for (up to 30 days inclusive).  Any timespans of 30 days + 1 second or
 	 * longer must be the timestamp of the time at which the mapping should expire. It
-	 * is safe to use timestamps in all cases, regardless of exipration
+	 * is safe to use timestamps in all cases, regardless of expiration
 	 * eg: strtotime("+3 hour")
 	 *
 	 * @return bool True on success
@@ -685,7 +690,7 @@ class MemcachedClient {
 	 * @param int $exp (optional) Expiration time. This can be a number of seconds
 	 * to cache for (up to 30 days inclusive).  Any timespans of 30 days + 1 second or
 	 * longer must be the timestamp of the time at which the mapping should expire. It
-	 * is safe to use timestamps in all cases, regardless of exipration
+	 * is safe to use timestamps in all cases, regardless of expiration
 	 * eg: strtotime("+3 hour")
 	 *
 	 * @return bool True on success
@@ -782,18 +787,27 @@ class MemcachedClient {
 	 * @access private
 	 */
 	function _connect_sock( &$sock, $host ) {
-		list( $ip, $port ) = preg_split( '/:(?=\d)/', $host );
+		$port = null;
+		$hostAndPort = IPUtils::splitHostAndPort( $host );
+		if ( $hostAndPort ) {
+			$ip = $hostAndPort[0];
+			if ( $hostAndPort[1] ) {
+				$port = $hostAndPort[1];
+			}
+		} else {
+			$ip = $host;
+		}
 		$sock = false;
 		$timeout = $this->_connect_timeout;
 		$errno = $errstr = null;
 		for ( $i = 0; !$sock && $i < $this->_connect_attempts; $i++ ) {
-			Wikimedia\suppressWarnings();
+			AtEase::suppressWarnings();
 			if ( $this->_persistent == 1 ) {
 				$sock = pfsockopen( $ip, $port, $errno, $errstr, $timeout );
 			} else {
 				$sock = fsockopen( $ip, $port, $errno, $errstr, $timeout );
 			}
-			Wikimedia\restoreWarnings();
+			AtEase::restoreWarnings();
 		}
 		if ( !$sock ) {
 			$this->_error_log( "Error connecting to $host: $errstr" );
@@ -831,7 +845,12 @@ class MemcachedClient {
 	 * @param string $host
 	 */
 	function _dead_host( $host ) {
-		$ip = explode( ':', $host )[0];
+		$hostAndPort = IPUtils::splitHostAndPort( $host );
+		if ( $hostAndPort ) {
+			$ip = $hostAndPort[0];
+		} else {
+			$ip = $host;
+		}
 		$this->_host_dead[$ip] = time() + 30 + intval( rand( 0, 10 ) );
 		$this->_host_dead[$host] = $this->_host_dead[$ip];
 		unset( $this->_cache_sock[$host] );
@@ -877,7 +896,7 @@ class MemcachedClient {
 		for ( $tries = 0; $tries < 20; $tries++ ) {
 			$host = $this->_buckets[$hv % $this->_bucketcount];
 			$sock = $this->sock_to_host( $host );
-			if ( is_resource( $sock ) ) {
+			if ( $sock ) {
 				return $sock;
 			}
 			$hv = $this->_hashfunc( $hv . $realkey );
@@ -908,7 +927,7 @@ class MemcachedClient {
 	// {{{ _incrdecr()
 
 	/**
-	 * Perform increment/decriment on $key
+	 * Perform increment/decrement on $key
 	 *
 	 * @param string $cmd Command to perform
 	 * @param string|array $key Key to perform it on
@@ -923,7 +942,7 @@ class MemcachedClient {
 		}
 
 		$sock = $this->get_sock( $key );
-		if ( !is_resource( $sock ) ) {
+		if ( !$sock ) {
 			return null;
 		}
 
@@ -970,7 +989,7 @@ class MemcachedClient {
 				 * to stop reading (right after "END") and we return right after that.
 				 */
 				return false;
-			} elseif ( preg_match( '/^VALUE (\S+) (\d+) (\d+) (\d+)$/', $decl, $match ) ) {
+			} elseif ( preg_match( '/^VALUE (\S+) (\d+) (\d+)(?: (\d+))?$/', $decl, $match ) ) {
 				/*
 				 * Read all data returned. This can be either one or multiple values.
 				 * Save all that data (in an array) to be processed later: we'll first
@@ -982,7 +1001,7 @@ class MemcachedClient {
 					$match[1], // rkey
 					$match[2], // flags
 					$match[3], // len
-					$match[4], // casToken
+					$match[4] ?? null, // casToken (appears with "gets" but not "get")
 					$this->_fread( $sock, $match[3] + 2 ), // data
 				);
 			} elseif ( $decl == "END" ) {
@@ -994,9 +1013,7 @@ class MemcachedClient {
 				 * All data has been read, time to process the data and build
 				 * meaningful return values.
 				 */
-				foreach ( $results as $vars ) {
-					list( $rkey, $flags, $len, $casToken, $data ) = $vars;
-
+				foreach ( $results as [ $rkey, $flags, /* length */, $casToken, $data ] ) {
 					if ( $data === false || substr( $data, -2 ) !== "\r\n" ) {
 						$this->_handle_error( $sock,
 							'line ending missing from data block from $1' );
@@ -1045,7 +1062,7 @@ class MemcachedClient {
 	 * @param int $exp (optional) Expiration time. This can be a number of seconds
 	 * to cache for (up to 30 days inclusive).  Any timespans of 30 days + 1 second or
 	 * longer must be the timestamp of the time at which the mapping should expire. It
-	 * is safe to use timestamps in all cases, regardless of exipration
+	 * is safe to use timestamps in all cases, regardless of expiration
 	 * eg: strtotime("+3 hour")
 	 * @param float $casToken [optional]
 	 *
@@ -1058,7 +1075,7 @@ class MemcachedClient {
 		}
 
 		$sock = $this->get_sock( $key );
-		if ( !is_resource( $sock ) ) {
+		if ( !$sock ) {
 			return false;
 		}
 
@@ -1140,7 +1157,12 @@ class MemcachedClient {
 
 		$sock = null;
 		$now = time();
-		list( $ip, /* $port */) = explode( ':', $host );
+		$hostAndPort = IPUtils::splitHostAndPort( $host );
+		if ( $hostAndPort ) {
+			$ip = $hostAndPort[0];
+		} else {
+			$ip = $host;
+		}
 		if ( isset( $this->_host_dead[$host] ) && $this->_host_dead[$host] > $now ||
 			isset( $this->_host_dead[$ip] ) && $this->_host_dead[$ip] > $now
 		) {
@@ -1289,7 +1311,7 @@ class MemcachedClient {
 	 * @param Resource $f
 	 */
 	function _flush_read_buffer( $f ) {
-		if ( !is_resource( $f ) ) {
+		if ( !$f ) {
 			return;
 		}
 		$r = array( $f );
