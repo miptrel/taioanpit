@@ -8,100 +8,44 @@ QUnit.module( 'ext.popups/userSettings', {
 	}
 } );
 
-QUnit.test( '#getIsEnabled should return false if Page Previews have been disabled', function ( assert ) {
-	this.userSettings.setIsEnabled( false );
+QUnit.test( '#isPagePreviewsEnabled should return false if Page Previews have been disabled', function ( assert ) {
+	this.userSettings.storePagePreviewsEnabled( false );
 
-	assert.notOk(
-		this.userSettings.getIsEnabled(),
+	assert.false(
+		this.userSettings.isPagePreviewsEnabled(),
 		'The user has disabled Page Previews.'
 	);
 
 	// ---
 
-	this.userSettings.setIsEnabled( true );
+	this.userSettings.storePagePreviewsEnabled( true );
 
-	assert.ok(
-		this.userSettings.getIsEnabled(),
-		'#getIsEnabled should return true if Page Previews have been enabled'
+	assert.true(
+		this.userSettings.isPagePreviewsEnabled(),
+		'#isPagePreviewsEnabled should return true if Page Previews have been enabled'
 	);
 } );
 
-QUnit.test( '#hasIsEnabled', function ( assert ) {
-	assert.notOk(
-		this.userSettings.hasIsEnabled(),
-		'#hasIsEnabled should return false if the storage is empty.'
-	);
-
-	// ---
-
-	this.userSettings.setIsEnabled( false );
-
-	assert.ok(
-		this.userSettings.hasIsEnabled(),
-		'#hasIsEnabled should return true even if "isEnabled" has been set to falsy.'
-	);
-
-	// ---
-
-	const getStub = this.sandbox.stub( this.storage, 'get' ).returns( false );
-
-	assert.notOk(
-		this.userSettings.hasIsEnabled(),
-		'#hasIsEnabled should return false if the storage is disabled.'
-	);
-
-	getStub.restore();
-} );
-
-QUnit.test( '#getPreviewCount should return the count as a number', function ( assert ) {
+QUnit.test( '#isReferencePreviewsEnabled', function ( assert ) {
 	assert.strictEqual(
-		this.userSettings.getPreviewCount(),
-		0,
-		'#getPreviewCount returns 0 when the storage is empty.'
+		this.storage.get( 'mwe-popups-referencePreviews-enabled' ),
+		null,
+		'Precondition: storage is empty.'
+	);
+	assert.true(
+		this.userSettings.isReferencePreviewsEnabled(),
+		'#isReferencePreviewsEnabled should default to true.'
 	);
 
-	// ---
-
-	this.storage.set( 'ext.popups.core.previewCount', false );
+	this.userSettings.storeReferencePreviewsEnabled( false );
 
 	assert.strictEqual(
-		this.userSettings.getPreviewCount(),
-		-1,
-		'#getPreviewCount returns -1 when the storage isn\'t available.'
-	);
-
-	// ---
-
-	this.storage.set( 'ext.popups.core.previewCount', '111' );
-
-	assert.strictEqual(
-		this.userSettings.getPreviewCount(),
-		111,
-		'#getPreviewCount returns the total.'
-	);
-} );
-
-QUnit.test( '#setPreviewCount should store the count as a string', function ( assert ) {
-	this.userSettings.setPreviewCount( 222 );
-
-	assert.strictEqual(
-		this.storage.get( 'ext.popups.core.previewCount' ),
-		'222',
-		'Storage returns the total as a string.'
-	);
-} );
-
-QUnit.test( '#getPreviewCount should override value in storage when is not a number', function ( assert ) {
-	this.storage.set( 'ext.popups.core.previewCount', 'NaN' );
-
-	assert.strictEqual(
-		this.userSettings.getPreviewCount(),
-		0,
-		'#getPreviewCount returns a sane default.'
-	);
-	assert.strictEqual(
-		this.storage.get( 'ext.popups.core.previewCount' ),
+		this.storage.get( 'mwe-popups-referencePreviews-enabled' ),
 		'0',
-		'Storage returns a sane default as a string.'
+		'#storeReferencePreviewsEnabled changes the storage.'
+	);
+	assert.false(
+		this.userSettings.isReferencePreviewsEnabled(),
+		'#isReferencePreviewsEnabled is now false.'
 	);
 } );

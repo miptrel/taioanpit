@@ -17,40 +17,54 @@ QUnit.test( '@@INIT', ( assert ) => {
 	);
 } );
 
-QUnit.test( 'BOOT', ( assert ) => {
+QUnit.test( 'BOOT with a single disabled popup type', ( assert ) => {
 	const action = {
 		type: actionTypes.BOOT,
-		isEnabled: false,
-		user: {
-			isAnon: true
-		}
+		initiallyEnabled: { page: false },
+		user: { isAnon: true }
 	};
-
 	assert.deepEqual(
 		settings( {}, action ),
-		{
-			shouldShowFooterLink: true
-		},
+		{ shouldShowFooterLink: true },
 		'The boot state shows a footer link.'
 	);
 
-	// ---
-
-	// And when the user is logged out...
 	action.user.isAnon = false;
-
 	assert.deepEqual(
 		settings( {}, action ),
-		{
-			shouldShowFooterLink: false
-		},
+		{ shouldShowFooterLink: false },
 		'If the user is logged in, then it doesn\'t signal that the footer link should be shown.'
 	);
 } );
 
-QUnit.test( 'SETTINGS_SHOW', ( assert ) => {
-	assert.expect( 1, 'All assertions are executed.' );
+QUnit.test( 'BOOT with multiple popup types', ( assert ) => {
+	const action = {
+		type: actionTypes.BOOT,
+		initiallyEnabled: { page: true, reference: null },
+		user: { isAnon: true }
+	};
+	assert.deepEqual(
+		settings( {}, action ),
+		{ shouldShowFooterLink: false },
+		'Footer link ignores unavailable popup types.'
+	);
 
+	action.initiallyEnabled.reference = true;
+	assert.deepEqual(
+		settings( {}, action ),
+		{ shouldShowFooterLink: false },
+		'Footer link is pointless when there is nothing to enable.'
+	);
+
+	action.initiallyEnabled.reference = false;
+	assert.deepEqual(
+		settings( {}, action ),
+		{ shouldShowFooterLink: true },
+		'Footer link appears when at least one popup type is disabled.'
+	);
+} );
+
+QUnit.test( 'SETTINGS_SHOW', ( assert ) => {
 	assert.deepEqual(
 		settings( {}, { type: actionTypes.SETTINGS_SHOW } ),
 		{
@@ -62,8 +76,6 @@ QUnit.test( 'SETTINGS_SHOW', ( assert ) => {
 } );
 
 QUnit.test( 'SETTINGS_HIDE', ( assert ) => {
-	assert.expect( 1, 'All assertions are executed.' );
-
 	assert.deepEqual(
 		settings( {}, { type: actionTypes.SETTINGS_HIDE } ),
 		{
@@ -74,12 +86,12 @@ QUnit.test( 'SETTINGS_HIDE', ( assert ) => {
 	);
 } );
 
-QUnit.test( 'SETTINGS_CHANGE', ( assert ) => {
-	const action = ( wasEnabled, enabled ) => {
+QUnit.test( 'SETTINGS_CHANGE with page previews only', ( assert ) => {
+	const action = ( oldValue, newValue ) => {
 		return {
 			type: actionTypes.SETTINGS_CHANGE,
-			wasEnabled,
-			enabled
+			oldValue: { page: oldValue },
+			newValue: { page: newValue }
 		};
 	};
 
@@ -113,5 +125,66 @@ QUnit.test( 'SETTINGS_CHANGE', ( assert ) => {
 		},
 		'It should keep the settings showing and show the help when we disable.'
 	);
+} );
 
+QUnit.test( 'SETTINGS_CHANGE with two preview types', ( assert ) => {
+	[
+		[
+			'All are disabled but nothing changed',
+			false, false, false, false,
+			{ shouldShow: false }
+		],
+		[
+			'All are enabled but nothing changed',
+			true, true, true, true,
+			{ shouldShow: false }
+		],
+		[
+			'One is enabled but nothing changed',
+			false, false, true, true,
+			{ shouldShow: false }
+		],
+		[
+			'Only one got disabled',
+			true, true, true, false,
+			{ shouldShow: true, showHelp: true, shouldShowFooterLink: true }
+		],
+		[
+			'One got disabled, the other enabled',
+			false, true, true, false,
+			{ shouldShow: true, showHelp: true, shouldShowFooterLink: true }
+		],
+		[
+			'Both got disabled',
+			true, false, true, false,
+			{ shouldShow: true, showHelp: true, shouldShowFooterLink: true }
+		],
+		[
+			'Only one got enabled',
+			false, false, false, true,
+			{ shouldShow: false, showHelp: false, shouldShowFooterLink: true }
+		],
+		[
+			'Both got enabled',
+			false, true, false, true,
+			{ shouldShow: false, showHelp: false, shouldShowFooterLink: false }
+		]
+	].forEach( ( [
+		message,
+		pageBefore,
+		pageAfter,
+		referenceBefore,
+		referenceAfter,
+		expected
+	] ) => {
+		assert.deepEqual(
+			settings( {}, {
+				type: actionTypes.SETTINGS_CHANGE,
+				oldValue: { page: pageBefore, reference: referenceBefore },
+				newValue: { page: pageAfter, reference: referenceAfter }
+			} ),
+			expected,
+			message
+		);
+	} );
 } );

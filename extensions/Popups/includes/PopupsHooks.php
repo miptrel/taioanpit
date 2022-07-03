@@ -21,7 +21,13 @@
 namespace Popups;
 
 use Config;
+use MediaWiki\Auth\Hook\LocalUserCreatedHook;
+use MediaWiki\Hook\BeforePageDisplayHook;
+use MediaWiki\Hook\MakeGlobalVariablesScriptHook;
 use MediaWiki\MediaWikiServices;
+use MediaWiki\Preferences\Hook\GetPreferencesHook;
+use MediaWiki\ResourceLoader\Hook\ResourceLoaderGetConfigVarsHook;
+use MediaWiki\User\Hook\UserGetDefaultOptionsHook;
 use OutputPage;
 use Skin;
 use User;
@@ -31,17 +37,24 @@ use User;
  *
  * @package Popups
  */
-class PopupsHooks {
+class PopupsHooks implements
+	GetPreferencesHook,
+	BeforePageDisplayHook,
+	ResourceLoaderGetConfigVarsHook,
+	MakeGlobalVariablesScriptHook,
+	UserGetDefaultOptionsHook,
+	LocalUserCreatedHook
+{
 
 	private const PREVIEWS_PREFERENCES_SECTION = 'rendering/reading';
 
 	/**
-	 * Add Page Previews options to user Preferences page
+	 * Add options to user Preferences page
 	 *
 	 * @param User $user User whose preferences are being modified
 	 * @param array[] &$prefs Preferences description array, to be fed to a HTMLForm object
 	 */
-	public static function onGetPreferences( User $user, array &$prefs ) {
+	public function onGetPreferences( $user, &$prefs ) {
 		/** @var PopupsContext $context */
 		$context = MediaWikiServices::getInstance()->getService( 'Popups.Context' );
 
@@ -49,39 +62,17 @@ class PopupsHooks {
 			return;
 		}
 
-		$option = [
-			'type' => 'radio',
-			'label-message' => 'popups-prefs-optin-title',
-			'help-message' => 'popups-prefs-conflicting-gadgets-info',
-			'options' => [
-				wfMessage( 'popups-prefs-optin-enabled-label' )->escaped()
-				=> PopupsContext::PREVIEWS_ENABLED,
-				wfMessage( 'popups-prefs-optin-disabled-label' )->escaped()
-				=> PopupsContext::PREVIEWS_DISABLED
-			],
-			'section' => self::PREVIEWS_PREFERENCES_SECTION
-		];
-		if ( $context->conflictsWithNavPopupsGadget( $user ) ) {
-			$option[ 'disabled' ] = true;
-			$option[ 'help-message' ] = [ 'popups-prefs-disable-nav-gadgets-info',
-				'Special:Preferences#mw-prefsection-gadgets' ];
-		}
-
 		$skinPosition = array_search( 'skin', array_keys( $prefs ) );
-		$readingOptions = [
-			PopupsContext::PREVIEWS_OPTIN_PREFERENCE_NAME => $option,
-		];
+		$readingOptions = self::getPagePreviewPrefToggle( $user, $context );
 
 		$config = MediaWikiServices::getInstance()->getService( 'Popups.Config' );
 		if ( $config->get( 'PopupsReferencePreviews' ) &&
 			!$config->get( 'PopupsReferencePreviewsBetaFeature' )
 		) {
-			$readingOptions[PopupsContext::REFERENCE_PREVIEWS_PREFERENCE_NAME] = [
-				'type' => 'toggle',
-				'label-message' => 'popups-refpreview-user-preference-label',
-				'section' => self::PREVIEWS_PREFERENCES_SECTION,
-				'disabled' => $option['disabled'] ?? false,
-			];
+			$readingOptions = array_merge(
+				$readingOptions,
+				self::getReferencePreviewPrefToggle( $user, $context )
+			);
 		}
 
 		if ( $skinPosition !== false ) {
@@ -95,12 +86,75 @@ class PopupsHooks {
 	}
 
 	/**
+	 * Get Page Preview option
+	 *
+	 * @param User $user User whose preferences are being modified
+	 * @param PopupsContext $context
+	 * @return array[]
+	 */
+	private static function getPagePreviewPrefToggle( User $user, PopupsContext $context ) {
+		$option = [
+			'type' => 'toggle',
+			'label-message' => 'popups-prefs-optin',
+			'help-message' => 'popups-prefs-conflicting-gadgets-info',
+			'section' => self::PREVIEWS_PREFERENCES_SECTION
+		];
+
+		if ( $context->conflictsWithNavPopupsGadget( $user ) ) {
+			$option[ 'disabled' ] = true;
+			$option[ 'help-message' ] = [ 'popups-prefs-disable-nav-gadgets-info',
+				'Special:Preferences#mw-prefsection-gadgets' ];
+		}
+
+		return [
+			PopupsContext::PREVIEWS_OPTIN_PREFERENCE_NAME => $option
+		];
+	}
+
+	/**
+	 * Get Reference Preview option
+	 *
+	 * @param User $user User whose preferences are being modified
+	 * @param PopupsContext $context
+	 * @return array[]
+	 */
+	private static function getReferencePreviewPrefToggle( User $user, PopupsContext $context ) {
+		$option = [
+			'type' => 'toggle',
+			'label-message' => 'popups-refpreview-user-preference-label',
+			'help-message' => 'popups-prefs-conflicting-gadgets-info',
+			'section' => self::PREVIEWS_PREFERENCES_SECTION
+		];
+
+		$isNavPopupsGadgetEnabled = $context->conflictsWithNavPopupsGadget( $user );
+		$isRefTooltipsGadgetEnabled = $context->conflictsWithRefTooltipsGadget( $user );
+
+		if ( $isNavPopupsGadgetEnabled && $isRefTooltipsGadgetEnabled ) {
+			$option[ 'disabled' ] = true;
+			$option[ 'help-message' ] = [ 'popups-prefs-reftooltips-and-navpopups-gadget-conflict-info',
+				'Special:Preferences#mw-prefsection-gadgets' ];
+		} elseif ( $isNavPopupsGadgetEnabled ) {
+			$option[ 'disabled' ] = true;
+			$option[ 'help-message' ] = [ 'popups-prefs-navpopups-gadget-conflict-info',
+				'Special:Preferences#mw-prefsection-gadgets' ];
+		} elseif ( $isRefTooltipsGadgetEnabled ) {
+			$option[ 'disabled' ] = true;
+			$option[ 'help-message' ] = [ 'popups-prefs-reftooltips-gadget-conflict-info',
+				'Special:Preferences#mw-prefsection-gadgets' ];
+		}
+
+		return [
+			PopupsContext::REFERENCE_PREVIEWS_PREFERENCE_NAME_AFTER_BETA => $option
+		];
+	}
+
+	/**
 	 * Allows last minute changes to the output page, e.g. adding of CSS or JavaScript by extensions.
 	 *
 	 * @param OutputPage $out The Output page object
 	 * @param Skin $skin Skin object that will be used to generate the page
 	 */
-	public static function onBeforePageDisplay( OutputPage $out, Skin $skin ) {
+	public function onBeforePageDisplay( $out, $skin ): void {
 		/** @var PopupsContext $context */
 		$context = MediaWikiServices::getInstance()->getService( 'Popups.Context' );
 		if ( $context->isTitleExcluded( $out->getTitle() ) ) {
@@ -130,16 +184,17 @@ class PopupsHooks {
 	 *
 	 * @param array &$vars Array of variables to be added into the output of the startup module
 	 * @param string $skin
+	 * @param Config $config
 	 */
-	public static function onResourceLoaderGetConfigVars( array &$vars, $skin ) {
+	public function onResourceLoaderGetConfigVars( array &$vars, $skin, Config $config ): void {
 		/** @var Config $config */
 		$config = MediaWikiServices::getInstance()->getService( 'Popups.Config' );
 
 		$vars['wgPopupsVirtualPageViews'] = $config->get( 'PopupsVirtualPageViews' );
 		$vars['wgPopupsGateway'] = $config->get( 'PopupsGateway' );
-		$vars['wgPopupsEventLogging'] = $config->get( 'PopupsEventLogging' );
 		$vars['wgPopupsRestGatewayEndpoint'] = $config->get( 'PopupsRestGatewayEndpoint' );
 		$vars['wgPopupsStatsvSamplingRate'] = $config->get( 'PopupsStatsvSamplingRate' );
+		$vars['wgPopupsTextExtractsIntroOnly'] = $config->get( 'PopupsTextExtractsIntroOnly' );
 	}
 
 	/**
@@ -153,22 +208,17 @@ class PopupsHooks {
 	 *   setting.
 	 * * `wgPopupsConflictsWithNavPopupGadget' - The server's notion of whether or not the
 	 *   user has enabled conflicting Navigational Popups Gadget.
+	 * * `wgPopupsConflictsWithRefTooltipsGadget' - The server's notion of whether or not the
+	 *   user has enabled conflicting Reference Tooltips Gadget.
 	 *
 	 * @param array &$vars variables to be added into the output of OutputPage::headElement
 	 * @param \IContextSource $out OutputPage instance calling the hook
 	 */
-	public static function onMakeGlobalVariablesScript( array &$vars, \IContextSource $out ) {
+	public function onMakeGlobalVariablesScript( &$vars, $out ): void {
 		$services = MediaWikiServices::getInstance();
 		/** @var PopupsContext $context */
 		$context = $services->getService( 'Popups.Context' );
-		$user = $out->getUser();
-
-		// TODO: Remove all references to wgPopupsReferencePreviews when not in Beta any more, and
-		// the temporary feature flag is not needed any more.
-		$vars['wgPopupsReferencePreviews'] = $context->isReferencePreviewsEnabled( $user );
-		$vars['wgPopupsConflictsWithNavPopupGadget'] = $context->conflictsWithNavPopupsGadget(
-			$user
-		);
+		$vars['wgPopupsFlags'] = $context->getConfigBitmaskFromUser( $out->getUser() );
 	}
 
 	/**
@@ -176,7 +226,7 @@ class PopupsHooks {
 	 *
 	 * @param array &$defaultOptions
 	 */
-	public static function onUserGetDefaultOptions( array &$defaultOptions ) {
+	public function onUserGetDefaultOptions( &$defaultOptions ) {
 		/** @var Config $config */
 		$config = MediaWikiServices::getInstance()->getService( 'Popups.Config' );
 		$default = $config->get( 'PopupsOptInDefaultState' );
@@ -187,7 +237,7 @@ class PopupsHooks {
 		if ( $config->get( 'PopupsReferencePreviews' ) &&
 			!$config->get( 'PopupsReferencePreviewsBetaFeature' )
 		) {
-			$defaultOptions[PopupsContext::REFERENCE_PREVIEWS_PREFERENCE_NAME] = $default;
+			$defaultOptions[PopupsContext::REFERENCE_PREVIEWS_PREFERENCE_NAME_AFTER_BETA] = '1';
 		}
 	}
 
@@ -197,18 +247,28 @@ class PopupsHooks {
 	 * @param User $user Newly created user object
 	 * @param bool $isAutoCreated
 	 */
-	public static function onLocalUserCreated( User $user, $isAutoCreated ) {
+	public function onLocalUserCreated( $user, $isAutoCreated ) {
 		/** @var Config $config */
-		$config = MediaWikiServices::getInstance()->getService( 'Popups.Config' );
+		$services = MediaWikiServices::getInstance();
+		$config = $services->getService( 'Popups.Config' );
 		$default = $config->get( 'PopupsOptInStateForNewAccounts' );
-		$user->setOption( PopupsContext::PREVIEWS_OPTIN_PREFERENCE_NAME, $default );
+		$userOptionsManager = $services->getUserOptionsManager();
+		$userOptionsManager->setOption(
+			$user,
+			PopupsContext::PREVIEWS_OPTIN_PREFERENCE_NAME,
+			$default
+		);
 
 		// As long as in Beta, don't set a default for Reference Previews. Rely on it either being
 		// null (= disabled), or follow what the "betafeatures-auto-enroll" flag says.
 		if ( $config->get( 'PopupsReferencePreviews' ) &&
 			!$config->get( 'PopupsReferencePreviewsBetaFeature' )
 		) {
-			$user->setOption( PopupsContext::REFERENCE_PREVIEWS_PREFERENCE_NAME, $default );
+			$userOptionsManager->setOption(
+				$user,
+				PopupsContext::REFERENCE_PREVIEWS_PREFERENCE_NAME_AFTER_BETA,
+				$default
+			);
 		}
 	}
 
@@ -218,7 +278,7 @@ class PopupsHooks {
 	 * @param User $user User whose preferences are being modified
 	 * @param array[] &$prefs Array of beta features
 	 */
-	public static function onGetBetaFeaturePreferences( User $user, array &$prefs ) {
+	public function onGetBetaFeaturePreferences( User $user, array &$prefs ) {
 		/** @var Config $config */
 		$config = MediaWikiServices::getInstance()->getService( 'Popups.Config' );
 		$extensionAssetsPath = $config->get( 'ExtensionAssetsPath' );

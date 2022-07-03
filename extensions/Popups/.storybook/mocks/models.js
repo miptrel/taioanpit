@@ -2,7 +2,7 @@
 * Various Page Preview models used for different configurations.
 * PreviewModel is defined in 'src/preview/model.js`.
 *
-* In produciton, thumbnail size is determined by the gateway before fetching
+* In production, thumbnail size is determined by the gateway before fetching
 * from the server. Here, thumbnails are defined statically so they
 * must be scaled down for low-dpi display, using `helpers/scaleDownThumbnails.js`.
 *
@@ -42,11 +42,43 @@ MODELS.THUMBNAIL_LANDSCAPE = {
 	type: "page",
 	thumbnail: {
 		source:
-		"img/542px-Atlantic_Ocean_location_map.svg.png",
+		"img/640px-Atlantic_Ocean_location_map.svg.png",
 		width: 542,
 		height: 640
 	},
 	pageId: 698
+};
+
+MODELS.THUMBNAIL_LANDSCAPE_PANORAMA = {
+	title: 'Zhongyuan Tower',
+	url: 'Zhongyuan Tower',
+	languageCode: "en",
+	languageDirection: "ltr",
+	extract: '<p><b>Zhongyuan Tower,</b> also known as Henan Radio and Television Tower, is located in Zhengzhou, Henan province, China. It is a multi-functional commercial, artistic and cultural center integrating radio and television broadcasting, tourism, cross-border trade, cultural performance, catering and leisure.The tower is 268 meters high and the top antenna is 120 meters high, with a total height of 388 meters. It is the world\'s second tallest steel tower after the Tokyo Skytree.</p>',
+	type: "page",
+	thumbnail: {
+		source:
+		"img/211px-HnzyftB.jpg",
+		width: 211,
+		height: 320
+	},
+	pageId: 3332543
+};
+
+MODELS.THUMBNAIL_PORTRAIT_PANORAMA = {
+	title: 'Deutsche Telekom',
+	url: 'Deutsche Telekom',
+	languageCode: "de",
+	languageDirection: "ltr",
+	extract: '<p>Die <b>Deutsche Telekom AG</b> ist die Dachgesellschaft von Europas größtem Tele­kommunikations­unternehmen mit Hauptsitz in Bonn. In der Liste Forbes Global 2000 der weltgrößten börsennotierten Unternehmen belegt die Deutsche Telekom Platz 69. Das Unternehmen kam im März 2021 auf einen Börsenwert von ca. 78,2 Mrd. Euro.</p>',
+	type: "page",
+	thumbnail: {
+		source:
+		"img/langde-320px-Telekom_Logo_2013.svg.png",
+		width: 320,
+		height: 157
+	},
+	pageId: 3332543
 };
 
 MODELS.SVG_PORTRAIT = {
@@ -115,6 +147,66 @@ MODELS.THUMBNAIL_DIVIDER = {
 		height: 426
 	},
 	pageId: 15573
+};
+MODELS.THUMBNAIL_SQUARE = {
+	title: "Swing When You're Winning",
+	url: "Swing When You're Winning",
+	languageCode: "en",
+	languageDirection: "ltr",
+	extract:
+		"<p><i><b>Swing When You're Winning</b></i> is a swing cover album by English singer-songwriter Robbie Williams, and his fourth studio album overall. It was released in the United Kingdom on 19 November 2001 and peaked at number one on the UK Albums Chart.</p>",
+	type: "page",
+	thumbnail: {
+		source: 'img/300px-Swing_When_You%27re_Winning_cover.png',
+		width: 300,
+		height: 300
+	},
+	pageId: 2846305
+};
+MODELS.THUMBNAIL_SMALL_TALL = {
+	title: "Ocean",
+	url: "Ocean",
+	languageCode: "en",
+	languageDirection: "ltr",
+	extract:
+		"<p>The <i><b>ocean</b></i> (also the sea or the world ocean) is the body of salt water which covers approximately 71% of the surface of the Earth and contains 97% of Earth's water.</p>",
+	type: "page",
+	thumbnail: {
+		source: 'img/300px-waves_unsplash.jpg',
+		width: 300,
+		height: 1000
+	},
+	pageId: 18842359
+};
+MODELS.THUMBNAIL_SMALL_SHORT = {
+	title: "Full Moon",
+	url: "Full Moon",
+	languageCode: "en",
+	languageDirection: "ltr",
+	extract:
+		"<p>The <i><b>full moon</b></i> is the lunar phase when the Moon appears fully illuminated from Earth's perspective. This occurs when Earth is located between the Sun and the Moon (more exactly, when the ecliptic longitudes of the Sun and Moon differ by 180°).</p>",
+	type: "page",
+	thumbnail: {
+		source: 'img/300px-full_moon_unsplash.jpg',
+		width: 300,
+		height: 200
+	},
+	pageId: 11432
+};
+MODELS.THUMBNAIL_BLOCKQUOTE = {
+	title: "List of photographs of Abraham Lincoln",
+	url: "List of photographs of Abraham Lincoln",
+	languageCode: "en",
+	languageDirection: "ltr",
+	extract:
+		`<p>There are 130 known photographs of Abraham Lincoln.</p><blockquote class="templatequote "><p>Lincoln's features were the despair of every artist who undertook his portrait. The writer saw nearly a dozen, one after another, soon after the first nomination to the presidency, attempt the task. They put into their pictures the large, rugged features, and strong, prominent lines; they made measurements to obtain exact proportions; they "petrified" some single look, but the picture remained hard and cold. Even before these paintings were finished it was plain to see that they were unsatisfactory to the artists themselves, and much more so to the intimate friends of the man this was not he who smiled, spoke, laughed, charmed. The picture was to the man as the grain of sand to the mountain, as the dead to the living. Graphic art was powerless before a face that moved through a thousand delicate gradations of line and contour, light and shade, sparkle of the eye and curve of the lip, in the long gamut of expression from grave to gay, and back again from the rollicking jollity of laughter to that serious, far away look that with prophetic intuitions beheld the awful panorama of war, and heard the cry of oppression and suffering. There are many pictures of Lincoln; there is no portrait of him.</p></blockquote>`,
+	type: "page",
+	thumbnail: {
+		source: 'img/640px-Abraham_Lincoln_by_Nicholas_Shepherd,_1846-crop.jpg',
+		width: 506,
+		height: 640
+	},
+	pageId: 38746858
 };
 MODELS.LONG_WORD_1 = {
 	title: "Pneumonoultramicroscopicsilicovolcanoconiosis",
@@ -421,6 +513,72 @@ MODELS.TH_WIKI = {
 		height: 640
 	},
 	pageId: 901909
+};
+
+const REFERENCE_EXTRACT = 'Link to <a href="#">website</a>, <a href="https://wikipedia.org">external</a> and <a href="https://wikipedia.org/w/index.pdf">pdf</a>';
+
+const REFERENCE_EXTRACT_LONG = `This reference has really long text. When you have really long text, and I mean really really long text, not just quite long text, it should introduce a scrollbar.
+The scrollbar is beautiful, one of the most beautiful things you have ever seen but it will only kick in when you have enough text and the text that has been
+written so far is not enough so we will continue writing more and more text until it shows. More and more and more and more. More and more and more.
+Sometimes it feels like it is never ending. The reference preview gets larger and larger. Larger and larger that you start to doubt yourself and wonder:
+perhaps I need some kind of special flag in the reference model to make the scrolling appear. However, luckily as you have that thought the storybook refreshes and a scrollbar
+appears. The reference preview no longer grows and you sigh a sigh of relief. You scroll down in the storybook and click one of the reference links
+and finally find <a href="#">the reference</a> you were looking for.`;
+
+MODELS.TYPE_REFERENCE_BOOK = {
+	type: 'reference',
+	referenceType: 'book',
+	extract: REFERENCE_EXTRACT
+};
+
+MODELS.TYPE_REFERENCE_JOURNAL = {
+	type: 'reference',
+	referenceType: 'journal',
+	extract: REFERENCE_EXTRACT
+};
+
+MODELS.TYPE_REFERENCE_NEWS = {
+	type: 'reference',
+	referenceType: 'news',
+	extract: REFERENCE_EXTRACT
+};
+
+MODELS.TYPE_REFERENCE_WEB = {
+	type: 'reference',
+	referenceType: 'web',
+	extract: REFERENCE_EXTRACT
+};
+
+MODELS.TYPE_REFERENCE_GENERIC = {
+	type: 'reference',
+	referenceType: 'generic',
+	extract: REFERENCE_EXTRACT
+};
+
+MODELS.TYPE_REFERENCE_GENERIC_LONG = {
+	type: 'reference',
+	referenceType: 'generic',
+	extract: REFERENCE_EXTRACT_LONG
+};
+
+MODELS.TYPE_REFERENCE_NOTE = {
+	type: 'reference',
+	referenceType: 'note',
+	extract: `<p>This is a note.</p>`
+};
+
+MODELS.TYPE_REFERENCE_GENERIC_COLLAPSIBLE = {
+	type: 'reference',
+	referenceType: 'generic',
+	extract: `<p>This is a reference.</p><div class="mw-collapsible"></div>`
+};
+
+MODELS.ERROR = {
+	title: "Error Preview",
+	url: "Error Preview",
+	languageCode: "en",
+	languageDirection: "ltr",
+	type: 'generic',
 };
 
 export default MODELS;

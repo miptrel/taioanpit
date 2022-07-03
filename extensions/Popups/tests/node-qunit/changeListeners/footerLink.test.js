@@ -20,21 +20,14 @@ QUnit.module( 'ext.popups/changeListeners/footerLink @integration', {
 
 		this.footerLinkChangeListener = footerLink( boundActions );
 
-		this.state = {
-			settings: {
-				shouldShowFooterLink: true
-			}
-		};
-
 		// A helper method, which should make the following tests more easily
 		// readable.
 		this.whenLinkPreviewsBoots = function () {
-			this.footerLinkChangeListener( undefined, this.state );
+			const newState = { settings: { shouldShowFooterLink: true } };
+			this.footerLinkChangeListener( undefined, newState );
 		};
 
-		this.getLink = function () {
-			return this.$footer.find( 'li:last-child' );
-		};
+		this.getLink = () => this.$footer.find( 'li:last-child' );
 	},
 	afterEach() {
 		this.$footer.remove();
@@ -65,12 +58,9 @@ QUnit.test( 'it should show and hide the link', function ( assert ) {
 		'Link is visible'
 	);
 
-	// ---
-
-	const prevState = $.extend( true, {}, this.state );
-	this.state.settings.shouldShowFooterLink = false;
-
-	this.footerLinkChangeListener( prevState, this.state );
+	const oldState = { settings: { shouldShowFooterLink: true } },
+		newState = { settings: { shouldShowFooterLink: false } };
+	this.footerLinkChangeListener( oldState, newState );
 
 	assert.strictEqual(
 		$link.css( 'display' ),
@@ -85,5 +75,5 @@ QUnit.test( 'it should call the showSettings bound action creator', function ( a
 	const $link = this.getLink();
 	$link.trigger( 'click' );
 
-	assert.ok( this.showSettingsSpy.called, 'Show settings is called.' );
+	assert.true( this.showSettingsSpy.called, 'Show settings is called.' );
 } );

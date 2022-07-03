@@ -1,11 +1,22 @@
 import pageviews from '../../../src/changeListeners/pageviews';
 
 const REFERRER = 'https://en.m.wikipedia.org/wiki/Kittens',
-	page = {
-		namespaceId: 1,
-		id: 42,
-		title: 'Kittens',
-		url: REFERRER
+	newState = {
+		pageviews: {
+			page: {
+				id: 42,
+				namespaceId: 1,
+				title: 'Kittens',
+				url: REFERRER
+			},
+			pageview: {
+				/* eslint-disable camelcase */
+				page_id: 43,
+				page_namespace: 1,
+				page_title: 'Rainbows'
+				/* eslint-enable camelcase */
+			}
+		}
 	};
 
 QUnit.module( 'ext.popups/pageviews', {
@@ -19,60 +30,53 @@ QUnit.module( 'ext.popups/pageviews', {
 			this.boundActions,
 			this.pageviewTracker
 		);
+
+		// Stub internal usage of mw.Title.newFromText
+		mw.Title.newFromText = ( str ) => {
+			return {
+				getPrefixedDb: () => { return str; }
+			};
+		};
 	}
 } );
-function createState( title ) {
-	return title ? {
-		pageviews: {
-			page,
-			pageview: {
-				page_title: title // eslint-disable-line camelcase
-			}
-		}
-	} : {
-		pageviews: {
-			page,
-			pageview: undefined
-		}
-	};
-}
 
 QUnit.test( 'it should log the queued event', function ( assert ) {
-	const state = createState( 'Rainbows' );
+	this.changeListener( undefined, newState );
 
-	this.changeListener( undefined, state );
-
-	assert.ok(
+	assert.true(
 		this.pageviewTracker.calledWith(
 			'event.VirtualPageView',
 			{
 				/* eslint-disable camelcase */
-				page_title: 'Rainbows',
-				source_url: REFERRER,
 				source_page_id: 42,
 				source_namespace: 1,
-				source_title: 'Kittens'
+				source_title: 'Kittens',
+				source_url: REFERRER,
+				page_id: 43,
+				page_namespace: 1,
+				page_title: 'Rainbows'
 				/* eslint-enable camelcase */
 			}
 		),
 		'Event is logged with the current page context'
 	);
-	assert.ok(
+	assert.true(
 		this.boundActions.pageviewLogged.called,
 		'When logged an action is taken to unqueue the pageview'
 	);
 } );
 
 QUnit.test( 'it should not log something that is not a pageview', function ( assert ) {
-	const state = createState();
+	const noPageviewState = $.extend( {}, newState );
+	delete noPageviewState.pageviews.pageview;
 
-	this.changeListener( undefined, state );
+	this.changeListener( undefined, newState );
 
-	assert.notOk(
+	assert.false(
 		this.pageviewTracker.called,
 		'No pageview tracked'
 	);
-	assert.notOk(
+	assert.false(
 		this.boundActions.pageviewLogged.called,
 		'No action taken'
 	);

@@ -4,6 +4,7 @@ import * as constants from '../../../src/constants';
 import { createNullModel, previewTypes } from '../../../src/preview/model';
 import { createThumbnail } from '../../../src/ui/thumbnail';
 
+const windowHeight = 400;
 /**
  * A utility function that creates a bare bones preview
  *
@@ -41,6 +42,9 @@ QUnit.module( 'ext.popups#renderer', {
 		this.sandbox.stub( constants.default, 'BRACKETED_DEVICE_PIXEL_RATIO' ).value( 1 );
 
 		mw.msg = ( key ) => `<${key}>`;
+		mw.message = ( key ) => {
+			return { exists: () => !key.endsWith( 'generic' ), text: () => `<${key}>` };
+		};
 
 		mw.html = {
 			escape: ( str ) => str && str.replace( /'/g, '&apos;' ).replace( /</g, '&lt;' )
@@ -59,6 +63,7 @@ QUnit.module( 'ext.popups#renderer', {
 		// Restore getElementsById to its original state.
 		document.getElementById = this.getElementById;
 		mw.msg = null;
+		mw.message = null;
 		mw.html = null;
 	}
 } );
@@ -154,6 +159,11 @@ QUnit.test( 'createPagePreview', ( assert ) => {
 		preview.el.find( '.mwe-popups-extract' ).attr( 'dir' ),
 		'ltr <"\'>',
 		'Language direction is safely espaced'
+	);
+	assert.strictEqual(
+		preview.el.find( '.mwe-popups-settings-icon' ).attr( 'title' ),
+		'<popups-settings-icon-gear-title>',
+		'Title attribute is correct.'
 	);
 } );
 
@@ -301,7 +311,7 @@ QUnit.test( 'createDisambiguationPreview(model)', ( assert ) => {
 QUnit.test( 'createReferencePreview(model)', ( assert ) => {
 	const model = {
 			url: '#custom_id',
-			extract: 'Custom <i>extract</i> with a <a href="//wikipedia.de">link</a>',
+			extract: 'Custom <i>extract</i> with an <a href="/wiki/Internal">internal</a> and an <a href="//wikipedia.de" class="external">external</a> link',
 			type: previewTypes.TYPE_REFERENCE,
 			referenceType: 'web'
 		},
@@ -315,33 +325,31 @@ QUnit.test( 'createReferencePreview(model)', ( assert ) => {
 		'<popups-refpreview-web>'
 	);
 	assert.strictEqual(
-		preview.el.find( '.mwe-popups-extract' ).text().trim(),
-		'Custom extract with a link'
+		preview.el.find( '.mw-parser-output' ).text().trim(),
+		'Custom extract with an internal and an external link'
 	);
 	assert.strictEqual(
 		preview.el.find( 'a[target="_blank"]' ).length,
 		1,
-		'links in (and only in) the content open in new tabs'
-	);
-	assert.strictEqual(
-		preview.el.find( '.mwe-popups-read-link' ).attr( 'href' ),
-		'#custom_id',
-		'readlink is correctly linked'
+		'only external links open in new tabs'
 	);
 } );
 
-QUnit.test( 'createReferencePreview escapes URLs safely', ( assert ) => {
+QUnit.test( 'createReferencePreview collapsible/sortable handling', ( assert ) => {
 	const model = {
-			url: '#custom_id <"\'>',
-			extract: '',
+			url: '',
+			extract: '<table class="mw-collapsible"></table>' +
+				'<table class="sortable"><th class="headerSort" tabindex="1" title="Click here"></th></table>',
 			type: previewTypes.TYPE_REFERENCE
 		},
 		preview = renderer.createPreviewWithType( model );
 
+	assert.strictEqual( preview.el.find( '.mw-collapsible, .sortable, .headerSort' ).length, 0 );
+	assert.strictEqual( preview.el.find( 'th' ).attr( 'tabindex' ), undefined );
+	assert.strictEqual( preview.el.find( 'th' ).attr( 'title' ), undefined );
 	assert.strictEqual(
-		preview.el.find( '.mwe-popups-read-link' ).attr( 'href' ),
-		'#custom_id <"\'>',
-		'URL is safely espaced'
+		preview.el.find( '.mwe-collapsible-placeholder' ).text(),
+		'<popups-refpreview-collapsible-placeholder>'
 	);
 } );
 
@@ -359,25 +367,6 @@ QUnit.test( 'createReferencePreview default title', ( assert ) => {
 	);
 } );
 
-QUnit.test( 'createReferencePreview propagates clicks to source element', ( assert ) => {
-	const model = {
-			url: '',
-			extract: '',
-			type: previewTypes.TYPE_REFERENCE,
-			sourceElementId: 'source-element'
-		},
-		preview = renderer.createPreviewWithType( model ),
-		$sourceElement = $( '<div>' ).attr( 'id', model.sourceElementId ).append(
-			$( '<a>' ).on( 'click', () => {
-				assert.ok( true, 'click event is triggered' );
-			} )
-		).appendTo( document.body );
-
-	preview.el.find( '.mwe-popups-read-link' ).trigger( 'click' );
-
-	$sourceElement.remove();
-} );
-
 QUnit.test( 'createReferencePreview updates fade-out effect on scroll', ( assert ) => {
 	const model = {
 			url: '',
@@ -389,8 +378,8 @@ QUnit.test( 'createReferencePreview updates fade-out effect on scroll', ( assert
 
 	$extract.children().trigger( 'scroll' );
 
-	assert.strictEqual( false, $extract.children()[ 0 ].isScrolling );
-	assert.ok( !$extract.hasClass( 'mwe-popups-fade-out' ) );
+	assert.false( $extract.children()[ 0 ].isScrolling );
+	assert.false( $extract.hasClass( 'mwe-popups-fade-out' ) );
 } );
 
 QUnit.test( 'bindBehavior - preview dwell', function ( assert ) {
@@ -401,10 +390,10 @@ QUnit.test( 'bindBehavior - preview dwell', function ( assert ) {
 	preview.el.mouseenter();
 
 	assert.strictEqual( behavior.previewDwell.callCount, 1, 'Preview dwell is called.' );
-	assert.notOk(
+	assert.false(
 		behavior.previewAbandon.called, 'Preview abandon is NOT called.' );
-	assert.notOk( behavior.click.called, 'Click is NOT called.' );
-	assert.notOk( behavior.showSettings.called, 'Show settings is NOT called.' );
+	assert.false( behavior.click.called, 'Click is NOT called.' );
+	assert.false( behavior.showSettings.called, 'Show settings is NOT called.' );
 } );
 
 QUnit.test( 'bindBehavior - preview abandon', function ( assert ) {
@@ -414,10 +403,10 @@ QUnit.test( 'bindBehavior - preview abandon', function ( assert ) {
 	renderer.bindBehavior( preview, behavior );
 	preview.el.mouseleave();
 
-	assert.notOk( behavior.previewDwell.called, 'Preview dwell is NOT called.' );
+	assert.false( behavior.previewDwell.called, 'Preview dwell is NOT called.' );
 	assert.strictEqual( behavior.previewAbandon.callCount, 1, 'Preview abandon is called.' );
-	assert.notOk( behavior.click.called, 'Click is NOT called.' );
-	assert.notOk( behavior.showSettings.called, 'Show settings is NOT called.' );
+	assert.false( behavior.click.called, 'Click is NOT called.' );
+	assert.false( behavior.showSettings.called, 'Show settings is NOT called.' );
 } );
 
 QUnit.test( 'bindBehavior - preview click', function ( assert ) {
@@ -427,11 +416,11 @@ QUnit.test( 'bindBehavior - preview click', function ( assert ) {
 	renderer.bindBehavior( preview, behavior );
 	preview.el.click();
 
-	assert.notOk( behavior.previewDwell.called, 'Preview dwell is NOT called.' );
-	assert.notOk(
+	assert.false( behavior.previewDwell.called, 'Preview dwell is NOT called.' );
+	assert.false(
 		behavior.previewAbandon.called, 'Preview abandon is NOT called.' );
 	assert.strictEqual( behavior.click.callCount, 1, 'Click is called.' );
-	assert.notOk( behavior.showSettings.called,
+	assert.false( behavior.showSettings.called,
 		'Settings link click is NOT called.' );
 } );
 
@@ -442,11 +431,11 @@ QUnit.test( 'bindBehavior - settings link click', function ( assert ) {
 	renderer.bindBehavior( preview, behavior );
 	preview.el.find( '.mwe-popups-settings-icon' ).click();
 
-	assert.notOk( behavior.previewDwell.called, 'Preview dwell is NOT called.' );
-	assert.notOk(
+	assert.false( behavior.previewDwell.called, 'Preview dwell is NOT called.' );
+	assert.false(
 		behavior.previewAbandon.called, 'Preview abandon is NOT called.' );
-	assert.notOk( behavior.click.called, 'Click is NOT called.' );
-	assert.ok(
+	assert.false( behavior.click.called, 'Click is NOT called.' );
+	assert.true(
 		behavior.showSettings.calledOnce, 'Settings link click is called.' );
 } );
 
@@ -465,38 +454,24 @@ QUnit.test( 'bindBehavior - settings link URL', function ( assert ) {
 
 QUnit.test( 'show', function ( assert ) {
 	const preview = createPagePreview(),
-		event = {
+		measures = {
 			pageX: 252,
 			pageY: 1146,
-			clientY: 36
-		},
-		link = {
-			get() {
-				return {
-					getClientRects() {
-						return [ {
-							bottom: 37,
-							height: 13,
-							left: 201,
-							right: 357,
-							top: 24,
-							width: 156
-						} ];
-					}
-				};
-			},
-			offset() {
-				return {
-					top: 1134,
-					left: 201
-				};
-			},
-			width() {
-				return 156;
-			},
-			height() {
-				return 13;
-			}
+			clientY: 36,
+			clientRects: [ {
+				bottom: 37,
+				height: 13,
+				left: 201,
+				right: 357,
+				top: 24,
+				width: 156
+			} ],
+			offset: { top: 1134, left: 201 },
+			width: 156,
+			height: 13,
+			scrollTop: 0,
+			windowWidth: 800,
+			windowHeight: 600
 		},
 		behavior = createBehavior( this.sandbox ),
 		token = 'some-token',
@@ -505,20 +480,20 @@ QUnit.test( 'show', function ( assert ) {
 	preview.el.show = this.sandbox.stub();
 
 	const showPreview = renderer.show(
-		preview, event, link, behavior, token, $container.get( 0 ), 'ltr' );
+		preview, measures, {}, behavior, token, $container.get( 0 ), 'ltr' );
 
-	assert.notEqual(
+	assert.notStrictEqual(
 		$container.html(),
 		'',
 		'Container is not empty.'
 	);
-	assert.ok(
+	assert.true(
 		preview.el.show.calledOnce,
 		'Preview has been shown.'
 	);
 
 	return showPreview.then( () => {
-		assert.ok(
+		assert.true(
 			behavior.previewShow.calledWith( token ),
 			'previewShow has been called with the correct token.'
 		);
@@ -535,15 +510,15 @@ QUnit.test( 'hide - fade out up', ( assert ) => {
 		$container = $( '<div>' ).append( preview.el ),
 		hidePreview = renderer.hide( preview );
 
-	assert.ok(
+	assert.true(
 		preview.el.hasClass( 'mwe-popups-fade-out-up' ),
 		'Thumbnail has faded out up.'
 	);
-	assert.notOk(
+	assert.false(
 		preview.el.hasClass( 'mwe-popups-fade-in-down' ),
 		'Fade-in class has been removed.'
 	);
-	assert.notEqual(
+	assert.notStrictEqual(
 		$container.html(),
 		'',
 		'Preview is still in the container.'
@@ -567,15 +542,15 @@ QUnit.test( 'hide - fade out down', ( assert ) => {
 		$container = $( '<div>' ).append( preview.el ),
 		hidePreview = renderer.hide( preview );
 
-	assert.ok(
+	assert.true(
 		preview.el.hasClass( 'mwe-popups-fade-out-down' ),
 		'Thumbnail has faded out down.'
 	);
-	assert.notOk(
+	assert.false(
 		preview.el.hasClass( 'mwe-popups-fade-in-up' ),
 		'Fade-in class has been removed.'
 	);
-	assert.notEqual(
+	assert.notStrictEqual(
 		$container.html(),
 		'',
 		'Preview is still in the container.'
@@ -591,12 +566,10 @@ QUnit.test( 'hide - fade out down', ( assert ) => {
 
 QUnit.test( '#createLayout - portrait preview, mouse event, link is on the top left of the page', ( assert ) => {
 	const isPreviewTall = false,
-		eventData = {
+		measures = {
 			pageX: 252,
 			pageY: 1146,
-			clientY: 36
-		},
-		linkData = {
+			clientY: 36,
 			clientRects: [ {
 				bottom: 37,
 				height: 13,
@@ -610,19 +583,17 @@ QUnit.test( '#createLayout - portrait preview, mouse event, link is on the top l
 				left: 201
 			},
 			width: 156,
-			height: 13
-		},
-		windowData = {
+			height: 13,
 			scrollTop: 1109,
-			width: 1239,
-			height: 827
+			windowWidth: 1239,
+			windowHeight: 827
 		},
 		pointerSize = 8;
 
 	const cases = [ { dir: 'ltr' }, { dir: 'rtl' } ];
 	cases.forEach( ( { dir }, i ) => {
 		const layout = renderer.createLayout(
-			isPreviewTall, eventData, linkData, windowData, pointerSize, dir
+			isPreviewTall, measures, pointerSize, dir
 		);
 
 		assert.deepEqual(
@@ -643,12 +614,10 @@ QUnit.test( '#createLayout - portrait preview, mouse event, link is on the top l
 
 QUnit.test( '#createLayout - tall preview, mouse event, link is on the bottom center of the page', ( assert ) => {
 	const isPreviewTall = true,
-		eventData = {
+		measures = {
 			pageX: 176,
 			pageY: 1252,
-			clientY: 628
-		},
-		linkData = {
+			clientY: 628,
 			clientRects: [ {
 				bottom: 640,
 				height: 13,
@@ -662,19 +631,17 @@ QUnit.test( '#createLayout - tall preview, mouse event, link is on the bottom ce
 				left: 177
 			},
 			width: 32,
-			height: 13
-		},
-		windowData = {
+			height: 13,
 			scrollTop: 623,
-			width: 587,
-			height: 827
+			windowWidth: 587,
+			windowHeight: 827
 		},
 		pointerSize = 8;
 
 	const cases = [ { dir: 'ltr' }, { dir: 'rtl' } ];
 	cases.forEach( ( { dir }, i ) => {
 		const layout = renderer.createLayout(
-			isPreviewTall, eventData, linkData, windowData, pointerSize, dir
+			isPreviewTall, measures, pointerSize, dir
 		);
 
 		assert.deepEqual(
@@ -695,8 +662,7 @@ QUnit.test( '#createLayout - tall preview, mouse event, link is on the bottom ce
 
 QUnit.test( '#createLayout - empty preview, keyboard event, link is on the center right of the page', ( assert ) => {
 	const isPreviewTall = false,
-		eventData = {},
-		linkData = {
+		measures = {
 			clientRects: [ {
 				bottom: 442,
 				height: 13,
@@ -710,19 +676,17 @@ QUnit.test( '#createLayout - empty preview, keyboard event, link is on the cente
 				left: 654
 			},
 			width: 38,
-			height: 13
-		},
-		windowData = {
+			height: 13,
 			scrollTop: 689,
-			width: 801,
-			height: 827
+			windowWidth: 801,
+			windowHeight: 827
 		},
 		pointerSize = 8;
 
 	const cases = [ { dir: 'ltr' }, { dir: 'rtl' } ];
 	cases.forEach( ( { dir }, i ) => {
 		const layout = renderer.createLayout(
-			isPreviewTall, eventData, linkData, windowData, pointerSize, dir
+			isPreviewTall, measures, pointerSize, dir
 		);
 
 		assert.deepEqual(
@@ -743,12 +707,10 @@ QUnit.test( '#createLayout - empty preview, keyboard event, link is on the cente
 
 QUnit.test( '#createLayout - empty preview, mouse event, popup pointer is in the correct position', ( assert ) => {
 	const isPreviewTall = false,
-		eventData = {
+		measures = {
 			pageX: 205,
 			pageY: 1146,
-			clientY: 36
-		},
-		linkData = {
+			clientY: 36,
 			clientRects: [ {
 				bottom: 37,
 				height: 13,
@@ -762,19 +724,17 @@ QUnit.test( '#createLayout - empty preview, mouse event, popup pointer is in the
 				left: 201
 			},
 			width: 26,
-			height: 13
-		},
-		windowData = {
+			height: 13,
 			scrollTop: 1109,
-			width: 1239,
-			height: 827
+			windowWidth: 1239,
+			windowHeight: 827
 		},
 		pointerSize = 8;
 
 	const cases = [ { dir: 'ltr' }, { dir: 'rtl' } ];
 	cases.forEach( ( { dir }, i ) => {
 		const layout = renderer.createLayout(
-			isPreviewTall, eventData, linkData, windowData, pointerSize, dir
+			isPreviewTall, measures, pointerSize, dir
 		);
 
 		assert.deepEqual(
@@ -824,6 +784,7 @@ QUnit.test( '#getClasses when no thumbnail is available', ( assert ) => {
 			[
 				'mwe-popups-fade-in-down',
 				'flipped-y',
+				'mwe-popups-no-image-pointer',
 				'mwe-popups-is-not-tall'
 			],
 			'Y flipped.'
@@ -857,6 +818,7 @@ QUnit.test( '#getClasses when no thumbnail is available', ( assert ) => {
 			[
 				'mwe-popups-fade-in-down',
 				'flipped-x-y',
+				'mwe-popups-no-image-pointer',
 				'mwe-popups-is-not-tall'
 			],
 			'X and Y flipped.'
@@ -901,6 +863,7 @@ QUnit.test( '#getClasses when a non-tall thumbnail is available', ( assert ) => 
 			[
 				'mwe-popups-fade-in-down',
 				'flipped-y',
+				'mwe-popups-no-image-pointer',
 				'mwe-popups-is-not-tall'
 			],
 			'Y flipped.'
@@ -934,6 +897,7 @@ QUnit.test( '#getClasses when a non-tall thumbnail is available', ( assert ) => 
 			[
 				'mwe-popups-fade-in-down',
 				'flipped-x-y',
+				'mwe-popups-no-image-pointer',
 				'mwe-popups-is-not-tall'
 			],
 			'X and Y flipped.'
@@ -979,6 +943,7 @@ QUnit.test( '#getClasses when a tall thumbnail is available', ( assert ) => {
 			[
 				'mwe-popups-fade-in-down',
 				'flipped-y',
+				'mwe-popups-no-image-pointer',
 				'mwe-popups-is-tall'
 			],
 			'Y flipped.'
@@ -995,6 +960,7 @@ QUnit.test( '#getClasses when a tall thumbnail is available', ( assert ) => {
 			[
 				'mwe-popups-fade-in-up',
 				'flipped-x',
+				'mwe-popups-image-pointer',
 				'mwe-popups-is-tall'
 			],
 			'X flipped.'
@@ -1011,6 +977,7 @@ QUnit.test( '#getClasses when a tall thumbnail is available', ( assert ) => {
 			[
 				'mwe-popups-fade-in-down',
 				'flipped-x-y',
+				'mwe-popups-image-pointer',
 				'mwe-popups-is-tall'
 			],
 			'X and Y flipped.'
@@ -1039,12 +1006,10 @@ QUnit.test( '#layoutPreview - no thumbnail', ( assert ) => {
 		},
 		classes = [ 'some-class', 'another-class' ];
 
-	renderer.layoutPreview( preview, layout, classes, 200, 8 );
+	renderer.layoutPreview( preview, layout, classes, 200, 8, windowHeight );
 
-	assert.ok(
-		classes.every( function ( c ) {
-			return preview.el.hasClass( c );
-		} ),
+	assert.true(
+		classes.every( ( c ) => preview.el.hasClass( c ) ),
 		'Classes have been added.'
 	);
 	assert.strictEqual(
@@ -1076,12 +1041,10 @@ QUnit.test( '#layoutPreview - tall preview, flipped X, has thumbnail', function 
 		.stub( document, 'getElementById' )
 		.returns( document.createElement( 'div' ) );
 
-	renderer.layoutPreview( preview, layout, classes, 200, 8 );
+	renderer.layoutPreview( preview, layout, classes, 200, 8, windowHeight );
 
-	assert.ok(
-		classes.every( function ( c ) {
-			return preview.el.hasClass( c );
-		} ),
+	assert.true(
+		classes.every( ( c ) => preview.el.hasClass( c ) ),
 		'Classes have been added.'
 	);
 	assert.strictEqual(
@@ -1094,7 +1057,7 @@ QUnit.test( '#layoutPreview - tall preview, flipped X, has thumbnail', function 
 		`${layout.offset.left}px`,
 		'Left is correct.'
 	);
-	assert.notOk(
+	assert.false(
 		preview.el.hasClass( 'mwe-popups-no-image-pointer' ),
 		'A class has been removed.'
 	);
@@ -1122,12 +1085,10 @@ QUnit.test( '#layoutPreview - portrait preview, flipped X, has thumbnail, small 
 		.stub( document, 'getElementById' )
 		.returns( document.createElement( 'div' ) );
 
-	renderer.layoutPreview( preview, layout, classes, 200, 8 );
+	renderer.layoutPreview( preview, layout, classes, 200, 8, windowHeight );
 
-	assert.ok(
-		classes.every( function ( c ) {
-			return preview.el.hasClass( c );
-		} ),
+	assert.true(
+		classes.every( ( c ) => preview.el.hasClass( c ) ),
 		'Classes have been added.'
 	);
 	assert.strictEqual(
@@ -1169,12 +1130,10 @@ QUnit.test( '#layoutPreview - portrait preview, flipped X, has thumbnail, big he
 		.stub( document, 'getElementById' )
 		.returns( document.createElement( 'div' ) );
 
-	renderer.layoutPreview( preview, layout, classes, 200, 8 );
+	renderer.layoutPreview( preview, layout, classes, 200, 8, windowHeight );
 
-	assert.ok(
-		classes.every( function ( c ) {
-			return preview.el.hasClass( c );
-		} ),
+	assert.true(
+		classes.every( ( c ) => preview.el.hasClass( c ) ),
 		'Classes have been added.'
 	);
 	assert.strictEqual(
@@ -1199,6 +1158,124 @@ QUnit.test( '#layoutPreview - portrait preview, flipped X, has thumbnail, big he
 	);
 } );
 
+QUnit.test( '#hasPointerOnImage', ( assert ) => {
+	const cases = [
+		{
+			preview: {
+				hasThumbnail: false
+			},
+			layout: {},
+			expected: false,
+			reason: 'If no thumbnails no chance pointer will be on image'
+		},
+		{
+			preview: {
+				isTall: true,
+				hasThumbnail: true
+			},
+			layout: {
+				flippedX: false,
+				flippedY: false
+			},
+			expected: false,
+			reason: '(landscape) Pointer on left, image on right'
+		},
+		{
+			preview: {
+				isTall: true,
+				hasThumbnail: true
+			},
+			layout: {
+				flippedX: false,
+				flippedY: true
+			},
+			expected: false,
+			reason: '(landscape) Pointer on left, image on right'
+		},
+		{
+			preview: {
+				isTall: true,
+				hasThumbnail: true
+			},
+			layout: {
+				flippedX: true,
+				flippedY: true
+			},
+			expected: true,
+			reason: '(landscape) Pointer on bottom right, image on right'
+		},
+		{
+			preview: {
+				isTall: false,
+				hasThumbnail: true
+			},
+			layout: {
+				flippedX: false,
+				flippedY: false
+			},
+			expected: true,
+			reason: '(portrait) Pointer on top left, image on top'
+		},
+		{
+			preview: {
+				isTall: false,
+				hasThumbnail: true
+			},
+			layout: {
+				flippedX: true,
+				flippedY: false
+			},
+			expected: true,
+			reason: '(portrait) Pointer on top right, image on top'
+		},
+		{
+			preview: {
+				isTall: false,
+				hasThumbnail: true
+			},
+			layout: {
+				flippedX: false,
+				flippedY: true
+			},
+			expected: false,
+			reason: '(portrait) Pointer on bottom left, image on top'
+		},
+		{
+			preview: {
+				isTall: false,
+				hasThumbnail: true
+			},
+			layout: {
+				flippedX: true,
+				flippedY: true
+			},
+			expected: false,
+			reason: '(portrait) Pointer on bottom right, image on top'
+		},
+
+		{
+			preview: {
+				isTall: true,
+				hasThumbnail: true
+			},
+			layout: {
+				flippedX: true,
+				flippedY: false
+			},
+			expected: true,
+			reason: '(landscape) Pointer on top right, image on right'
+		}
+	];
+
+	cases.forEach( ( testCase ) => {
+		assert.strictEqual(
+			renderer.hasPointerOnImage( testCase.preview, testCase.layout ),
+			testCase.expected,
+			testCase.reason
+		);
+	} );
+} );
+
 QUnit.test( '#layoutPreview - tall preview, has thumbnail, flipped Y', ( assert ) => {
 	const preview = createPagePreview( true, true, { height: 200 } ),
 		layout = {
@@ -1212,28 +1289,27 @@ QUnit.test( '#layoutPreview - tall preview, has thumbnail, flipped Y', ( assert 
 		},
 		classes = [ 'some-class', 'another-class' ];
 
-	preview.el.outerHeight = () => 20;
+	renderer.layoutPreview( preview, layout, classes, 200, 8, windowHeight );
 
-	renderer.layoutPreview( preview, layout, classes, 200, 8 );
-
-	assert.ok(
-		classes.every( function ( c ) {
-			return preview.el.hasClass( c );
-		} ),
+	assert.true(
+		classes.every( ( c ) => preview.el.hasClass( c ) ),
 		'Classes have been added.'
 	);
+
 	assert.strictEqual(
-		preview.el.css( 'top' ),
-		`${layout.offset.top - 20}px`, // - outer height
-		'Top is correct.'
+		preview.el.css( 'bottom' ),
+		`${windowHeight - layout.offset.top}px`,
+		'Bottom is correct.'
 	);
+
 	assert.strictEqual(
 		preview.el.css( 'left' ),
 		`${layout.offset.left}px`,
 		'Left is correct.'
 	);
-	assert.notOk(
+	assert.strictEqual(
 		preview.el.find( 'image' ).attr( 'clip-path' ),
+		undefined,
 		'Image clip path is not set.'
 	);
 } );
@@ -1251,29 +1327,25 @@ QUnit.test( '#layoutPreview - tall preview, has thumbnail, flipped X and Y', fun
 		},
 		classes = [ 'some-class', 'another-class' ];
 
-	preview.el.outerHeight = () => 20;
-
 	this.sandbox
 		.stub( document, 'getElementById' )
 		.returns( document.createElement( 'div' ) );
 
-	renderer.layoutPreview( preview, layout, classes, 200, 8 );
+	renderer.layoutPreview( preview, layout, classes, 200, 8, windowHeight );
 
-	assert.ok(
-		classes.every( function ( c ) {
-			return preview.el.hasClass( c );
-		} ),
+	assert.true(
+		classes.every( ( c ) => preview.el.hasClass( c ) ),
 		'Classes have been added.'
-	);
-	assert.strictEqual(
-		preview.el.css( 'top' ),
-		`${layout.offset.top - 20}px`, // - outer height
-		'Top is correct.'
 	);
 	assert.strictEqual(
 		preview.el.css( 'left' ),
 		`${layout.offset.left}px`,
 		'Left is correct.'
+	);
+	assert.strictEqual(
+		preview.el.css( 'bottom' ),
+		`${windowHeight - layout.offset.top}px`,
+		'Bottom is correct.'
 	);
 	assert.strictEqual(
 		preview.el.find( 'image' ).attr( 'clip-path' ),
@@ -1295,28 +1367,25 @@ QUnit.test( '#layoutPreview - portrait preview, has thumbnail, flipped X and Y',
 		},
 		classes = [ 'some-class', 'another-class' ];
 
-	preview.el.outerHeight = () => 20;
+	renderer.layoutPreview( preview, layout, classes, 200, 8, windowHeight );
 
-	renderer.layoutPreview( preview, layout, classes, 200, 8 );
-
-	assert.ok(
-		classes.every( function ( c ) {
-			return preview.el.hasClass( c );
-		} ),
+	assert.true(
+		classes.every( ( c ) => preview.el.hasClass( c ) ),
 		'Classes have been added.'
-	);
-	assert.strictEqual(
-		preview.el.css( 'top' ),
-		`${layout.offset.top - 20}px`, // - outer height
-		'Top is correct.'
 	);
 	assert.strictEqual(
 		preview.el.css( 'left' ),
 		`${layout.offset.left}px`,
 		'Left is correct.'
 	);
-	assert.notOk(
+	assert.strictEqual(
+		preview.el.css( 'bottom' ),
+		`${windowHeight - layout.offset.top}px`,
+		'Bottom is correct.'
+	);
+	assert.strictEqual(
 		preview.el.find( 'image' ).attr( 'clip-path' ),
+		undefined,
 		'Image clip path is not set.'
 	);
 } );
@@ -1352,8 +1421,6 @@ QUnit.test( '#setThumbnailClipPath', function ( assert ) {
 				},
 				dir
 			};
-
-		// preview.el.outerHeight = () => 20;
 
 		renderer.setThumbnailClipPath( preview, layout );
 

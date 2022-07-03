@@ -1,11 +1,15 @@
 'use strict';
 
 const assert = require( 'assert' ),
-	page = require( '../pageobjects/popups.page' );
+	page = require( '../pageobjects/popups.page' ),
+	UserLoginPage = require( 'wdio-mediawiki/LoginPage' );
 
 describe( 'Dwelling on a valid reference link', function () {
 	before( function () {
 		page.setup();
+		// TODO Remove or adjust when not in Beta any more
+		UserLoginPage.loginAdmin();
+		page.shouldUseReferencePopupsBetaFeature( true );
 	} );
 
 	beforeEach( function () {
@@ -37,7 +41,7 @@ describe( 'Dwelling on a valid reference link', function () {
 			this.skip();
 		}
 		page.dwellReferenceLink( 2 );
-		assert( page.seeScrollableReferencePreview(), 'Reference preview has a fading effect' );
+		assert( page.seeScrollableReferencePreview(), 'Reference preview is scrollable' );
 		assert( page.seeFadeoutOnReferenceText(), 'Reference preview has a fading effect' );
 	} );
 

@@ -19,8 +19,8 @@
  * @ingroup extensions
  */
 
+use MediaWiki\MediaWikiServices;
 use PHPUnit\Framework\MockObject\Stub\ConsecutiveCalls;
-use Popups\EventLogging\EventLogger;
 use Popups\PopupsContext;
 use Popups\PopupsGadgetsIntegration;
 
@@ -28,11 +28,11 @@ use Popups\PopupsGadgetsIntegration;
  * @group Popups
  * @coversDefaultClass \Popups\PopupsContext
  */
-class PopupsContextTest extends MediaWikiTestCase {
+class PopupsContextTest extends MediaWikiIntegrationTestCase {
 
 	/**
 	 * Anonymous user id
-	 * @see MediaWikiTestCase::addCoreDBData()
+	 * @see MediaWikiIntegrationTestCase::addCoreDBData()
 	 */
 	private const ANONYMOUS_USER = 0;
 
@@ -40,21 +40,23 @@ class PopupsContextTest extends MediaWikiTestCase {
 	 * Helper method to quickly build Popups Context
 	 * @param ExtensionRegistry|null $registry
 	 * @param PopupsGadgetsIntegration|null $integration
-	 * @param EventLogger $eventLogger
 	 * @return PopupsContext
 	 */
-	protected function getContext( $registry = null, $integration = null, $eventLogger = null ) {
+	protected function getContext( $registry = null, $integration = null ) {
 		$config = new GlobalVarConfig();
 		$registry = $registry ?: ExtensionRegistry::getInstance();
-		if ( $eventLogger === null ) {
-			$eventLogger = $this->createMock( EventLogger::class );
-		}
 		if ( $integration === null ) {
 			$integration = $this->createMock( PopupsGadgetsIntegration::class );
 			$integration->method( 'conflictsWithNavPopupsGadget' )
 				->willReturn( false );
 		}
-		return new PopupsContext( $config, $registry, $integration, $eventLogger );
+		$userOptionsLookup = MediaWikiServices::getInstance()->getUserOptionsLookup();
+		return new PopupsContext(
+			$config,
+			$registry,
+			$integration,
+			$userOptionsLookup
+		);
 	}
 
 	/**
@@ -118,7 +120,8 @@ class PopupsContextTest extends MediaWikiTestCase {
 
 		$context = $this->getContext();
 		$user = $this->getMutableTestUser()->getUser();
-		$user->setOption( PopupsContext::PREVIEWS_OPTIN_PREFERENCE_NAME, $optIn );
+		$userOptionsManager = MediaWikiServices::getInstance()->getUserOptionsManager();
+		$userOptionsManager->setOption( $user, PopupsContext::PREVIEWS_OPTIN_PREFERENCE_NAME, $optIn );
 		$this->assertSame( $expected,
 			$context->shouldSendModuleToUser( $user ),
 			( $expected ? 'A' : 'No' ) . ' module is sent to the user.' );
@@ -264,15 +267,75 @@ class PopupsContextTest extends MediaWikiTestCase {
 	}
 
 	/**
-	 * @covers ::logUserDisabledPagePreviewsEvent
+	 * @covers ::getConfigBitmaskFromUser
+	 * @dataProvider provideTestGetConfigBitmaskFromUser
+	 * @param bool $navPops
+	 * @param bool $refTooltips
+	 * @param bool $refEnabled
+	 * @param bool $refInBeta
+	 * @param int $expected
 	 */
-	public function testLogsEvent() {
-		$loggerMock = $this->createMock( EventLogger::class );
-		$loggerMock->expects( $this->once() )
-			->method( 'log' );
+	public function testGetConfigBitmaskFromUser(
+		$navPops,
+		$refTooltips,
+		$refEnabled,
+		$refInBeta,
+		$expected
+	) {
+		$contextMock = $this->createPartialMock(
+			PopupsContext::class,
+			[
+				'conflictsWithNavPopupsGadget',
+				'conflictsWithRefTooltipsGadget',
+				'isReferencePreviewsEnabled',
+				'isReferencePreviewsInBeta',
+			]
+		);
+		$contextMock->method( 'conflictsWithNavPopupsGadget' )
+			->willReturn( $navPops );
+		$contextMock->method( 'conflictsWithRefTooltipsGadget' )
+			->willReturn( $refTooltips );
+		$contextMock->method( 'isReferencePreviewsEnabled' )
+			->willReturn( $refEnabled );
+		$contextMock->method( 'isReferencePreviewsInBeta' )
+			->willReturn( $refInBeta );
 
-		$context = $this->getContext( null, null, $loggerMock );
-		$context->logUserDisabledPagePreviewsEvent();
+		$this->assertSame(
+			$expected,
+			$contextMock->getConfigBitmaskFromUser( $this->getTestUser()->getUser() )
+		);
 	}
 
+	public function provideTestGetConfigBitmaskFromUser() {
+		return [
+			[
+				true,
+				true,
+				true,
+				true,
+				15,
+			],
+			[
+				false,
+				true,
+				false,
+				true,
+				10,
+			],
+			[
+				true,
+				false,
+				true,
+				false,
+				5,
+			],
+			[
+				false,
+				false,
+				false,
+				false,
+				0,
+			],
+		];
+	}
 }

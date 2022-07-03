@@ -8,7 +8,6 @@ export default {
 	ABANDON_START: 'ABANDON_START',
 	ABANDON_END: 'ABANDON_END',
 	LINK_CLICK: 'LINK_CLICK',
-	REFERENCE_CLICK: 'REFERENCE_CLICK',
 	/** Precedes a fetch. */
 	FETCH_START: 'FETCH_START',
 	/** Follows a successful fetch. */
@@ -24,13 +23,12 @@ export default {
 	PREVIEW_SHOW: 'PREVIEW_SHOW',
 	PREVIEW_CLICK: 'PREVIEW_CLICK',
 	/**
-		Occurs when a preview has been opened for a significant amount of time and
-		is assumed to have been viewed.
+	 * Occurs when a preview has been opened for a significant amount of time and
+	 * is assumed to have been viewed.
 	 */
 	PREVIEW_SEEN: 'PREVIEW_SEEN',
 	SETTINGS_SHOW: 'SETTINGS_SHOW',
 	SETTINGS_HIDE: 'SETTINGS_HIDE',
 	SETTINGS_CHANGE: 'SETTINGS_CHANGE',
-	EVENT_LOGGED: 'EVENT_LOGGED',
 	STATSV_LOGGED: 'STATSV_LOGGED'
 };

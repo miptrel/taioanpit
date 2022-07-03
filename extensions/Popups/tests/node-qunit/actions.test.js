@@ -30,7 +30,7 @@ QUnit.test( '#boot', ( assert ) => {
 	};
 
 	const action = actions.boot(
-		false,
+		{ page: false },
 		stubUser,
 		stubUserSettings,
 		config,
@@ -41,7 +41,7 @@ QUnit.test( '#boot', ( assert ) => {
 		action,
 		{
 			type: actionTypes.BOOT,
-			isEnabled: false,
+			initiallyEnabled: { page: false },
 			isNavPopupsEnabled: true,
 			sessionToken: '0123456789',
 			pageToken: '9876543210',
@@ -53,8 +53,7 @@ QUnit.test( '#boot', ( assert ) => {
 			},
 			user: {
 				isAnon: true,
-				editCount: 3,
-				previewCount: 22
+				editCount: 3
 			}
 		},
 		'boots with the initial state'
@@ -102,7 +101,7 @@ QUnit.module( 'ext.popups/actions#linkDwell @integration', {
 } );
 
 QUnit.test( '#linkDwell', function ( assert ) {
-	const event = {},
+	const measures = {},
 		dispatch = this.sandbox.spy();
 
 	this.sandbox.stub( mw, 'now' ).returns( new Date() );
@@ -114,7 +113,7 @@ QUnit.test( '#linkDwell', function ( assert ) {
 	};
 
 	const linkDwelled = actions.linkDwell(
-		this.title, this.el, event, /* gateway = */ null, generateToken, previewTypes.TYPE_PAGE
+		this.title, this.el, measures, null, generateToken, previewTypes.TYPE_PAGE
 	)(
 		dispatch,
 		this.getState
@@ -124,7 +123,8 @@ QUnit.test( '#linkDwell', function ( assert ) {
 		dispatch.getCall( 0 ).args[ 0 ], {
 			type: actionTypes.LINK_DWELL,
 			el: this.el,
-			event,
+			previewType: 'page',
+			measures,
 			token: 'ABC',
 			timestamp: mw.now(),
 			title: 'Foo',
@@ -136,7 +136,7 @@ QUnit.test( '#linkDwell', function ( assert ) {
 
 	// Stub the state tree being updated.
 	this.state.preview = {
-		enabled: true,
+		enabled: { page: true },
 		activeLink: this.el,
 		activeToken: generateToken()
 	};
@@ -158,7 +158,7 @@ QUnit.test( '#linkDwell doesn\'t continue when previews are disabled', function 
 
 	// Stub the state tree being updated by the LINK_DWELL action.
 	this.state.preview = {
-		enabled: false,
+		enabled: { page: false },
 		activeLink: this.el,
 		activeToken: generateToken()
 	};
@@ -191,7 +191,7 @@ QUnit.test( '#linkDwell doesn\'t continue if the token has changed', function ( 
 
 	// Stub the state tree being updated by a LINK_DWELL action.
 	this.state.preview = {
-		enabled: true,
+		enabled: { page: true },
 		activeLink: this.el,
 		activeToken: generateToken()
 	};
@@ -205,7 +205,7 @@ QUnit.test( '#linkDwell doesn\'t continue if the token has changed', function ( 
 
 	// Stub the state tree being updated by another LINK_DWELL action.
 	this.state.preview = {
-		enabled: true,
+		enabled: { page: true },
 
 		// Consider the user tabbing back and forth between two links in the time
 		// it takes to start fetching data via the gateway: the active link hasn't
@@ -229,7 +229,7 @@ QUnit.test( '#linkDwell dispatches the fetch action', function ( assert ) {
 		dispatch = this.sandbox.spy();
 
 	this.state.preview = {
-		enabled: true,
+		enabled: { page: true },
 		activeToken: generateToken()
 	};
 
@@ -279,7 +279,7 @@ QUnit.module( 'ext.popups/actions#fetch', {
 QUnit.test( 'it should fetch data from the gateway immediately', function ( assert ) {
 	this.fetch();
 
-	assert.ok(
+	assert.true(
 		this.gateway.fetchPreviewForTitle.calledWith( TEST_TITLE ),
 		'The gateway was called with the correct arguments.'
 	);
@@ -439,7 +439,7 @@ QUnit.test( 'it should dispatch start and end actions', function ( assert ) {
 
 	const abandoned = actions.abandon()( dispatch, getState );
 
-	assert.ok(
+	assert.true(
 		dispatch.calledWith( {
 			type: actionTypes.ABANDON_START,
 			timestamp: mw.now(),
@@ -450,13 +450,13 @@ QUnit.test( 'it should dispatch start and end actions', function ( assert ) {
 
 	// ---
 
-	assert.ok(
+	assert.true(
 		this.wait.calledWith( 300 ),
 		'Have you spoken with #Design about changing this value?'
 	);
 
 	return abandoned.then( () => {
-		assert.ok(
+		assert.true(
 			dispatch.calledWith( {
 				type: actionTypes.ABANDON_END,
 				token
@@ -491,21 +491,21 @@ QUnit.test( 'it should dispatch an action with previous and current enabled stat
 	const dispatch = this.sandbox.spy(),
 		getState = this.sandbox.stub().returns( {
 			preview: {
-				enabled: false
+				enabled: { page: false }
 			}
 		} );
 
-	actions.saveSettings( /* enabled = */ true )( dispatch, getState );
+	actions.saveSettings( { page: true } )( dispatch, getState );
 
-	assert.ok(
+	assert.true(
 		getState.calledOnce,
 		'it should query the global state for the current state'
 	);
-	assert.ok(
+	assert.true(
 		dispatch.calledWith( {
 			type: actionTypes.SETTINGS_CHANGE,
-			wasEnabled: false,
-			enabled: true
+			oldValue: { page: false },
+			newValue: { page: true }
 		} ),
 		'it should dispatch the action with the previous and next enabled state'
 	);
@@ -535,7 +535,7 @@ QUnit.test( 'it should dispatch the PREVIEW_SHOW action and log a pageview', fun
 	const previewShow = actions
 		.previewShow( token )( dispatch, getState );
 
-	assert.ok(
+	assert.true(
 		dispatch.calledWith( {
 			type: actionTypes.PREVIEW_SHOW,
 			token,
@@ -550,11 +550,11 @@ QUnit.test( 'it should dispatch the PREVIEW_SHOW action and log a pageview', fun
 		'It waits for PAGEVIEW_VISIBILITY_DURATION milliseconds before trigging a pageview.'
 	);
 	return previewShow.then( () => {
-		assert.ok(
+		assert.true(
 			dispatch.calledTwice,
 			'Dispatch was called twice - once for PREVIEW_SHOW then for PREVIEW_SEEN'
 		);
-		assert.ok(
+		assert.true(
 			dispatch.calledWith( {
 				type: actionTypes.PREVIEW_SEEN,
 				namespace: 0,
@@ -584,7 +584,7 @@ QUnit.test( 'PREVIEW_SEEN action not called if activeToken changes', function ( 
 		.previewShow( token )( dispatch, getState );
 
 	return previewShow.then( () => {
-		assert.ok(
+		assert.true(
 			dispatch.calledOnce,
 			'Dispatch was only called for PREVIEW_SHOW'
 		);
@@ -609,122 +609,9 @@ QUnit.test( 'PREVIEW_SEEN action not called if preview type not page', function 
 		.previewShow( token )( dispatch, getState );
 
 	return previewShow.then( () => {
-		assert.ok(
+		assert.true(
 			dispatch.calledOnce,
 			'Dispatch was only called for PREVIEW_SHOW'
-		);
-	} );
-} );
-
-QUnit.module( 'ext.popups/actions#referenceClick @integration', {
-	beforeEach() {
-		this.state = {
-			preview: {}
-		};
-		this.getState = () => this.state;
-
-		this.gatewayDeferred = $.Deferred();
-		this.gateway = {
-			fetchPreviewForTitle: this.sandbox.stub().returns(
-				this.gatewayDeferred.resolve( {} ).promise()
-			)
-		};
-
-		// lets just set this to always return 0
-		mw.now = () => 0;
-
-		setupEl( this );
-	}
-} );
-
-QUnit.test( '#referenceClick', function ( assert ) {
-	const dispatch = this.sandbox.spy();
-
-	this.sandbox.stub( mw, 'now' ).returns( new Date() );
-
-	const referenceClicked = actions.referenceClick(
-		this.title, this.el, this.gateway, generateToken
-	)(
-		dispatch,
-		this.getState
-	);
-
-	assert.propEqual(
-		dispatch.getCall( 0 ).args[ 0 ], {
-			type: actionTypes.REFERENCE_CLICK,
-			el: this.el,
-			token: 'ABC',
-			timestamp: mw.now()
-		},
-		'The dispatcher was called with the correct REFERENCE_CLICK arguments.'
-	);
-
-	return referenceClicked.then( () => {
-		assert.propEqual(
-			dispatch.getCall( 1 ).args[ 0 ], {
-				type: actionTypes.FETCH_COMPLETE,
-				el: this.el,
-				result: {},
-				token: 'ABC'
-			},
-			'The dispatcher was called with the correct FETCH_COMPLETE arguments.'
-		);
-	} );
-} );
-
-QUnit.test( '#referenceClick doesn\'t continue when clicked several times', function ( assert ) {
-	const dispatch = this.sandbox.spy();
-
-	this.state.preview = {
-		wasClicked: true
-	};
-
-	const referenceClicked = actions.referenceClick(
-		this.title, this.el, this.gateway, generateToken
-	)(
-		dispatch,
-		this.getState
-	);
-
-	return referenceClicked.then( () => {
-		assert.ok(
-			dispatch.notCalled,
-			'The dispatcher was never called.'
-		);
-	} );
-} );
-
-QUnit.test( '#referenceClick re-uses the linkDwell token if present', function ( assert ) {
-	const dispatch = this.sandbox.spy(),
-		oldDeferred = $.Deferred().promise( { abort() {} } );
-
-	this.state.preview = {
-		activeLink: this.el,
-		activeToken: 'OLD_TOKEN',
-		promise: oldDeferred
-	};
-
-	const referenceClicked = actions.referenceClick(
-		this.title, this.el, this.gateway, generateToken
-	)(
-		dispatch,
-		this.getState
-	);
-
-	assert.propEqual(
-		dispatch.getCall( 0 ).args[ 0 ], {
-			type: actionTypes.REFERENCE_CLICK,
-			el: this.el,
-			token: 'OLD_TOKEN',
-			timestamp: mw.now()
-		},
-		'The dispatcher was called with the correct REFERENCE_CLICK arguments.'
-	);
-
-	return referenceClicked.then( () => {
-		assert.ok(
-			dispatch.calledTwice,
-			'The dispatcher was called twice.'
 		);
 	} );
 } );

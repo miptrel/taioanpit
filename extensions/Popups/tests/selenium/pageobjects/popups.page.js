@@ -6,6 +6,7 @@ const
 	fs = require( 'fs' ),
 	Api = require( 'wdio-mediawiki/Api' ),
 	Page = require( 'wdio-mediawiki/Page' ),
+	Util = require( 'wdio-mediawiki/Util' ),
 	TEST_PAGE_TITLE = 'Popups test page',
 	POPUPS_SELECTOR = '.mwe-popups',
 	PAGE_POPUPS_SELECTOR = '.mwe-popups-type-page',
@@ -22,8 +23,9 @@ function makePage( title, path ) {
 			}
 			resolve( content );
 		} );
-	} ).then( ( content ) => {
-		return Api.edit( title, content );
+	} ).then( async ( content ) => {
+		const bot = await Api.bot();
+		await bot.edit( title, content );
 	} );
 }
 class PopupsPage extends Page {
@@ -38,38 +40,35 @@ class PopupsPage extends Page {
 		} );
 	}
 
-	resourceLoaderModuleStatus( moduleName, moduleStatus, errMsg ) {
-		// Word of caution: browser.waitUntil returns a Timer class NOT a Promise.
-		// Webdriver IO will run waitUntil synchronously so not returning it will
-		// block JavaScript execution while returning it will not.
-		// http://webdriver.io/api/utility/waitUntil.html
-		// https://github.com/webdriverio/webdriverio/blob/master/lib/utils/Timer.js
-		browser.waitUntil( () => {
-			const result = browser.execute( ( module ) => {
-				return typeof mw !== 'undefined' &&
-					mw.loader.getState( module.name ) === module.status;
-			}, { status: moduleStatus, name: moduleName } );
-			return result.value;
-		}, 10000, errMsg );
+	ready() {
+		Util.waitForModuleState( POPUPS_MODULE_NAME );
 	}
 
-	ready() {
-		this.resourceLoaderModuleStatus( POPUPS_MODULE_NAME, 'ready', 'Popups did not load' );
+	shouldUseReferencePopupsBetaFeature( shouldUse ) {
+		Util.waitForModuleState( 'mediawiki.base' );
+		return browser.execute( function ( use ) {
+			return mw.loader.using( 'mediawiki.api' ).then( function () {
+				return new mw.Api().saveOptions( {
+					// TODO: Remove the first option when all Beta code is gone
+					popupsreferencepreviews: use ? '1' : '0',
+					'popups-reference-previews': use ? '1' : '0'
+				} );
+			} );
+		}, shouldUse );
 	}
 
 	hasReferencePopupsEnabled() {
-		return browser.execute( function () {
-			return mw.config.get( 'wgPopupsReferencePreviews' );
-		} ).value;
+		// TODO Remove or adjust when not in Beta any more
+		return browser.execute( () => mw.config.get( 'wgPopupsReferencePreviews' ) );
 	}
 
 	abandonLink() {
-		browser.moveToObject( '#content h1' );
+		$( '#content h1' ).moveTo();
 	}
 
 	dwellLink( selector ) {
-		browser.moveToObject( selector );
-		browser.waitForExist( POPUPS_SELECTOR );
+		$( selector ).moveTo();
+		$( POPUPS_SELECTOR ).waitForExist();
 	}
 
 	dwellPageLink() {
@@ -77,7 +76,7 @@ class PopupsPage extends Page {
 	}
 
 	hoverPageLink() {
-		browser.moveToObject( PAGE_POPUPS_LINK_SELECTOR );
+		$( PAGE_POPUPS_LINK_SELECTOR ).moveTo();
 	}
 
 	dwellReferenceLink( num ) {
@@ -85,12 +84,12 @@ class PopupsPage extends Page {
 	}
 
 	dwellReferenceInceptionLink() {
-		browser.moveToObject( REFERENCE_INCEPTION_LINK_SELECTOR );
+		$( REFERENCE_INCEPTION_LINK_SELECTOR ).moveTo();
 		browser.pause( 1000 );
 	}
 
 	doNotSeePreview( selector ) {
-		return browser.waitUntil( () => !browser.isVisible( selector ) );
+		return browser.waitUntil( () => !$( selector ).isDisplayed() );
 	}
 
 	doNotSeePagePreview() {
@@ -102,7 +101,7 @@ class PopupsPage extends Page {
 	}
 
 	seePreview( selector ) {
-		return browser.isVisible( selector );
+		return $( selector ).isDisplayed();
 	}
 
 	seePagePreview() {
@@ -119,13 +118,13 @@ class PopupsPage extends Page {
 
 	seeScrollableReferencePreview() {
 		return browser.execute( () => {
-			const el = document.querySelector( '.mwe-popups-extract .mw-parser-output' );
+			const el = document.querySelector( '.mwe-popups-extract .mwe-popups-scroll' );
 			return el.scrollHeight > el.offsetHeight;
-		} ).value;
+		} );
 	}
 
 	seeFadeoutOnReferenceText() {
-		return browser.isExisting( '.mwe-popups-fade-out' );
+		return $( '.mwe-popups-fade-out' ).isExisting();
 	}
 
 	open() {

@@ -18,6 +18,7 @@
  * @ingroup extensions
  */
 
+use MediaWiki\Extension\Gadgets\GadgetRepo;
 use PHPUnit\Framework\MockObject\MockObject;
 use Popups\PopupsGadgetsIntegration;
 
@@ -69,9 +70,12 @@ class PopupsGadgetsIntegrationTest extends MediaWikiUnitTestCase {
 	 */
 	private function getConfigMock() {
 		$mock = $this->createMock( Config::class );
-		$mock->expects( $this->once() )
+		$mock->expects( $this->atLeastOnce() )
 			->method( 'get' )
-			->with( PopupsGadgetsIntegration::CONFIG_NAVIGATION_POPUPS_NAME )
+			->withConsecutive(
+				[ PopupsGadgetsIntegration::CONFIG_NAVIGATION_POPUPS_NAME ],
+				[ PopupsGadgetsIntegration::CONFIG_REFERENCE_TOOLTIPS_NAME ]
+			)
 			->willReturn( self::NAV_POPUPS_GADGET_NAME );
 		return $mock;
 	}
@@ -167,9 +171,12 @@ class PopupsGadgetsIntegrationTest extends MediaWikiUnitTestCase {
 		$user = $this->createMock( User::class );
 
 		$configMock = $this->createMock( Config::class );
-		$configMock->expects( $this->once() )
+		$configMock->expects( $this->atLeastOnce() )
 			->method( 'get' )
-			->with( PopupsGadgetsIntegration::CONFIG_NAVIGATION_POPUPS_NAME )
+			->withConsecutive(
+				[ PopupsGadgetsIntegration::CONFIG_NAVIGATION_POPUPS_NAME ],
+				[ PopupsGadgetsIntegration::CONFIG_REFERENCE_TOOLTIPS_NAME ]
+			)
 			->willReturn( $name );
 
 		$gadgetMock = $this->createMock( Gadget::class );

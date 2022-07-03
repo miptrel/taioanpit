@@ -11,14 +11,13 @@ QUnit.module( 'ext.popups/reducers#preview', {
 QUnit.test( '@@INIT', ( assert ) => {
 	const state = preview( undefined, { type: '@@INIT' } );
 
-	assert.expect( 1, 'All assertions are executed.' );
-
 	assert.deepEqual(
 		state,
 		{
-			enabled: undefined,
+			enabled: {},
 			activeLink: undefined,
-			activeEvent: undefined,
+			previewType: undefined,
+			measures: undefined,
 			activeToken: '',
 			shouldShow: false,
 			isUserDwelling: false,
@@ -31,15 +30,13 @@ QUnit.test( '@@INIT', ( assert ) => {
 QUnit.test( 'BOOT', ( assert ) => {
 	const action = {
 		type: actionTypes.BOOT,
-		isEnabled: true
+		initiallyEnabled: { page: true }
 	};
-
-	assert.expect( 1, 'All assertions are executed.' );
 
 	assert.deepEqual(
 		preview( {}, action ),
 		{
-			enabled: true
+			enabled: { page: true }
 		},
 		'It should set whether or not previews are enabled.'
 	);
@@ -48,15 +45,13 @@ QUnit.test( 'BOOT', ( assert ) => {
 QUnit.test( 'SETTINGS_CHANGE', ( assert ) => {
 	const action = {
 		type: actionTypes.SETTINGS_CHANGE,
-		enabled: true
+		newValue: { page: true }
 	};
 
-	assert.expect( 1, 'All assertions are executed.' );
-
 	assert.deepEqual(
-		preview( {}, action ),
+		preview( { enabled: {} }, action ),
 		{
-			enabled: true
+			enabled: { page: true }
 		},
 		'It should set whether or not previews are enabled when settings change.'
 	);
@@ -67,6 +62,7 @@ QUnit.test( 'LINK_DWELL initializes the state for a new link', function ( assert
 	const action = {
 		type: actionTypes.LINK_DWELL,
 		el: this.el,
+		previewType: 'page',
 		event: {},
 		token: '1234567890',
 		promise
@@ -76,7 +72,8 @@ QUnit.test( 'LINK_DWELL initializes the state for a new link', function ( assert
 		preview( {}, action ),
 		{
 			activeLink: action.el,
-			activeEvent: action.event,
+			previewType: 'page',
+			measures: action.measures,
 			activeToken: action.token,
 			shouldShow: false,
 			isUserDwelling: true,
@@ -122,8 +119,9 @@ QUnit.test( 'ABANDON_END', ( assert ) => {
 		preview( state, action ),
 		{
 			activeLink: undefined,
+			previewType: undefined,
 			activeToken: undefined,
-			activeEvent: undefined,
+			measures: undefined,
 			fetchResponse: undefined,
 			isUserDwelling: false,
 			shouldShow: false
@@ -169,8 +167,6 @@ QUnit.test( 'FETCH_COMPLETE', ( assert ) => {
 			token,
 			result: {}
 		};
-
-	assert.expect( 3, 'All assertions are executed.' );
 
 	assert.deepEqual(
 		preview( state, action ),
@@ -232,8 +228,6 @@ QUnit.test( actionTypes.FETCH_FAILED, ( assert ) => {
 		token
 	};
 
-	assert.expect( 2, 'All assertions are executed.' );
-
 	assert.deepEqual(
 		preview( state, action ),
 		{
@@ -269,8 +263,6 @@ QUnit.test( 'PREVIEW_DWELL', ( assert ) => {
 		type: actionTypes.PREVIEW_DWELL
 	};
 
-	assert.expect( 1, 'All assertions are executed.' );
-
 	assert.deepEqual(
 		preview( {}, action ),
 		{
@@ -292,24 +284,5 @@ QUnit.test( 'ABANDON_START', ( assert ) => {
 			wasClicked: false
 		},
 		'ABANDON_START should mark the preview having been abandoned.'
-	);
-} );
-
-QUnit.test( 'REFERENCE_CLICK updates the state for a click', function ( assert ) {
-	const action = {
-		type: actionTypes.REFERENCE_CLICK,
-		el: this.el,
-		token: '1234567890'
-	};
-
-	assert.deepEqual(
-		preview( {}, action ),
-		{
-			activeLink: action.el,
-			activeToken: action.token,
-			isUserDwelling: true,
-			wasClicked: true
-		},
-		'It should set active link and token as well as dwelling and click status.'
 	);
 } );
