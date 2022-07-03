@@ -1,9 +1,31 @@
 <?php
 
-use MediaWiki\Extensions\XAnalytics\XAnalytics;
+namespace MobileFrontend\Api;
+
+use ApiBase;
+use ApiMain;
+use ApiResult;
+use DerivativeContext;
+use ExtensionRegistry;
+use ExtMobileFrontend;
+use FauxRequest;
+use File;
+use ILanguageConverter;
+use ImagePage;
+use MediaWiki\Extension\XAnalytics\XAnalytics;
 use MediaWiki\MediaWikiServices;
+use Message;
+use MobileFormatter;
+use OutputPage;
 use PageImages\PageImages;
+use ParserOptions;
+use ParserOutput;
+use RequestContext;
+use Title;
+use User;
+use WANObjectCache;
 use Wikimedia\ParamValidator\ParamValidator;
+use WikiPage;
 
 /**
  * Extends Api of MediaWiki with actions for mobile devices. For further information see
@@ -13,7 +35,7 @@ class ApiMobileView extends ApiBase {
 	/**
 	 * Increment this when changing the format of cached data
 	 */
-	const CACHE_VERSION = 9;
+	private const CACHE_VERSION = 9;
 
 	/** @var bool Saves whether redirects has to be followed or not */
 	private $followRedirects;
@@ -123,8 +145,9 @@ class ApiMobileView extends ApiBase {
 
 		}
 		if ( isset( $prop['normalizedtitle'] ) && $title->getPrefixedText() != $params['page'] ) {
+			$langConverter = $this->getLanguageConverter();
 			$resultObj->addValue( null, $moduleName,
-				[ 'normalizedtitle' => $title->getPageLanguage()->convert( $title->getPrefixedText() ) ]
+				[ 'normalizedtitle' => $langConverter->convert( $title->getPrefixedText() ) ]
 			);
 		}
 
@@ -133,7 +156,7 @@ class ApiMobileView extends ApiBase {
 				'ns' => $namespace,
 			] );
 		}
-		$data = $this->getData( $title, $params['noimages'], $params['revision'] );
+		$data = $this->getData( $title, $params['revision'] );
 		$plainData = [ 'lastmodified', 'lastmodifiedby', 'revision',
 			'languagecount', 'hasvariants', 'displaytitle', 'id', 'contentmodel' ];
 		foreach ( $plainData as $name ) {
@@ -304,7 +327,7 @@ class ApiMobileView extends ApiBase {
 	/**
 	 * Small wrapper around XAnalytics extension
 	 *
-	 * @see MediaWiki\Extensions\XAnalytics\XAnalytics::addItem
+	 * @see MediaWiki\Extension\XAnalytics\XAnalytics::addItem
 	 * @param string $name
 	 * @param string $value
 	 */
@@ -325,6 +348,7 @@ class ApiMobileView extends ApiBase {
 			$this->dieWithError( [ 'apierror-invalidtitle', wfEscapeWikiText( $name ) ] );
 		}
 		$unconvertedTitle = $title->getPrefixedText();
+		// @phan-suppress-next-line PhanTypeMismatchArgumentNullable T240141 False positive
 		$this->getLanguageConverter()->findVariantLink( $name, $title );
 		if ( $unconvertedTitle !== $title->getPrefixedText() ) {
 			$values = [ 'from' => $unconvertedTitle, 'to' => $title->getPrefixedText() ];
@@ -501,7 +525,8 @@ class ApiMobileView extends ApiBase {
 	 * @return WikiPage
 	 */
 	protected function makeWikiPage( Title $title ) {
-		return WikiPage::factory( $title );
+		return MediaWikiServices::getInstance()->getWikiPageFactory()
+			->newFromTitle( $title );
 	}
 
 	/**
@@ -533,15 +558,12 @@ class ApiMobileView extends ApiBase {
 	) {
 		$data = [];
 		$data['sections'] = $parserOutput->getSections();
-		$sectionCount = count( $data['sections'] );
-		for ( $i = 0; $i < $sectionCount; $i++ ) {
-			$data['sections'][$i]['line'] =
-				$title->getPageLanguage()->convert( $data['sections'][$i]['line'] );
+		$langConverter = $this->getLanguageConverter();
+		foreach ( $data['sections'] as $sectionKey => $sectionValue ) {
+			$data['sections'][$sectionKey]['line'] = $langConverter->convert( $sectionValue['line'] );
 		}
 		$chunks = preg_split( '/<h(?=[1-6]\b)/i', $html );
 		if ( count( $chunks ) != count( $data['sections'] ) + 1 ) {
-			wfDebugLog( 'mobile', __METHOD__ . "(): mismatching number of " .
-				"sections from parser and split on page {$title->getPrefixedText()}, oldid=$revId" );
 			// We can't be sure about anything here, return all page HTML as one big section
 			$chunks = [ $html ];
 			$data['sections'] = [];
@@ -563,12 +585,11 @@ class ApiMobileView extends ApiBase {
 	/**
 	 * Get data of requested article.
 	 * @param Title $title
-	 * @param bool $noImages
 	 * @param null|int $oldid Revision ID to get the text from, passing null or 0 will
 	 *   get the current revision (default value)
 	 * @return array
 	 */
-	private function getData( Title $title, $noImages, $oldid = null ) {
+	private function getData( Title $title, $oldid = null ) {
 		$result = $this->getResult();
 		$wikiPage = $this->makeWikiPage( $title );
 		if ( $this->followRedirects && $wikiPage->isRedirect() ) {
@@ -603,7 +624,6 @@ class ApiMobileView extends ApiBase {
 			$parserOptions = null;
 			$key = $cache->makeKey(
 				'mf-mobileview',
-				(int)$noImages,
 				$touched,
 				(int)$this->noTransform,
 				$this->file->getSha1(),
@@ -616,13 +636,17 @@ class ApiMobileView extends ApiBase {
 				$this->dieWithError( [ 'apierror-missingtitle' ] );
 			}
 			$parserOptions = $this->makeParserOptions( $wikiPage );
+			$parserCacheMetadata = $services->getParserCache()->getMetadata( $wikiPage );
 			$key = $cache->makeKey(
 				'mf-mobileview',
-				(int)$noImages,
+				$wikiPage->getId(),
 				$touched,
 				$revId,
 				(int)$this->noTransform,
-				$services->getParserCache()->getKey( $wikiPage, $parserOptions )
+				$parserOptions->optionsHash(
+					$parserCacheMetadata ? $parserCacheMetadata->getUsedOptions() :
+						ParserOptions::allCacheVaryingOptions()
+				)
 			);
 		}
 
@@ -631,7 +655,7 @@ class ApiMobileView extends ApiBase {
 			$key,
 			$cache::TTL_HOUR,
 			function ( $oldValue, &$ttl ) use (
-				$title, $revId, $noImages, $wikiPage, $parserOptions, $latest, &$miss
+				$title, $revId, $wikiPage, $parserOptions, $latest, &$miss
 			) {
 				$miss = true;
 
@@ -640,12 +664,12 @@ class ApiMobileView extends ApiBase {
 				$context = $services->getService( 'MobileFrontend.Context' );
 
 				$mfMinCachedPageSize = $config->get( 'MFMinCachedPageSize' );
-				$mfSpecialCaseMainPage = $config->get( 'MFSpecialCaseMainPage' );
 
 				if ( $this->file ) {
 					$parserOutput = null;
 					$html = $this->getFilePage( $title );
 				} else {
+					// @phan-suppress-next-line PhanTypeMismatchArgumentNullable
 					$parserOutput = $this->getParserOutput( $wikiPage, $parserOptions, $revId );
 					if ( $parserOutput === false ) {
 						$this->dieWithError( 'apierror-mobilefrontend-badidtitle', 'invalidparams' );
@@ -658,9 +682,7 @@ class ApiMobileView extends ApiBase {
 					$mf = new MobileFormatter(
 						MobileFormatter::wrapHTML( $html ), $title, $config, $context
 					);
-					$mf->setRemoveMedia( $noImages );
-					$mf->setIsMainPage( $this->mainPage && $mfSpecialCaseMainPage );
-					$mf->filterContent();
+					$mf->applyTransforms( [] );
 					$html = $mf->getText();
 				}
 
@@ -671,6 +693,7 @@ class ApiMobileView extends ApiBase {
 						'refsections' => [],
 					];
 				} else {
+					// @phan-suppress-next-line PhanTypeMismatchArgumentNullable
 					$data = $this->parseSectionsData( $html, $title, $parserOutput, $latest );
 					if ( $this->usePageImages ) {
 						$image = $this->getPageImage( $title );
@@ -701,7 +724,7 @@ class ApiMobileView extends ApiBase {
 					$data['languagecount'] = count( $languages );
 					$data['displaytitle'] = $parserOutput->getDisplayTitle();
 					// @fixme: Does no work for some extension properties that get added in LinksUpdate
-					$data['pageprops'] = $parserOutput->getProperties();
+					$data['pageprops'] = $parserOutput->getPageProperties();
 				} else {
 					$data['languagecount'] = 0;
 					$data['displaytitle'] = htmlspecialchars( $title->getPrefixedText() );
@@ -710,7 +733,8 @@ class ApiMobileView extends ApiBase {
 
 				$data['contentmodel'] = $title->getContentModel();
 
-				if ( $title->getPageLanguage()->hasVariants() ) {
+				$langHasVariants = $this->getLanguageConverter()->hasVariants();
+				if ( $langHasVariants ) {
 					$data['hasvariants'] = true;
 				}
 
@@ -941,7 +965,6 @@ class ApiMobileView extends ApiBase {
 				ApiBase::PARAM_TYPE => 'string',
 				ParamValidator::PARAM_DEFAULT => '',
 			],
-			'noimages' => false,
 			'noheadings' => false,
 			'notransform' => false,
 			'onlyrequestedsections' => false,
@@ -1000,7 +1023,7 @@ class ApiMobileView extends ApiBase {
 	 * @since 1.35
 	 * @return ILanguageConverter
 	 */
-	private function getLanguageConverter() : ILanguageConverter {
+	private function getLanguageConverter(): ILanguageConverter {
 		$services = MediaWikiServices::getInstance();
 		return $services
 			->getLanguageConverterFactory()

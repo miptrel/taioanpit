@@ -5,10 +5,10 @@ use Wikimedia\Rdbms\FakeResultWrapper;
 /**
  * @group MobileFrontend
  */
-class SpecialMobileWatchlistTest extends MediaWikiTestCase {
+class SpecialMobileWatchlistTest extends MediaWikiIntegrationTestCase {
 	/**
-	 * @dataProvider provideAddWatchlistHTML
 	 * @covers SpecialMobileWatchlist::addWatchlistHTML
+	 * @dataProvider provideAddWatchlistHTML
 	 */
 	public function testAddWatchlistHTML( $results, $expected, $msg ) {
 		$context = new DerivativeContext( RequestContext::getMain() );

@@ -1,10 +1,13 @@
 <?php
 
+use MobileFrontend\Models\MobileCollection;
+use MobileFrontend\Models\MobilePage;
+
 /**
  * @group MobileFrontend
- * @coversDefaultClass MobileCollection
+ * @coversDefaultClass \MobileFrontend\Models\MobileCollection
  */
-class MobileCollectionTest extends MediaWikiTestCase {
+class MobileCollectionTest extends MediaWikiIntegrationTestCase {
 	/**
 	 * @covers ::count
 	 */

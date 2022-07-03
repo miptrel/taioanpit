@@ -3,6 +3,7 @@ var browser = require( './Browser' ).getSingleton(),
 	escapeHash = util.escapeHash,
 	arrowOptions = {
 		name: 'expand',
+		type: '',
 		isSmall: true,
 		additionalClassNames: 'indicator mw-ui-icon-flush-left'
 	},
@@ -41,24 +42,25 @@ function Toggler( options ) {
  * @return {Object} representing open sections
  */
 function getExpandedSections( page ) {
-	var expandedSections = JSON.parse( mw.storage.get( 'expandedSections' ) || '{}' );
+	var expandedSections = mw.storage.session.getObject( 'expandedSections' ) || {};
 	expandedSections[page.title] = expandedSections[page.title] || {};
 	return expandedSections;
 }
 
 /**
+ * Save expandedSections to sessionStorage
+ *
  * @param {Object} expandedSections
- * Save expandedSections to localStorage
  */
 function saveExpandedSections( expandedSections ) {
-	mw.storage.set(
-		'expandedSections', JSON.stringify( expandedSections )
+	mw.storage.session.setObject(
+		'expandedSections', expandedSections
 	);
 }
 
 /**
- * Given an expanded heading, store it to localStorage.
- * If the heading is collapsed, remove it from localStorage.
+ * Given an expanded heading, store it to sessionStorage.
+ * If the heading is collapsed, remove it from sessionStorage.
  *
  * @param {jQuery.Object} $heading - A heading belonging to a section
  * @param {Page} page
@@ -68,9 +70,9 @@ function storeSectionToggleState( $heading, page ) {
 		isSectionOpen = $heading.hasClass( 'open-block' ),
 		expandedSections = getExpandedSections( page );
 
-	if ( headline ) {
+	if ( headline && expandedSections[page.title] ) {
 		if ( isSectionOpen ) {
-			expandedSections[page.title][headline] = ( new Date() ).getTime();
+			expandedSections[page.title][headline] = true;
 		} else {
 			delete expandedSections[page.title][headline];
 		}
@@ -102,31 +104,6 @@ function expandStoredSections( toggler, $container, page ) {
 			toggler.toggle( $sectionHeading, page );
 		}
 	} );
-}
-
-/**
- * Clean obsolete (saved more than a day ago) expanded sections from
- * localStorage.
- *
- * @param {Page} page
- */
-function cleanObsoleteStoredSections( page ) {
-	var now = ( new Date() ).getTime(),
-		expandedSections = getExpandedSections( page ),
-		// the number of days between now and the time a setting was saved
-		daysDifference;
-	Object.keys( expandedSections ).forEach( function ( page ) {
-		var sections = expandedSections[ page ];
-		// clean the setting if it is more than a day old
-		Object.keys( sections ).forEach( function ( section ) {
-			var timestamp = sections[ section ];
-			daysDifference = Math.floor( ( now - timestamp ) / 1000 / 60 / 60 / 24 );
-			if ( daysDifference >= 1 ) {
-				delete expandedSections[page][section];
-			}
-		} );
-	} );
-	saveExpandedSections( expandedSections );
 }
 
 /**
@@ -257,6 +234,7 @@ Toggler.prototype._enable = function ( $container, prefix, page, isClosed ) {
 		// Old default behavior if on cached output
 		collapseSectionsByDefault = true;
 	}
+	// NB: 'expandSections' uses localStorage, unlike 'expandedSections' which uses sessionStorage
 	expandSections = !collapseSectionsByDefault || mw.storage.get( 'expandSections' ) === 'true';
 
 	$container.children( tagName ).each( function ( i ) {
@@ -334,10 +312,16 @@ Toggler.prototype._enable = function ( $container, prefix, page, isClosed ) {
 	 */
 	function checkHash() {
 		var hash = window.location.hash;
+		var decodedHash;
 		if ( hash.indexOf( '#' ) === 0 ) {
 			// Non-latin characters in the hash will be provided percent-encoded, which
 			// jQuery would later fail to cope with.
-			self.reveal( decodeURIComponent( hash ), $container, page );
+			try {
+				decodedHash = decodeURIComponent( hash );
+				self.reveal( decodedHash, $container, page );
+			} catch ( e ) {
+				// sometimes decoding will fail e.g. T262599, T264914. If that happens ignore.
+			}
 		}
 	}
 
@@ -378,12 +362,10 @@ Toggler.prototype._enable = function ( $container, prefix, page, isClosed ) {
 
 	if ( !browser.isWideScreen() && page ) {
 		expandStoredSections( this, $container, page );
-		cleanObsoleteStoredSections( page );
 	}
 };
 
 Toggler._getExpandedSections = getExpandedSections;
 Toggler._expandStoredSections = expandStoredSections;
-Toggler._cleanObsoleteStoredSections = cleanObsoleteStoredSections;
 
 module.exports = Toggler;

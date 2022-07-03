@@ -1,6 +1,8 @@
 <?php
 
 use MediaWiki\MediaWikiServices;
+use MobileFrontend\Models\MobileCollection;
+use MobileFrontend\Models\MobilePage;
 
 /**
  * The mobile version of the watchlist editing page.
@@ -86,17 +88,15 @@ class SpecialMobileEditWatchlist extends SpecialEditWatchlist {
 	/**
 	 * The main entry point for the page.
 	 *
-	 * @param int $mode Whether the user is viewing, editing, or clearing their
+	 * @param string|null $mode Whether the user is viewing, editing, or clearing their
 	 *  watchlist
-	 * @suppress PhanParamSignatureMismatch It is identical
 	 */
 	public function execute( $mode ) {
 		// Anons don't get a watchlist edit
 		$this->requireLogin( 'mobile-frontend-watchlist-purpose' );
 
 		$out = $this->getOutput();
-		// turn off #bodyContent element
-		$out->setProperty( 'unstyledContent', true );
+		$out->addBodyClasses( 'mw-mf-special-page' );
 		parent::execute( $mode );
 		$out->setPageTitle( $this->msg( 'watchlist' ) );
 	}
@@ -201,7 +201,7 @@ class SpecialMobileEditWatchlist extends SpecialEditWatchlist {
 			$mobilePages->add( $page );
 		}
 
-		if ( count( $mobilePages ) === 0 ) {
+		if ( $mobilePages->isEmpty() ) {
 			$html = SpecialMobileWatchlist::getEmptyListHtml( false, $this->getLanguage() );
 		} else {
 			$html = $this->getViewHtml( $mobilePages );

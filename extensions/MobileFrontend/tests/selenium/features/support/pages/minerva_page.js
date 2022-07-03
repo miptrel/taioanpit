@@ -40,16 +40,16 @@ class MinervaPage extends Page {
 		const currentPage = browser.getUrl(),
 			// some cookies might require a valid expiry date.
 			// setting to 1 hour from now.
-			cookieExpiryTime = new Date().getTime() + ( 3600 * 1000 );
+			cookieExpiryTime = Date.now() + ( 3600 * 1000 );
 
 		if ( !currentPage.includes( browser.options.baseUrl ) ) {
 			this.open();
 		}
 
-		const cookie = browser.getCookie( name );
+		const cookie = browser.getCookies( name );
 
 		if ( !cookie || cookie.value !== value ) {
-			browser.setCookie( {
+			browser.setCookies( {
 				name: name,
 				value: value,
 				expiry: cookieExpiryTime
@@ -85,7 +85,7 @@ class MinervaPage extends Page {
 			const state = browser.execute( ( m ) => {
 				return mw.loader.getState( m );
 			}, moduleName );
-			return state.value === 'ready';
+			return state === 'ready';
 		} );
 	}
 }

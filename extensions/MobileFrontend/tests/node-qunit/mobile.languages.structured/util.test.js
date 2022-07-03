@@ -205,7 +205,7 @@ QUnit.test( '#getFrequentlyUsedLanguages', function ( assert ) {
 
 QUnit.test( '#saveLanguageUsageCount', function ( assert ) {
 	util.saveLanguageUsageCount( 'ko', util.getFrequentlyUsedLanguages() );
-	assert.ok( this.saveSpy.calledWith( {
+	assert.true( this.saveSpy.calledWith( {
 		zh: 2,
 		ko: 2
 	} ), 'Frequently used language is correctly saved.' );
@@ -213,7 +213,7 @@ QUnit.test( '#saveLanguageUsageCount', function ( assert ) {
 
 QUnit.test( '#getStructuredLanguages', function ( assert ) {
 	const result = util.getStructuredLanguages(
-		this.apiLanguages, false, this.frequentlyUsedLanguages, this.deviceLanguage
+		this.apiLanguages, false, this.frequentlyUsedLanguages, true, this.deviceLanguage
 	);
 
 	assert.propEqual(
@@ -225,7 +225,7 @@ QUnit.test( '#getStructuredLanguages', function ( assert ) {
 
 QUnit.test( '#getStructuredLanguages device language', function ( assert ) {
 	const result =
-		util.getStructuredLanguages( this.apiLanguages, false, {}, 'es-lx' ).suggested[0].lang;
+		util.getStructuredLanguages( this.apiLanguages, false, {}, true, 'es-lx' ).suggested[0].lang;
 
 	// device language is a variant and only the parent language is available
 	assert.strictEqual(
@@ -239,13 +239,13 @@ QUnit.test( '#getStructuredLanguages variants', function ( assert ) {
 	const variantsMap = {};
 
 	const suggestedLanguages = util.getStructuredLanguages(
-		this.apiLanguages, this.apiVariants, {}, this.deviceLanguage
+		this.apiLanguages, this.apiVariants, {}, true, this.deviceLanguage
 	).suggested;
 	this.apiVariants.forEach( function ( variant ) {
 		variantsMap[ variant.lang ] = variant;
 	} );
 	suggestedLanguages.forEach( function ( suggestedLanguage ) {
-		assert.ok(
+		assert.true(
 			Object.prototype.hasOwnProperty.call( variantsMap, suggestedLanguage.lang ),
 			'Variant "' + suggestedLanguage.lang + '" is in the list of suggested languages.'
 		);

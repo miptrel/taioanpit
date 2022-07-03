@@ -5,6 +5,7 @@ var storage = mw.storage,
 	amcOutreach = require( './mobile.startup/amcOutreach/amcOutreach' ),
 	EXPAND_SECTIONS_KEY = 'expandSections',
 	msg = mw.msg,
+	{ USER_FONT_SIZE_REGULAR } = require( './constants.js' ),
 	FONT_SIZE_KEY = 'userFontSize';
 
 /**
@@ -50,7 +51,7 @@ function addFontChangerToForm( $form ) {
 		currentFontSize = storage.get( FONT_SIZE_KEY );
 
 	fontChangerDropdown = new OO.ui.DropdownInputWidget( {
-		value: currentFontSize || 'regular',
+		value: currentFontSize || USER_FONT_SIZE_REGULAR,
 		options: [
 			{
 				data: 'small',
@@ -209,7 +210,10 @@ function initMobileOptions() {
 	if (
 		// Don't show this option on large screens since it's only honored for small screens.
 		// This logic should be kept in sync with Toggle._enable().
-		!browser.isWideScreen()
+		!browser.isWideScreen() &&
+		// don't add the option if the sections are set by default as the setting doesn't
+		// work in the opposite direction! (more background on T239195)
+		mw.config.get( 'wgMFCollapseSectionsByDefault' )
 	) {
 		addExpandAllSectionsToForm( $form );
 	}

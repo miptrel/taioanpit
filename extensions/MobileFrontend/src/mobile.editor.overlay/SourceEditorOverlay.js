@@ -6,6 +6,7 @@ var EditorOverlayBase = require( './EditorOverlayBase' ),
 	EditorGateway = require( './EditorGateway' ),
 	fakeToolbar = require( '../mobile.init/fakeToolbar' ),
 	mfExtend = require( '../mobile.startup/mfExtend' ),
+	setPreferredEditor = require( './setPreferredEditor' ),
 	VisualEditorOverlay = require( './VisualEditorOverlay' );
 
 /**
@@ -208,7 +209,8 @@ mfExtend( SourceEditorOverlay, EditorOverlayBase, {
 		this.$content.addClass( 'mw-editfont-' + mw.user.options.get( 'editfont' ) );
 		if ( showAnonWarning ) {
 			this.$anonWarning = this.createAnonWarning( options );
-			this.$el.find( '.editor-container' ).append( this.$anonWarning );
+			this.$anonTalkWarning = this.createAnonTalkWarning();
+			this.$el.find( '.editor-container' ).append( [ this.$anonTalkWarning, this.$anonWarning ] );
 			this.$content.hide();
 			// the user has to click login, signup or edit without login,
 			// disable "Next" button on top right
@@ -264,6 +266,7 @@ mfExtend( SourceEditorOverlay, EditorOverlayBase, {
 	 */
 	onClickAnonymous: function () {
 		this.$anonWarning.hide();
+		this.$anonTalkWarning.hide();
 		// reenable "Next" button
 		this.$anonHiddenButtons.show();
 		this._loadContent();
@@ -309,7 +312,9 @@ mfExtend( SourceEditorOverlay, EditorOverlayBase, {
 
 			hideSpinnerAndShowPreview();
 		}, function () {
-			self.$preview.addClass( 'errorbox' ).text( mw.msg( 'mobile-frontend-editor-error-preview' ) );
+			self.$preview.addClass(
+				'mw-message-box mw-message-box-error'
+			).text( mw.msg( 'mobile-frontend-editor-error-preview' ) );
 
 			hideSpinnerAndShowPreview();
 		} );
@@ -327,7 +332,9 @@ mfExtend( SourceEditorOverlay, EditorOverlayBase, {
 	_hidePreview: function () {
 		this.gateway.abortPreview();
 		this.hideSpinner();
-		this.$preview.removeClass( 'errorbox' ).hide();
+		this.$preview.removeClass(
+			'mw-message-box-error'
+		).hide();
 		this.$content.show();
 		window.scrollTo( 0, this.scrollTop );
 		this.showHidden( '.initial-header' );
@@ -438,7 +445,7 @@ mfExtend( SourceEditorOverlay, EditorOverlayBase, {
 		} );
 
 		// Save a user setting indicating that this user prefers using the VisualEditor
-		mw.storage.set( 'preferredEditor', 'VisualEditor' );
+		setPreferredEditor( 'VisualEditor' );
 
 		this.$el.addClass( 'switching' );
 		this.$el.find( '.overlay-header-container' ).hide();

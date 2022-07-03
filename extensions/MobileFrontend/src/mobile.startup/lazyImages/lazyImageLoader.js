@@ -43,6 +43,7 @@ function loadImage( placeholder ) {
 	// eslint-disable-next-line mediawiki/class-doc
 	image.className = placeholder.dataset.class || '';
 	image.alt = placeholder.dataset.alt || '';
+	image.useMap = placeholder.dataset.usemap;
 	image.style.cssText = placeholder.style.cssText || '';
 
 	// When the image has loaded
@@ -56,6 +57,10 @@ function loadImage( placeholder ) {
 		deferred.resolve( 'load' );
 	}, { once: true } );
 	image.addEventListener( 'error', function () {
+		// Swap the HTML and let the browser decide what to do with the broken image.
+		if ( placeholder.parentNode ) {
+			placeholder.parentNode.replaceChild( image, placeholder );
+		}
 		// Never reject. Quietly resolve so that Promise.all() awaits for all Deferreds to complete.
 		// Reevaluate using Deferred.reject in T136693.
 		deferred.resolve( 'error' );

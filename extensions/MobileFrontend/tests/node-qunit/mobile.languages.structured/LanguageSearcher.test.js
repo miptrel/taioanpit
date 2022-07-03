@@ -103,6 +103,7 @@ QUnit.module( 'MobileFrontend LanguageSearcher.js', {
 		this.languageSearcher = new LanguageSearcher( {
 			languages: apiLanguages,
 			variants: variants,
+			showSuggestedLanguages: true,
 			deviceLanguage: deviceLanguage
 		} );
 	},
@@ -143,6 +144,7 @@ QUnit.test( 'without variants, input event filters languages', function ( assert
 	const languageSearcher = new LanguageSearcher( {
 		languages: apiLanguages,
 		variants: false,
+		showSuggestedLanguages: true,
 		deviceLanguage: deviceLanguage
 	} );
 
@@ -161,7 +163,7 @@ QUnit.test( 'without variants, input event filters languages', function ( assert
 	);
 
 	enterText( languageSearcher, 'chin' );
-	assert.ok(
+	assert.true(
 		languageSearcher.$el.find( '.site-link-list a:not(.hidden)' ).length === 1 &&
 		languageSearcher.$el.find( '.site-link-list a:not(.hidden)' ).hasClass( 'zh-min-nan' ),
 		'One language (zh-min-nan) matches "Chin" (langname) and only that language is visible.'
@@ -191,14 +193,14 @@ QUnit.test( 'with variants, input event filters languages', function ( assert ) 
 	);
 
 	enterText( this.languageSearcher, 'ol' );
-	assert.ok(
+	assert.true(
 		this.languageSearcher.$el.find( '.site-link-list a:not(.hidden)' ).length === 1 &&
 		this.languageSearcher.$el.find( '.site-link-list a:not(.hidden)' ).hasClass( 'be-x-old' ),
 		'One language (be-x-old) matches "ol" and only that language is visible.'
 	);
 
 	enterText( this.languageSearcher, 'chin' );
-	assert.ok(
+	assert.true(
 		this.languageSearcher.$el.find( '.site-link-list a:not(.hidden)' ).length === 1 &&
 		this.languageSearcher.$el.find( '.site-link-list a:not(.hidden)' ).hasClass( 'zh-min-nan' ),
 		'One language (zh-min-nan) matches "Chin" (langname) and only that language is visible.'

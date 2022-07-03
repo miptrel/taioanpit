@@ -5,15 +5,15 @@ use MediaWiki\MediaWikiServices;
 /**
  * @group MobileFrontend
  */
-class MobileFrontendHooksTest extends MediaWikiTestCase {
-	protected function setUp() : void {
+class MobileFrontendHooksTest extends MediaWikiIntegrationTestCase {
+	protected function setUp(): void {
 		parent::setUp();
 
 		MobileContext::resetInstanceForTesting();
 	}
 
 	/**
-	 * Test findTagLine when output has no wikibase elements
+	 * Test findTagline when output has no wikibase elements
 	 *
 	 * @covers MobileFrontendHooks::findTagline
 	 */
@@ -22,17 +22,17 @@ class MobileFrontendHooksTest extends MediaWikiTestCase {
 		$fallback = function () {
 			$this->fail( 'Fallback shouldn\'t be called' );
 		};
-		$this->assertFalse( MobileFrontendHooks::findTagline( $po, $fallback ) );
+		$this->assertNull( MobileFrontendHooks::findTagline( $po, $fallback ) );
 	}
 
 	/**
-	 * Test findTagLine when output has no wikibase elements
+	 * Test findTagline when output has no wikibase elements
 	 *
 	 * @covers MobileFrontendHooks::findTagline
 	 */
 	public function testFindTaglineWhenItemIsNotPresent() {
 		$poWithDesc = new ParserOutput();
-		$poWithDesc->setProperty( 'wikibase-shortdesc', 'desc' );
+		$poWithDesc->setPageProperty( 'wikibase-shortdesc', 'desc' );
 
 		$fallback = function () {
 			$this->fail( 'Fallback shouldn\'t be called' );
@@ -41,7 +41,7 @@ class MobileFrontendHooksTest extends MediaWikiTestCase {
 	}
 
 	/**
-	 * Test findTagLine when output has no wikibase elements
+	 * Test findTagline when output has no wikibase elements
 	 *
 	 * @covers MobileFrontendHooks::findTagline
 	 */
@@ -52,7 +52,7 @@ class MobileFrontendHooksTest extends MediaWikiTestCase {
 		};
 
 		$poWithItem = new ParserOutput();
-		$poWithItem->setProperty( 'wikibase_item', 'W2' );
+		$poWithItem->setPageProperty( 'wikibase_item', 'W2' );
 		$this->assertSame(
 			'Hello Wikidata',
 			MobileFrontendHooks::findTagline( $poWithItem, $fallback )
@@ -60,7 +60,7 @@ class MobileFrontendHooksTest extends MediaWikiTestCase {
 	}
 
 	/**
-	 * Test findTagLine when output has no wikibase elements
+	 * Test findTagline when output has no wikibase elements
 	 *
 	 * @covers MobileFrontendHooks::findTagline
 	 */
@@ -70,8 +70,8 @@ class MobileFrontendHooksTest extends MediaWikiTestCase {
 		};
 
 		$poWithBoth = new ParserOutput();
-		$poWithBoth->setProperty( 'wikibase-shortdesc', 'Hello world' );
-		$poWithBoth->setProperty( 'wikibase_item', 'W2' );
+		$poWithBoth->setPageProperty( 'wikibase-shortdesc', 'Hello world' );
+		$poWithBoth->setPageProperty( 'wikibase_item', 'W2' );
 		$this->assertSame(
 			'Hello world',
 			MobileFrontendHooks::findTagline( $poWithBoth, $fallback )
@@ -81,8 +81,8 @@ class MobileFrontendHooksTest extends MediaWikiTestCase {
 	/**
 	 * Test headers and alternate/canonical links to be set or not
 	 *
-	 * @dataProvider onBeforePageDisplayDataProvider
 	 * @covers MobileFrontendHooks::onBeforePageDisplay
+	 * @dataProvider onBeforePageDisplayDataProvider
 	 */
 	public function testOnBeforePageDisplay( $mobileUrlTemplate, $mfNoindexPages,
 		$mfEnableXAnalyticsLogging, $mfAutoDetectMobileView, $mfVaryOnUA, $mfXAnalyticsItems,
@@ -157,7 +157,7 @@ class MobileFrontendHooksTest extends MediaWikiTestCase {
 	 *
 	 * @param string $mode The mode for the test cases (desktop, mobile)
 	 * @param array $mfXAnalyticsItems
-	 * @param Title $title
+	 * @param Title|null $title
 	 * @return array Array of objects, including MobileContext (context),
 	 * SkinTemplate (sk) and OutputPage (out)
 	 */
@@ -227,7 +227,8 @@ class MobileFrontendHooksTest extends MediaWikiTestCase {
 		] );
 		$title = Title::newFromText( 'PurgeTest' );
 
-		$urls = $title->getCdnUrls();
+		$htmlCacheUpdater = MediaWikiServices::getInstance()->getHtmlCacheUpdater();
+		$urls = $htmlCacheUpdater->getUrls( $title );
 
 		$expected = [
 			'http://en.wikipedia.org/wiki/PurgeTest',
@@ -240,8 +241,8 @@ class MobileFrontendHooksTest extends MediaWikiTestCase {
 	}
 
 	/**
-	 * @dataProvider provideOnPageRenderingHash
 	 * @covers MobileFrontendHooks::onPageRenderingHash
+	 * @dataProvider provideOnPageRenderingHash
 	 */
 	public function testOnPageRenderingHash(
 		$shouldConfstrChange,
@@ -305,8 +306,8 @@ class MobileFrontendHooksTest extends MediaWikiTestCase {
 	}
 
 	/**
-	 * @dataProvider provideShouldMobileFormatSpecialPages
 	 * @covers MobileFrontendHooks::shouldMobileFormatSpecialPages
+	 * @dataProvider provideShouldMobileFormatSpecialPages
 	 */
 	public function testShouldMobileFormatSpecialPages(
 		$expected,
@@ -321,10 +322,17 @@ class MobileFrontendHooksTest extends MediaWikiTestCase {
 
 		$user = $isAnon ? new User() : $this->getMutableTestUser()->getUser();
 		if ( !$isAnon && $userpref ) {
-			$user->setOption( MobileFrontendHooks::MOBILE_PREFERENCES_SPECIAL_PAGES, true );
+			$userOptionsManager = MediaWikiServices::getInstance()->getUserOptionsManager();
+			$userOptionsManager->setOption(
+				$user,
+				MobileFrontendHooks::MOBILE_PREFERENCES_SPECIAL_PAGES,
+				true
+			);
 		}
-		$this->assertSame( $expected,
-			MobileFrontendHooks::shouldMobileFormatSpecialPages( $user ) );
+		$this->assertSame(
+			$expected,
+			MobileFrontendHooks::shouldMobileFormatSpecialPages( $user )
+		);
 	}
 
 	public static function provideOnPageRenderingHash() {
@@ -335,8 +343,8 @@ class MobileFrontendHooksTest extends MediaWikiTestCase {
 	}
 
 	/**
-	 * @dataProvider provideDoThumbnailBeforeProduceHTML
 	 * @covers MobileFrontendHooks::onPageRenderingHash
+	 * @dataProvider provideDoThumbnailBeforeProduceHTML
 	 */
 	public function testDoThumbnailBeforeProduceHTML(
 		$expected,
@@ -377,6 +385,7 @@ class MobileFrontendHooksTest extends MediaWikiTestCase {
 	/**
 	 * Creates an instance of `File` which has the given MIME type.
 	 *
+	 * @param string $mimeType
 	 * @return File
 	 */
 	private function factoryFile( $mimeType ) {

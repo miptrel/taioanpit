@@ -5,7 +5,7 @@ use MediaWiki\MediaWikiServices;
 /**
  * @group MobileFrontend
  */
-class MobileContextTest extends MediaWikiTestCase {
+class MobileContextTest extends MediaWikiIntegrationTestCase {
 	/**
 	 * PHP 5.3.2 introduces the ReflectionMethod::setAccessible() method to allow the invocation of
 	 * protected and private methods directly through the Reflection API
@@ -21,7 +21,7 @@ class MobileContextTest extends MediaWikiTestCase {
 		return $method;
 	}
 
-	protected function tearDown() : void {
+	protected function tearDown(): void {
 		parent::tearDown();
 
 		MobileContext::resetInstanceForTesting();
@@ -67,17 +67,16 @@ class MobileContextTest extends MediaWikiTestCase {
 		] );
 		$invokes = 0;
 		$context = $this->makeContext();
-		$asserter = $this;
-		$this->setMwGlobals( 'wgHooks',
-			[ 'GetMobileUrl' => [ function ( &$string, $hookCtx ) use (
-					$asserter,
+		$this->setTemporaryHook(
+			'GetMobileUrl',
+			function ( &$string, $hookCtx ) use (
 					&$invokes,
 					$context
 				) {
-					$asserter->assertEquals( $context, $hookCtx );
+					$this->assertEquals( $context, $hookCtx );
 					$invokes++;
-			} ]
-		] );
+			}
+		);
 		$context->getRequest()->setHeader( 'X-Subdomain', 'M' );
 		$this->assertEquals(
 			'http://en.m.wikipedia.org/wiki/Article',
@@ -116,8 +115,8 @@ class MobileContextTest extends MediaWikiTestCase {
 	}
 
 	/**
-	 * @dataProvider updateMobileUrlHostProvider
 	 * @covers MobileContext::updateMobileUrlHost
+	 * @dataProvider updateMobileUrlHostProvider
 	 */
 	public function testUpdateMobileUrlHost( $url, $expected, $urlTemplate ) {
 		$updateMobileUrlHost = self::getMethod( "updateMobileUrlHost" );
@@ -157,8 +156,8 @@ class MobileContextTest extends MediaWikiTestCase {
 	}
 
 	/**
-	 * @dataProvider updateDesktopUrlQueryProvider
 	 * @covers MobileContext::updateDesktopUrlQuery
+	 * @dataProvider updateDesktopUrlQueryProvider
 	 */
 	public function testUpdateDesktopUrlQuery( $mobile, $desktop ) {
 		$updateDesktopUrlQuery = self::getMethod( "updateDesktopUrlQuery" );
@@ -180,8 +179,8 @@ class MobileContextTest extends MediaWikiTestCase {
 	}
 
 	/**
-	 * @dataProvider updateDesktopUrlHostProvider
 	 * @covers MobileContext::updateDesktopUrlHost
+	 * @dataProvider updateDesktopUrlHostProvider
 	 */
 	public function testUpdateDesktopUrlHost( $mobile, $desktop, $server ) {
 		$updateMobileUrlHost = self::getMethod( "updateDesktopUrlHost" );
@@ -256,8 +255,8 @@ class MobileContextTest extends MediaWikiTestCase {
 	}
 
 	/**
-	 * @dataProvider getMobileActionProvider
 	 * @covers MobileContext::getMobileAction
+	 * @dataProvider getMobileActionProvider
 	 */
 	public function testGetMobileAction( $mobileaction = null ) {
 		$context = $this->makeContext();
@@ -333,8 +332,8 @@ class MobileContextTest extends MediaWikiTestCase {
 	}
 
 	/**
-	 * @dataProvider addAnalyticsLogItemProvider
 	 * @covers MobileContext::getAnalyticsLogItems
+	 * @dataProvider addAnalyticsLogItemProvider
 	 */
 	public function testAddAnalyticsLogItem( $key, array $inputs, $expected ) {
 		$context = $this->makeContext();
@@ -358,8 +357,8 @@ class MobileContextTest extends MediaWikiTestCase {
 	}
 
 	/**
-	 * @dataProvider getXAnalyticsHeaderProvider
 	 * @covers MobileContext::getXAnalyticsHeader
+	 * @dataProvider getXAnalyticsHeaderProvider
 	 */
 	public function testGetXAnalyticsHeader( $existingHeader, $logItems, $expectedHeader ) {
 		$context = $this->makeContext();
@@ -401,8 +400,8 @@ class MobileContextTest extends MediaWikiTestCase {
 	}
 
 	/**
-	 * @dataProvider addAnalyticsLogItemFromXAnalyticsProvider
 	 * @covers MobileContext::addAnalyticsLogItemFromXAnalytics
+	 * @dataProvider addAnalyticsLogItemFromXAnalyticsProvider
 	 */
 	public function testAddAnalyticsLogItemFromXAnalytics( $analyticsItem, $key, $val ) {
 		$context = $this->makeContext();
@@ -424,8 +423,8 @@ class MobileContextTest extends MediaWikiTestCase {
 	}
 
 	/**
-	 * @dataProvider getMobileHostTokenProvider
 	 * @covers MobileContext::getMobileHostToken
+	 * @dataProvider getMobileHostTokenProvider
 	 */
 	public function testGetMobileHostToken( $domainTemplate, $result ) {
 		$context = $this->makeContext();
@@ -441,8 +440,8 @@ class MobileContextTest extends MediaWikiTestCase {
 	}
 
 	/**
-	 * @dataProvider optInProvider
 	 * @covers MobileContext::isBetaGroupMember
+	 * @dataProvider optInProvider
 	 */
 	public function testOptIn( array $cookies, $isBeta, $enabledInSettings ) {
 		$this->setMwGlobals( 'wgMFEnableBeta', $enabledInSettings );
@@ -462,9 +461,9 @@ class MobileContextTest extends MediaWikiTestCase {
 	}
 
 	/**
-	 * @dataProvider provideToggleView
 	 * @covers MobileContext::checkToggleView
 	 * @covers MobileContext::doToggling
+	 * @dataProvider provideToggleView
 	 */
 	public function testToggleView( $page, $url, $urlTemplate, $expectedLocation ) {
 		$this->setMwGlobals( [
@@ -549,14 +548,14 @@ class MobileContextTest extends MediaWikiTestCase {
 	}
 
 	/**
-	 * @dataProvider provideShouldStripResponsiveImages
 	 * @covers MobileContext::shouldStripResponsiveImages
 	 * @covers MobileContext::setForceMobileView
+	 * @dataProvider provideShouldStripResponsiveImages
 	 */
 	public function testShouldStripResponsiveImages(
 		$expected,
 		$forceMobileView,
-		$wgMFStripResponsiveImages,
+		$mFStripResponsiveImages,
 		$stripResponsiveImages = null
 	) {
 		/** @var MobileContext $context */
@@ -565,7 +564,7 @@ class MobileContextTest extends MediaWikiTestCase {
 
 		$this->setMwGlobals(
 			'wgMFStripResponsiveImages',
-			$wgMFStripResponsiveImages
+			$mFStripResponsiveImages
 		);
 
 		$context->setStripResponsiveImages( $stripResponsiveImages );
