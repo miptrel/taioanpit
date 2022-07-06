@@ -1,0 +1,250 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   xmlns:dc="http://purl.org/dc/elements/1.1/"
+   xmlns:cc="http://creativecommons.org/ns#"
+   xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+   xmlns:svg="http://www.w3.org/2000/svg"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:xlink="http://www.w3.org/1999/xlink"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   width="24px"
+   height="24px"
+   viewBox="0 0 24 24"
+   version="1.1"
+   id="SVGRoot"
+   inkscape:version="1.0.1 (c497b03c, 2020-09-10)"
+   sodipodi:docname="wiki_icon.svg"
+   inkscape:export-filename="/Users/peter/taioanpit_project/taioanpit/resources/assets/wiki.png"
+   inkscape:export-xdpi="540"
+   inkscape:export-ydpi="540">
+  <sodipodi:namedview
+     id="base"
+     pagecolor="#ffffff"
+     bordercolor="#666666"
+     borderopacity="1.0"
+     inkscape:pageopacity="0.0"
+     inkscape:pageshadow="2"
+     inkscape:zoom="11.890059"
+     inkscape:cx="21.493739"
+     inkscape:cy="20.247689"
+     inkscape:document-units="px"
+     inkscape:current-layer="layer1"
+     showgrid="false"
+     inkscape:window-width="1280"
+     inkscape:window-height="755"
+     inkscape:window-x="0"
+     inkscape:window-y="23"
+     inkscape:window-maximized="0"
+     inkscape:grid-bbox="true"
+     inkscape:object-paths="true"
+     inkscape:snap-global="false"
+     inkscape:document-rotation="0"
+     showguides="false"
+     inkscape:snap-bbox="true"
+     inkscape:bbox-nodes="true" />
+  <defs
+     id="defs815">
+    <linearGradient
+       inkscape:collect="always"
+       id="linearGradient985-7">
+      <stop
+         style="stop-color:#8f8f8f;stop-opacity:1;"
+         offset="0"
+         id="stop981" />
+      <stop
+         style="stop-color:#52820e;stop-opacity:1"
+         offset="1"
+         id="stop983" />
+    </linearGradient>
+    <linearGradient
+       inkscape:collect="always"
+       xlink:href="#linearGradient985-7"
+       id="linearGradient987"
+       x1="-18.140921"
+       y1="15.951627"
+       x2="-2.6988106"
+       y2="8.1218491"
+       gradientUnits="userSpaceOnUse" />
+    <linearGradient
+       inkscape:collect="always"
+       xlink:href="#linearGradient985-7"
+       id="linearGradient1088"
+       gradientUnits="userSpaceOnUse"
+       x1="-18.140921"
+       y1="15.951627"
+       x2="-2.6988106"
+       y2="8.1218491"
+       gradientTransform="translate(0.3105603)" />
+  </defs>
+  <metadata
+     id="metadata818">
+    <rdf:RDF>
+      <cc:Work
+         rdf:about="">
+        <dc:format>image/svg+xml</dc:format>
+        <dc:type
+           rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
+        <dc:title></dc:title>
+      </cc:Work>
+    </rdf:RDF>
+  </metadata>
+  <g
+     id="layer1"
+     inkscape:groupmode="layer"
+     inkscape:label="Layer 1">
+    <g
+       id="g1007"
+       transform="matrix(0.86413673,0,0,0.86413673,18.035178,3.425533)"
+       style="stroke-width:1.15723" />
+    <g
+       id="g1135"
+       transform="matrix(1.4558283,0,0,1.42652,-4.6160956,-2.9091366)"
+       style="stroke-width:0.693915">
+      <g
+         id="g1309"
+         transform="translate(0,-0.31056029)"
+         style="stroke-width:0.693915">
+        <circle
+           style="opacity:1;fill:#d5f5c4;fill-opacity:1;fill-rule:nonzero;stroke:none;stroke-width:4.00219;stroke-linecap:square;stroke-opacity:1"
+           id="path1074"
+           cx="-10.276677"
+           cy="12.078895"
+           transform="rotate(-90)"
+           inkscape:export-filename="/Users/peter/taioanpit_project/taioanpit/favicon.ico.png"
+           inkscape:export-xdpi="699.95966"
+           inkscape:export-ydpi="699.95966"
+           r="7.5780001" />
+        <path
+           style="opacity:1;fill:none;fill-opacity:1;fill-rule:nonzero;stroke:#8f8f8f;stroke-width:0.262267;stroke-linecap:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+           id="path980"
+           transform="rotate(-90)"
+           inkscape:export-filename="/Users/peter/taioanpit_project/taioanpit/favicon.ico.png"
+           inkscape:export-xdpi="699.95966"
+           inkscape:export-ydpi="699.95966"
+           sodipodi:type="arc"
+           sodipodi:cx="-10.276841"
+           sodipodi:cy="12.078444"
+           sodipodi:rx="8.7776489"
+           sodipodi:ry="8.7776489"
+           sodipodi:start="2.3474678"
+           sodipodi:end="2.6040312"
+           sodipodi:arc-type="arc"
+           sodipodi:open="true"
+           d="m -16.429176,18.339106 a 8.7776489,8.7776489 0 0 1 -1.387313,-1.76613" />
+      </g>
+      <g
+         id="g1058"
+         transform="translate(0,-0.31056029)"
+         style="stroke-width:0.693915">
+        <g
+           id="g1029"
+           style="stroke-width:0.693915">
+          <path
+             id="rect4545"
+             style="fill:#52820e;fill-opacity:1;stroke:none;stroke-width:0.310236;stroke-miterlimit:9.3;stroke-dasharray:none;stroke-opacity:1"
+             d="M 4.204966,6.4393279 4.7459032,5.1564904 6.935061,2.9673219 8.2415448,2.4027491 14.025219,8.1864231 9.98864,12.223002 Z"
+             sodipodi:nodetypes="ccccccc" />
+          <rect
+             style="fill:#b1d77a;fill-opacity:1;stroke:none;stroke-width:0.131134"
+             id="rect1289"
+             width="3.0959435"
+             height="8.7036552"
+             x="-2.8056149"
+             y="-15.705695"
+             transform="rotate(135)" />
+          <path
+             id="path883"
+             style="fill:#efcf69;fill-opacity:1;stroke:none;stroke-width:1.57493px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+             d="M 18.22164,16.445702 12.955797,8.988124 11.569537,9.7909719 10.765375,11.175918 Z"
+             sodipodi:nodetypes="ccccc" />
+          <path
+             style="fill:#f5e3a8;fill-opacity:1;stroke:none;stroke-width:1.57493px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+             d="M 17.160616,14.961172 17.278561,14.48701 16.194113,12.386815 14.025218,8.1864225 13.326063,8.4370933 12.954926,8.9871868 Z"
+             id="path4549"
+             inkscape:connector-curvature="0"
+             sodipodi:nodetypes="ccccccc" />
+          <path
+             style="fill:#e2b219;fill-opacity:1;stroke:none;stroke-width:1.57493px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+             d="m 9.9886393,12.223001 6.2799577,3.273973 0.467047,-0.110831 -5.969881,-4.209793 -0.552571,0.373614 z"
+             id="path885"
+             inkscape:connector-curvature="0"
+             sodipodi:nodetypes="cccccc" />
+          <path
+             sodipodi:nodetypes="ccaccsscc"
+             inkscape:connector-curvature="0"
+             id="path4551"
+             d="m 15.669139,15.189784 2.525503,1.310083 c 0,0 0.07397,0.04013 0.09733,0.01692 0.02348,-0.02332 -0.01632,-0.09793 -0.01632,-0.09793 l -1.31041,-2.525177 c 0,0 -0.286048,0.153257 -0.451771,0.292321 -0.156163,0.131043 -0.464144,0.43652 -0.59384,0.59384 -0.125254,0.15193 -0.250489,0.409939 -0.250489,0.409939 z"
+             style="fill:#5b5b5b;fill-opacity:1;stroke:none;stroke-width:0.505831px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1" />
+          <path
+             style="fill:#a0a0a0;fill-opacity:1;stroke:none;stroke-width:0.505831px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+             d="M 18.227625,16.46093 16.90982,13.996415 16.639334,14.203683 Z"
+             id="path887"
+             inkscape:connector-curvature="0"
+             sodipodi:nodetypes="cccc" />
+        </g>
+        <g
+           id="g1039"
+           style="stroke-width:0.693915">
+          <path
+             style="fill:#7cb22c;fill-opacity:1;stroke:none;stroke-width:0.693915px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+             d="M 11.405326,9.5339781 10.325875,9.4599268 9.7321785,8.6146804 9.539486,7.7074964 9.8811585,7.5640292 10.708236,8.4305319 11.073587,9.074136 11.401001,9.3642049 Z"
+             id="path987"
+             sodipodi:nodetypes="ccccccccc" />
+          <g
+             id="g1054"
+             transform="matrix(0.47571537,-0.82396319,0.82396319,0.47571537,-8.071059,11.385965)"
+             style="stroke-width:0.729339">
+            <path
+               d="m 12.040953,16.299536 c 0.134669,-0.160321 0.2998,-0.31503 0.495391,-0.464129 L 12.459394,15.732 C 12.255787,15.82659 12.081839,15.928393 11.93755,16.037411 11.774023,15.915568 11.59767,15.813764 11.408492,15.732 l -0.06733,0.103407 c 0.141083,0.105812 0.303808,0.260522 0.488177,0.464129 z"
+               style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:4.92505px;line-height:125%;font-family:'Linux Biolinum';-inkscape-font-specification:'Linux Biolinum';letter-spacing:0px;word-spacing:0px;fill:#52820e;fill-opacity:1;stroke:none;stroke-width:0.673505px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+               id="path1009"
+               sodipodi:nodetypes="cccccccc" />
+            <path
+               d="m 12.02356,15.855116 c 0.157193,-0.109944 0.340013,-0.207698 0.548458,-0.293267 l -0.04358,-0.109758 c -0.202613,0.03543 -0.380691,0.08427 -0.534232,0.146535 -0.115823,-0.146603 -0.247748,-0.278382 -0.395775,-0.395599 l -0.08411,0.07555 c 0.09976,0.127091 0.207081,0.302461 0.32196,0.526363 z"
+               style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:4.92505px;line-height:125%;font-family:'Linux Biolinum';-inkscape-font-specification:'Linux Biolinum';letter-spacing:0px;word-spacing:0px;fill:#52820e;fill-opacity:1;stroke:none;stroke-width:0.673502px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+               id="path1034"
+               sodipodi:nodetypes="cccccccc" />
+            <path
+               d="m 12.11537,15.473856 c 0.147359,-0.05354 0.312376,-0.09205 0.495043,-0.115508 l -0.01118,-0.09587 c -0.167455,-0.0149 -0.318381,-0.014 -0.452774,0.0027 -0.06043,-0.140244 -0.136678,-0.272295 -0.228748,-0.396151 l -0.08239,0.04185 c 0.05187,0.121448 0.09948,0.282702 0.14281,0.483773 z"
+               style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:4.92505px;line-height:125%;font-family:'Linux Biolinum';-inkscape-font-specification:'Linux Biolinum';letter-spacing:0px;word-spacing:0px;fill:#52820e;fill-opacity:1;stroke:none;stroke-width:0.673506px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+               id="path1036"
+               sodipodi:nodetypes="cccccccc" />
+            <path
+               d="m 12.234878,15.137097 c 0.121293,-0.01055 0.252804,-0.0063 0.394534,0.01285 l 0.01087,-0.07416 c -0.122615,-0.04482 -0.235996,-0.07449 -0.340155,-0.08897 -0.01713,-0.117339 -0.04779,-0.23171 -0.09196,-0.343115 l -0.07022,0.01482 c 0.0145,0.101531 0.0178,0.23204 0.0099,0.391567 z"
+               style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:4.92505px;line-height:125%;font-family:'Linux Biolinum';-inkscape-font-specification:'Linux Biolinum';letter-spacing:0px;word-spacing:0px;fill:#52820e;fill-opacity:1;stroke:none;stroke-width:0.673505px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+               id="path1038"
+               sodipodi:nodetypes="cccccccc" />
+            <path
+               d="m 12.39889,14.805395 c 0.08544,0.01513 0.175206,0.04229 0.269229,0.08166 l 0.02112,-0.04908 c -0.07616,-0.05344 -0.148751,-0.09477 -0.21776,-0.123996 0.0098,-0.08394 0.0098,-0.168336 -10e-6,-0.25319 l -0.05109,-0.0027 c -0.0087,0.07259 -0.03056,0.163033 -0.06538,0.271427 z"
+               style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:4.92505px;line-height:125%;font-family:'Linux Biolinum';-inkscape-font-specification:'Linux Biolinum';letter-spacing:0px;word-spacing:0px;fill:#52820e;fill-opacity:1;stroke:none;stroke-width:0.673505px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+               id="path1040"
+               sodipodi:nodetypes="cccccccc" />
+            <path
+               style="color:#000000;font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:medium;line-height:normal;font-family:sans-serif;font-variant-ligatures:normal;font-variant-position:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-alternates:normal;font-variant-east-asian:normal;font-feature-settings:normal;font-variation-settings:normal;text-indent:0;text-align:start;text-decoration:none;text-decoration-line:none;text-decoration-style:solid;text-decoration-color:#000000;letter-spacing:normal;word-spacing:normal;text-transform:none;writing-mode:lr-tb;direction:ltr;text-orientation:mixed;dominant-baseline:auto;baseline-shift:baseline;text-anchor:start;white-space:normal;shape-padding:0;shape-margin:0;inline-size:0;clip-rule:nonzero;display:inline;overflow:visible;visibility:visible;opacity:1;isolation:auto;mix-blend-mode:normal;color-interpolation:sRGB;color-interpolation-filters:linearRGB;solid-color:#000000;solid-opacity:1;vector-effect:none;fill:#52820e;fill-opacity:1;fill-rule:nonzero;stroke:none;stroke-width:0.0729339;stroke-linecap:square;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;color-rendering:auto;image-rendering:auto;shape-rendering:auto;text-rendering:auto;enable-background:accumulate;stop-color:#000000;stop-opacity:1"
+               d="m 12.577321,14.562 -0.222322,0.167516 -0.207152,0.320573 -0.169716,0.344561 -0.14185,0.41029 -0.0069,0.69506 h 0.211614 l -0.01743,-0.644884 0.09181,-0.38126 0.119503,-0.336759 0.164012,-0.331702 0.208436,-0.182395 z"
+               id="path1046"
+               sodipodi:nodetypes="ccccccccccccc" />
+          </g>
+        </g>
+      </g>
+      <path
+         style="fill:none;fill-opacity:1;fill-rule:nonzero;stroke:url(#linearGradient1088);stroke-width:0.262267;stroke-linecap:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+         id="circle977"
+         transform="rotate(-90)"
+         inkscape:export-filename="/Users/peter/taioanpit_project/taioanpit/favicon.ico.png"
+         inkscape:export-xdpi="685.23096"
+         inkscape:export-ydpi="685.23096"
+         sodipodi:type="arc"
+         sodipodi:cx="-9.9661169"
+         sodipodi:cy="12.078895"
+         sodipodi:rx="8.7776489"
+         sodipodi:ry="8.7776489"
+         sodipodi:start="2.581342"
+         sodipodi:end="5.8084558"
+         sodipodi:arc-type="arc"
+         sodipodi:open="true"
+         d="m -17.401856,16.743325 a 8.7776489,8.7776489 0 0 1 -0.201422,-8.9911957 8.7776489,8.7776489 0 0 1 7.8158812,-4.449064 8.7776489,8.7776489 0 0 1 7.6282648,4.7635846" />
+    </g>
+  </g>
+</svg>
