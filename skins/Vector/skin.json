@@ -25,49 +25,20 @@
 	},
 	"ValidSkinNames": {
 		"vector-2022": {
-			"class": "MediaWiki\\Skins\\Vector\\SkinVector22",
-			"services": [
-				"LanguageConverterFactory",
-				"Vector.FeatureManagerFactory"
-			],
+			"class": "Vector\\SkinVector22",
 			"args": [
 				{
 					"name": "vector-2022",
-					"supportsMwHeading": true,
-					"wrapSiteNotice": true,
 					"templateDirectory": "includes/templates",
-					"template": "skin",
-					"tempUserBanner": true,
 					"responsive": true,
-					"toc": false,
 					"link": {
 						"text-wrapper": {
 							"tag": "span"
 						}
 					},
 					"bodyClasses": [
-						"skin--responsive",
 						"skin-vector",
 						"skin-vector-search-vue"
-					],
-					"clientPrefEnabled": true,
-					"menus": [
-						"user-interface-preferences",
-						"user-page",
-						"user-menu",
-						"notifications",
-						"views",
-						"actions",
-						"variants",
-						"associated-pages"
-					],
-					"scripts": [
-						"skins.vector.js"
-					],
-					"styles": [
-						"skins.vector.search.codex.styles",
-						"skins.vector.styles",
-						"skins.vector.icons"
 					],
 					"messages": [
 						"tooltip-p-logo",
@@ -75,28 +46,17 @@
 						"vector-opt-out",
 						"vector-action-toggle-sidebar",
 						"vector-main-menu-tooltip",
+						"vector-menu-checkbox-expanded",
+						"vector-menu-checkbox-collapsed",
 						"vector-jumptosearch",
 						"vector-jumptocontent",
-						"vector-toc-beginning",
-						"vector-toc-label",
-						"vector-toc-menu-tooltip",
-						"vector-toc-collapsible-button-label",
-						"vector-pin-element-label",
-						"vector-unpin-element-label",
-						"vector-site-nav-label",
 						"search",
 						"searchbutton",
 						"searcharticle",
 						"searchsuggest-search",
 						"sitesubtitle",
 						"sitetitle",
-						"tagline",
-						"personaltools",
-						"namespaces",
-						"views",
-						"vector-page-tools-nav-label",
-						"empty-language-selector-body",
-						"vector-appearance-label"
+						"tagline"
 					]
 				}
 			]
