@@ -452,6 +452,7 @@ class Names {
 		'szl' => 'ślůnski', # Silesian
 		'szy' => 'Sakizaya', # Sakizaya - T174601
 		'ta' => 'தமிழ்', # Tamil
+		'tai' => 'Tâi-gí',
 		'tay' => 'Tayal', # Atayal
 		'tcy' => 'ತುಳು', # Tulu
 		'te' => 'తెలుగు', # Telugu
@@ -467,7 +468,6 @@ class Names {
 		'tly-cyrl' => 'толыши', # Talysh (Cyrillic)
 		'tn' => 'Setswana', # Setswana
 		'to' => 'lea faka-Tonga', # Tonga (Tonga Islands)
-		'top' => 'Tâi-gí (Tâi-oân-pit)',
 		'tpi' => 'Tok Pisin', # Tok Pisin
 		'tr' => 'Türkçe', # Turkish
 		'tru' => 'Ṫuroyo', # Turoyo
